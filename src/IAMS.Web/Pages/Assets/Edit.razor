@@ -1,27 +1,29 @@
 @page "/assets/new"
 @page "/assets/{Id:int}/edit"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Admin,Staff")]
+@implements IDisposable
 @inject ApiClient Api
 @inject NavigationManager Navigation
+@inject AppleDeviceLookupService AppleLookup
 
 <PageTitle>@(IsNew ? "Add Asset" : "Edit Asset") - IAMS</PageTitle>
 
-<div class="max-w-2xl mx-auto space-y-6">
+<div class="max-w-3xl mx-auto space-y-4 sm:space-y-6">
     <!-- Header -->
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-3 sm:gap-4">
         <a href="@(IsNew ? "/assets" : $"/assets/{Id}")" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
         </a>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">@(IsNew ? "Add Asset" : "Edit Asset")</h1>
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">@(IsNew ? "Add Asset" : "Edit Asset")</h1>
     </div>
 
     @if (_loading)
     {
         <Card>
             <div class="space-y-4">
-                @for (int i = 0; i < 6; i++)
+                @for (int i = 0; i < 8; i++)
                 {
                     <div class="h-12 rounded-xl skeleton"></div>
                 }
@@ -30,26 +32,97 @@
     }
     else
     {
-        <Card>
-            <EditForm Model="@_model" OnValidSubmit="HandleSubmit" class="space-y-6">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <EditForm Model="@_model" OnValidSubmit="HandleSubmit">
+            <!-- Device Information -->
+            <Card Title="Device Information">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div class="sm:col-span-2">
-                        <Input Label="Asset Name" @bind-Value="_model.Name" Placeholder="MacBook Pro 16&quot;" />
-                    </div>
-                    <Input Label="Asset Tag" @bind-Value="_model.AssetTag" Placeholder="LAP-001" />
-                    <Input Label="Serial Number" @bind-Value="_model.SerialNumber" Placeholder="C02X1234ABCD" />
-
-                    <Select Label="Category" @bind-Value="_model.Category" Placeholder="Select category">
-                        @if (_categories is not null)
-                        {
-                            @foreach (var cat in _categories)
+                        <Select Label="Device Type *" @bind-Value="_model.DeviceType" Placeholder="Select device type">
+                            @if (_deviceTypes is not null)
                             {
-                                <option value="@cat">@cat</option>
+                                @foreach (var dt in _deviceTypes)
+                                {
+                                    <option value="@dt">@dt</option>
+                                }
                             }
-                        }
-                    </Select>
+                        </Select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Serial Number</label>
+                        <div class="relative">
+                            <input type="text"
+                                   @bind="_model.SerialNumber"
+                                   @bind:event="oninput"
+                                   @bind:after="OnSerialNumberChangedAsync"
+                                   placeholder="C02X1234ABCD"
+                                   class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 text-sm @(_appleDeviceInfo is not null ? "pr-10" : "")" />
+                            @if (_appleDeviceInfo is not null)
+                            {
+                                <div class="absolute right-3 top-1/2 -translate-y-1/2">
+                                    <svg class="w-5 h-5 text-slate-400" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                                    </svg>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <Input Label="Manufacturer" @bind-Value="_model.Manufacturer" Placeholder="Apple, Dell, HP..." />
+                    <Input Label="Model" @bind-Value="_model.Model" Placeholder="MacBook Pro 16&quot;, XPS 15..." />
+                    <Input Label="Model Year" Type="number" @bind-Value="_model.ModelYear" Placeholder="2024" />
+                    <Input Label="Location" @bind-Value="_model.Location" Placeholder="Office - Floor 2" />
+                    <Input Label="Name (Optional)" @bind-Value="_model.Name" Placeholder="Custom display name" />
+                </div>
+            </Card>
 
-                    <Select Label="Status" @bind-Value="_model.Status" Placeholder="Select status">
+            <!-- Apple Auto-fill Suggestion -->
+            @if (_appleDeviceInfo is not null && _showAutoFillSuggestion)
+            {
+                <div class="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl border border-slate-200 dark:border-slate-600 p-4 animate-slide-up">
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-white dark:bg-slate-600 flex items-center justify-center shadow-sm shrink-0">
+                            <svg class="w-6 h-6 text-slate-600 dark:text-slate-300" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                            </svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Apple Device Detected</h4>
+                                @if (_appleDeviceInfo.IsPartialMatch)
+                                {
+                                    <span class="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded">Partial</span>
+                                }
+                            </div>
+                            <div class="text-sm text-slate-600 dark:text-slate-300 space-y-0.5">
+                                @if (_appleDeviceInfo.Model is not null)
+                                {
+                                    <p><span class="text-slate-400">Model:</span> @_appleDeviceInfo.Model</p>
+                                }
+                                @if (_appleDeviceInfo.Year.HasValue)
+                                {
+                                    <p><span class="text-slate-400">Year:</span> @_appleDeviceInfo.Year</p>
+                                }
+                                @if (_appleDeviceInfo.DeviceType is not null)
+                                {
+                                    <p><span class="text-slate-400">Type:</span> @_appleDeviceInfo.DeviceType</p>
+                                }
+                            </div>
+                            <div class="flex items-center gap-2 mt-3">
+                                <button type="button" @onclick="ApplyAutoFill" class="px-3 py-1.5 text-sm font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+                                    Apply
+                                </button>
+                                <button type="button" @onclick="DismissAutoFill" class="px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+                                    Dismiss
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Status & Assignment -->
+            <Card Title="Status & Assignment">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <Select Label="Status *" @bind-Value="_model.Status" Placeholder="Select status">
                         @if (_statuses is not null)
                         {
                             @foreach (var stat in _statuses)
@@ -58,9 +131,6 @@
                             }
                         }
                     </Select>
-
-                    <Input Label="Location" @bind-Value="_model.Location" Placeholder="Office - Floor 2" />
-
                     <Select Label="Assigned To" @bind-Value="_model.AssignedToUserId" Placeholder="Unassigned">
                         @if (_users is not null)
                         {
@@ -70,37 +140,65 @@
                             }
                         }
                     </Select>
+                </div>
+            </Card>
 
+            <!-- Purchase Information -->
+            <Card Title="Purchase Information">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <Input Label="Purchase Price" Type="number" @bind-Value="_model.PurchasePrice" Placeholder="2499.00" />
+                    <Select Label="Currency" @bind-Value="_model.Currency" Placeholder="Select currency">
+                        @if (_currencies is not null)
+                        {
+                            @foreach (var cur in _currencies)
+                            {
+                                <option value="@cur">@cur</option>
+                            }
+                        }
+                    </Select>
                     <Input Label="Purchase Date" Type="date" @bind-Value="_model.PurchaseDate" />
-                    <Input Label="Warranty Expiry" Type="date" @bind-Value="_model.WarrantyExpiry" />
+                </div>
+            </Card>
 
+            <!-- Warranty Information -->
+            <Card Title="Warranty Information">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div class="sm:col-span-2">
-                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Notes</label>
-                        <textarea @bind="_model.Notes"
-                                  rows="3"
-                                  placeholder="Additional notes about this asset..."
-                                  class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 resize-none"></textarea>
+                        <Input Label="Warranty Provider" @bind-Value="_model.WarrantyProvider" Placeholder="Apple Care+, Dell ProSupport..." />
                     </div>
+                    <Input Label="Warranty Start Date" Type="date" @bind-Value="_model.WarrantyStartDate" />
+                    <Input Label="Warranty End Date" Type="date" @bind-Value="_model.WarrantyEndDate" />
                 </div>
+            </Card>
 
-                @if (!string.IsNullOrEmpty(_error))
-                {
-                    <div class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-slide-up">
-                        <p class="text-sm text-red-600 dark:text-red-400">@_error</p>
-                    </div>
-                }
-
-                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <a href="@(IsNew ? "/assets" : $"/assets/{Id}")" class="px-4 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200">
-                        Cancel
-                    </a>
-                    <Button Type="submit" Loading="@_saving">
-                        @(IsNew ? "Create Asset" : "Save Changes")
-                    </Button>
+            <!-- Notes -->
+            <Card Title="Additional Notes">
+                <div>
+                    <textarea @bind="_model.Notes"
+                              rows="4"
+                              placeholder="Additional notes about this asset..."
+                              class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 resize-none text-sm"></textarea>
                 </div>
-            </EditForm>
-        </Card>
+            </Card>
+
+            <!-- Error Message -->
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-slide-up">
+                    <p class="text-sm text-red-600 dark:text-red-400">@_error</p>
+                </div>
+            }
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-2">
+                <a href="@(IsNew ? "/assets" : $"/assets/{Id}")" class="w-full sm:w-auto px-6 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 text-center">
+                    Cancel
+                </a>
+                <Button Type="submit" Loading="@_saving" class="w-full sm:w-auto">
+                    @(IsNew ? "Create Asset" : "Save Changes")
+                </Button>
+            </div>
+        </EditForm>
     }
 </div>
 
@@ -112,14 +210,22 @@
     private bool _saving;
     private string? _error;
     private AssetModel _model = new();
-    private string[]? _categories;
+    private string[]? _deviceTypes;
     private string[]? _statuses;
+    private string[]? _currencies;
     private List<UserListItem>? _users;
+
+    // Apple auto-fill state
+    private AppleDeviceInfo? _appleDeviceInfo;
+    private bool _showAutoFillSuggestion;
+    private string? _lastCheckedSerial;
+    private System.Timers.Timer? _debounceTimer;
 
     protected override async Task OnInitializedAsync()
     {
-        _categories = await Api.GetCategoriesAsync();
+        _deviceTypes = await Api.GetDeviceTypesAsync();
         _statuses = await Api.GetStatusesAsync();
+        _currencies = await Api.GetCurrenciesAsync();
         _users = await Api.GetUserListAsync();
 
         if (!IsNew)
@@ -129,19 +235,29 @@
             {
                 _model = new AssetModel
                 {
-                    Name = asset.Name,
-                    AssetTag = asset.AssetTag,
+                    DeviceType = asset.DeviceType,
+                    Manufacturer = asset.Manufacturer ?? "",
+                    Model = asset.Model ?? "",
+                    ModelYear = asset.ModelYear?.ToString() ?? "",
                     SerialNumber = asset.SerialNumber ?? "",
-                    Category = asset.Category,
-                    Status = asset.Status,
+                    Name = asset.Name ?? "",
                     Location = asset.Location ?? "",
-                    AssignedToUserId = asset.AssignedToUserId?.ToString() ?? "",
+                    Status = asset.Status,
+                    AssignedToUserId = asset.AssignedToUserId ?? "",
                     PurchasePrice = asset.PurchasePrice?.ToString() ?? "",
+                    Currency = asset.Currency,
                     PurchaseDate = asset.PurchaseDate?.ToString("yyyy-MM-dd") ?? "",
-                    WarrantyExpiry = asset.WarrantyExpiry?.ToString("yyyy-MM-dd") ?? "",
+                    WarrantyProvider = asset.WarrantyProvider ?? "",
+                    WarrantyStartDate = asset.WarrantyStartDate?.ToString("yyyy-MM-dd") ?? "",
+                    WarrantyEndDate = asset.WarrantyEndDate?.ToString("yyyy-MM-dd") ?? "",
                     Notes = asset.Notes ?? ""
                 };
             }
+        }
+        else
+        {
+            _model.Currency = "USD";
+            _model.Status = "Available";
         }
 
         _loading = false;
@@ -152,10 +268,9 @@
         _error = null;
         _saving = true;
 
-        if (string.IsNullOrWhiteSpace(_model.Name) || string.IsNullOrWhiteSpace(_model.AssetTag) ||
-            string.IsNullOrWhiteSpace(_model.Category) || string.IsNullOrWhiteSpace(_model.Status))
+        if (string.IsNullOrWhiteSpace(_model.DeviceType) || string.IsNullOrWhiteSpace(_model.Status))
         {
-            _error = "Please fill in all required fields.";
+            _error = "Please fill in all required fields (Device Type and Status).";
             _saving = false;
             return;
         }
@@ -167,17 +282,22 @@
         {
             var dto = new CreateAssetDto
             {
-                Name = _model.Name,
-                AssetTag = _model.AssetTag,
-                SerialNumber = string.IsNullOrWhiteSpace(_model.SerialNumber) ? null : _model.SerialNumber,
-                Category = _model.Category,
+                DeviceType = _model.DeviceType,
+                Manufacturer = NullIfEmpty(_model.Manufacturer),
+                Model = NullIfEmpty(_model.Model),
+                ModelYear = int.TryParse(_model.ModelYear, out var year) ? year : null,
+                SerialNumber = NullIfEmpty(_model.SerialNumber),
+                Name = NullIfEmpty(_model.Name),
+                Location = NullIfEmpty(_model.Location),
                 Status = _model.Status,
-                Location = string.IsNullOrWhiteSpace(_model.Location) ? null : _model.Location,
-                AssignedToUserId = int.TryParse(_model.AssignedToUserId, out var uid) ? uid : null,
+                AssignedToUserId = NullIfEmpty(_model.AssignedToUserId),
                 PurchasePrice = decimal.TryParse(_model.PurchasePrice, out var price) ? price : null,
+                Currency = _model.Currency,
                 PurchaseDate = DateTime.TryParse(_model.PurchaseDate, out var pdate) ? pdate : null,
-                WarrantyExpiry = DateTime.TryParse(_model.WarrantyExpiry, out var wdate) ? wdate : null,
-                Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes
+                WarrantyProvider = NullIfEmpty(_model.WarrantyProvider),
+                WarrantyStartDate = DateTime.TryParse(_model.WarrantyStartDate, out var wsdate) ? wsdate : null,
+                WarrantyEndDate = DateTime.TryParse(_model.WarrantyEndDate, out var wedate) ? wedate : null,
+                Notes = NullIfEmpty(_model.Notes)
             };
             (success, error) = await Api.CreateAssetAsync(dto);
         }
@@ -185,17 +305,22 @@
         {
             var dto = new UpdateAssetDto
             {
-                Name = _model.Name,
-                AssetTag = _model.AssetTag,
-                SerialNumber = string.IsNullOrWhiteSpace(_model.SerialNumber) ? null : _model.SerialNumber,
-                Category = _model.Category,
+                DeviceType = _model.DeviceType,
+                Manufacturer = NullIfEmpty(_model.Manufacturer),
+                Model = NullIfEmpty(_model.Model),
+                ModelYear = int.TryParse(_model.ModelYear, out var year) ? year : null,
+                SerialNumber = NullIfEmpty(_model.SerialNumber),
+                Name = NullIfEmpty(_model.Name),
+                Location = NullIfEmpty(_model.Location),
                 Status = _model.Status,
-                Location = string.IsNullOrWhiteSpace(_model.Location) ? null : _model.Location,
-                AssignedToUserId = int.TryParse(_model.AssignedToUserId, out var uid) ? uid : null,
+                AssignedToUserId = _model.AssignedToUserId ?? "",
                 PurchasePrice = decimal.TryParse(_model.PurchasePrice, out var price) ? price : null,
+                Currency = _model.Currency,
                 PurchaseDate = DateTime.TryParse(_model.PurchaseDate, out var pdate) ? pdate : null,
-                WarrantyExpiry = DateTime.TryParse(_model.WarrantyExpiry, out var wdate) ? wdate : null,
-                Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes
+                WarrantyProvider = NullIfEmpty(_model.WarrantyProvider),
+                WarrantyStartDate = DateTime.TryParse(_model.WarrantyStartDate, out var wsdate) ? wsdate : null,
+                WarrantyEndDate = DateTime.TryParse(_model.WarrantyEndDate, out var wedate) ? wedate : null,
+                Notes = NullIfEmpty(_model.Notes)
             };
             (success, error) = await Api.UpdateAssetAsync(Id!.Value, dto);
         }
@@ -212,18 +337,113 @@
         }
     }
 
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private async Task OnSerialNumberChangedAsync()
+    {
+        var serial = _model.SerialNumber;
+
+        // Debounce the lookup to avoid excessive calls while typing
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+        _debounceTimer = new System.Timers.Timer(300);
+        _debounceTimer.Elapsed += async (s, args) =>
+        {
+            _debounceTimer?.Stop();
+            await InvokeAsync(() => CheckAppleSerial(serial));
+        };
+        _debounceTimer.AutoReset = false;
+        _debounceTimer.Start();
+
+        await Task.CompletedTask;
+    }
+
+    private void CheckAppleSerial(string? serial)
+    {
+        if (serial == _lastCheckedSerial)
+            return;
+
+        _lastCheckedSerial = serial;
+
+        // Clear previous suggestion if serial is too short
+        if (string.IsNullOrWhiteSpace(serial) || serial.Length < 11)
+        {
+            _appleDeviceInfo = null;
+            _showAutoFillSuggestion = false;
+            StateHasChanged();
+            return;
+        }
+
+        // Look up device
+        var deviceInfo = AppleLookup.LookupDevice(serial);
+
+        if (deviceInfo?.IsAppleDevice == true)
+        {
+            _appleDeviceInfo = deviceInfo;
+            // Only show suggestion if we have useful info to fill
+            _showAutoFillSuggestion = deviceInfo.Model is not null || deviceInfo.Year.HasValue || deviceInfo.DeviceType is not null;
+        }
+        else
+        {
+            _appleDeviceInfo = null;
+            _showAutoFillSuggestion = false;
+        }
+
+        StateHasChanged();
+    }
+
+    private void ApplyAutoFill()
+    {
+        if (_appleDeviceInfo is null)
+            return;
+
+        // Apply manufacturer (always Apple for Apple devices)
+        _model.Manufacturer = _appleDeviceInfo.Manufacturer;
+
+        // Apply model if available
+        if (!string.IsNullOrEmpty(_appleDeviceInfo.Model))
+            _model.Model = _appleDeviceInfo.Model;
+
+        // Apply year if available
+        if (_appleDeviceInfo.Year.HasValue)
+            _model.ModelYear = _appleDeviceInfo.Year.Value.ToString();
+
+        // Apply device type if available and currently empty
+        if (!string.IsNullOrEmpty(_appleDeviceInfo.DeviceType) && string.IsNullOrEmpty(_model.DeviceType))
+            _model.DeviceType = _appleDeviceInfo.DeviceType;
+
+        // Hide the suggestion after applying
+        _showAutoFillSuggestion = false;
+    }
+
+    private void DismissAutoFill()
+    {
+        _showAutoFillSuggestion = false;
+    }
+
+    public void Dispose()
+    {
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+    }
+
     private class AssetModel
     {
-        public string Name { get; set; } = "";
-        public string AssetTag { get; set; } = "";
+        public string DeviceType { get; set; } = "";
+        public string Manufacturer { get; set; } = "";
+        public string Model { get; set; } = "";
+        public string ModelYear { get; set; } = "";
         public string SerialNumber { get; set; } = "";
-        public string Category { get; set; } = "";
-        public string Status { get; set; } = "";
+        public string Name { get; set; } = "";
         public string Location { get; set; } = "";
+        public string Status { get; set; } = "";
         public string AssignedToUserId { get; set; } = "";
         public string PurchasePrice { get; set; } = "";
+        public string Currency { get; set; } = "USD";
         public string PurchaseDate { get; set; } = "";
-        public string WarrantyExpiry { get; set; } = "";
+        public string WarrantyProvider { get; set; } = "";
+        public string WarrantyStartDate { get; set; } = "";
+        public string WarrantyEndDate { get; set; } = "";
         public string Notes { get; set; } = "";
     }
 }

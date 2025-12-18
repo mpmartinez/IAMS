@@ -2,8 +2,9 @@
 @attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
-<PageTitle>@(_asset?.Name ?? "Asset") - IAMS</PageTitle>
+<PageTitle>@(_asset?.DisplayName ?? "Asset") - IAMS</PageTitle>
 
 @if (_loading)
 {
@@ -33,83 +34,245 @@ else if (_asset is null)
 }
 else
 {
-    <div class="space-y-6">
+    <div class="space-y-4 sm:space-y-6">
         <!-- Header -->
-        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
-            <a href="/assets" class="inline-flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-                Back
-            </a>
-            <div class="flex-1">
-                <div class="flex items-center gap-3">
-                    <h1 class="text-2xl font-bold text-slate-900 dark:text-white">@_asset.Name</h1>
-                    <Badge Text="@_asset.Status" Variant="@_asset.Status" Pulse="@(_asset.Status == "InUse")" />
-                </div>
-                <p class="text-slate-500 dark:text-slate-400 mt-1">@_asset.AssetTag</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <a href="/assets/@Id/edit" class="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        <div class="flex flex-col gap-4">
+            <div class="flex items-center gap-2 sm:gap-4">
+                <a href="/assets" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
-                    Edit
                 </a>
-                <button @onclick="() => _showDeleteModal = true" class="inline-flex items-center gap-2 px-4 py-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all duration-200">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    Delete
-                </button>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white truncate">@_asset.DisplayName</h1>
+                        <Badge Text="@_asset.Status" Variant="@_asset.Status" Pulse="@(_asset.Status == "InUse")" />
+                    </div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 font-mono">@_asset.AssetTag</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 sm:gap-3">
+                <AuthorizeView Roles="Admin,Staff">
+                    <a href="/assets/@Id/edit" class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Edit
+                    </a>
+                </AuthorizeView>
+                <AuthorizeView Roles="Admin">
+                    <button @onclick="() => _showDeleteModal = true" class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all duration-200 text-sm">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Delete
+                    </button>
+                </AuthorizeView>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
             <!-- Main Info -->
-            <div class="lg:col-span-2 space-y-6">
-                <Card Title="Details">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <DetailItem Label="Category" Value="@_asset.Category" />
+            <div class="lg:col-span-2 space-y-4 sm:space-y-6">
+                <!-- Device Info -->
+                <Card Title="Device Information">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                        <DetailItem Label="Device Type" Value="@_asset.DeviceType" />
+                        <DetailItem Label="Manufacturer" Value="@(_asset.Manufacturer ?? "—")" />
+                        <DetailItem Label="Model" Value="@(_asset.Model ?? "—")" />
+                        <DetailItem Label="Model Year" Value="@(_asset.ModelYear?.ToString() ?? "—")" />
                         <DetailItem Label="Serial Number" Value="@(_asset.SerialNumber ?? "—")" />
                         <DetailItem Label="Location" Value="@(_asset.Location ?? "—")" />
-                        <DetailItem Label="Assigned To" Value="@(_asset.AssignedToUserName ?? "Unassigned")" />
                     </div>
                 </Card>
 
-                <Card Title="Purchase Information">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <DetailItem Label="Purchase Price" Value="@(_asset.PurchasePrice?.ToString("C") ?? "—")" />
-                        <DetailItem Label="Purchase Date" Value="@(_asset.PurchaseDate?.ToString("MMM dd, yyyy") ?? "—")" />
-                        <DetailItem Label="Warranty Expiry" Value="@(_asset.WarrantyExpiry?.ToString("MMM dd, yyyy") ?? "—")" WarningDate="@_asset.WarrantyExpiry" />
-                    </div>
+                <!-- Assignment -->
+                <Card Title="Assignment">
+                    <HeaderContent>
+                        <AuthorizeView Roles="Admin,Staff">
+                            @if (string.IsNullOrEmpty(_asset.AssignedToUserId))
+                            {
+                                <button @onclick="ShowAssignModal" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
+                                    Assign
+                                </button>
+                            }
+                            else
+                            {
+                                <button @onclick="ShowReturnModal" class="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 font-medium transition-colors">
+                                    Return
+                                </button>
+                            }
+                        </AuthorizeView>
+                    </HeaderContent>
+                    <ChildContent>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                            <DetailItem Label="Status" Value="@_asset.Status" />
+                            @if (!string.IsNullOrEmpty(_asset.AssignedToUserName))
+                            {
+                                <div>
+                                    <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Assigned To</p>
+                                    <a href="/users/@_asset.AssignedToUserId/assets" class="text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
+                                        @_asset.AssignedToUserName
+                                    </a>
+                                </div>
+                            }
+                            else
+                            {
+                                <DetailItem Label="Assigned To" Value="Unassigned" />
+                            }
+                        </div>
+                    </ChildContent>
+                </Card>
+
+                <!-- Assignment History -->
+                <Card Title="Assignment History">
+                    <HeaderContent>
+                        @if (_assignmentHistory?.Count > 3)
+                        {
+                            <button @onclick="() => _showAllHistory = !_showAllHistory" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
+                                @(_showAllHistory ? "Show Less" : "Show All")
+                            </button>
+                        }
+                    </HeaderContent>
+                    <ChildContent>
+                        @if (_assignmentHistory is null)
+                        {
+                            <div class="space-y-3">
+                                @for (int i = 0; i < 3; i++)
+                                {
+                                    <div class="flex items-center gap-3 p-3">
+                                        <div class="w-8 h-8 rounded-full skeleton"></div>
+                                        <div class="flex-1 space-y-1">
+                                            <div class="h-3 w-1/2 rounded skeleton"></div>
+                                            <div class="h-2 w-1/3 rounded skeleton"></div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else if (_assignmentHistory.Count == 0)
+                        {
+                            <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No assignment history</p>
+                        }
+                        else
+                        {
+                            <div class="space-y-0 -mx-6 -my-6 divide-y divide-slate-100 dark:divide-slate-700">
+                                @foreach (var assignment in (_showAllHistory ? _assignmentHistory : _assignmentHistory.Take(3)))
+                                {
+                                    <div class="px-6 py-4">
+                                        <div class="flex items-start gap-3">
+                                            <div class="w-8 h-8 rounded-full @(assignment.IsActive ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-slate-100 dark:bg-slate-700") flex items-center justify-center shrink-0">
+                                                @if (assignment.IsActive)
+                                                {
+                                                    <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                    </svg>
+                                                }
+                                                else
+                                                {
+                                                    <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                }
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="flex items-center gap-2">
+                                                    <p class="text-sm font-medium text-slate-900 dark:text-white">@assignment.UserName</p>
+                                                    @if (assignment.IsActive)
+                                                    {
+                                                        <span class="px-1.5 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded">Current</span>
+                                                    }
+                                                </div>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                                    @assignment.AssignedAt.ToString("MMM dd, yyyy")
+                                                    @if (assignment.ReturnedAt.HasValue)
+                                                    {
+                                                        <span> — @assignment.ReturnedAt.Value.ToString("MMM dd, yyyy")</span>
+                                                        <span class="text-slate-400"> (@assignment.DurationDays days)</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-slate-400"> (@assignment.DurationDays days)</span>
+                                                    }
+                                                </p>
+                                                @if (assignment.ReturnCondition is not null && assignment.ReturnCondition != "Good")
+                                                {
+                                                    <p class="text-xs text-amber-600 dark:text-amber-400 mt-1">Returned: @assignment.ReturnCondition</p>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </ChildContent>
+                </Card>
+
+                <!-- Purchase & Warranty -->
+                <Card Title="Purchase & Warranty">
+                    <HeaderContent>
+                        @if (_asset.WarrantyStatus != WarrantyStatus.None)
+                        {
+                            <Badge Text="@GetWarrantyBadgeText()" Variant="@GetWarrantyBadgeVariant()" Pulse="@(_asset.WarrantyStatus == WarrantyStatus.Expiring)" />
+                        }
+                    </HeaderContent>
+                    <ChildContent>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                            <DetailItem Label="Purchase Price" Value="@FormatPrice(_asset.PurchasePrice, _asset.Currency)" />
+                            <DetailItem Label="Purchase Date" Value="@(_asset.PurchaseDate?.ToString("MMM dd, yyyy") ?? "—")" />
+                            <DetailItem Label="Warranty Provider" Value="@(_asset.WarrantyProvider ?? "—")" />
+                            <div>
+                                <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Warranty Period</p>
+                                <p class="text-slate-900 dark:text-white">@GetWarrantyPeriod()</p>
+                                @if (_asset.WarrantyDaysRemaining.HasValue)
+                                {
+                                    <p class="text-xs mt-1 @GetWarrantyDaysClass()">
+                                        @if (_asset.WarrantyDaysRemaining.Value < 0)
+                                        {
+                                            <span>Expired @Math.Abs(_asset.WarrantyDaysRemaining.Value) days ago</span>
+                                        }
+                                        else if (_asset.WarrantyDaysRemaining.Value == 0)
+                                        {
+                                            <span>Expires today</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@_asset.WarrantyDaysRemaining.Value days remaining</span>
+                                        }
+                                    </p>
+                                }
+                            </div>
+                        </div>
+                    </ChildContent>
                 </Card>
 
                 @if (!string.IsNullOrEmpty(_asset.Notes))
                 {
                     <Card Title="Notes">
-                        <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap">@_asset.Notes</p>
+                        <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-sm">@_asset.Notes</p>
                     </Card>
                 }
             </div>
 
             <!-- Sidebar -->
-            <div class="space-y-6">
+            <div class="space-y-4 sm:space-y-6">
                 <Card Title="Quick Actions">
                     <div class="space-y-2">
-                        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200">
-                            <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                            </svg>
-                            Transfer Asset
-                        </button>
-                        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200">
+                        <AuthorizeView Roles="Admin,Staff">
+                            <button @onclick="ShowTransferModal" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm">
+                                <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                </svg>
+                                Transfer Asset
+                            </button>
+                        </AuthorizeView>
+                        <button @onclick="ShowReportModal" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm">
                             <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             Generate Report
                         </button>
-                        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200">
+                        <button @onclick="PrintLabel" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm">
                             <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                             </svg>
@@ -119,7 +282,7 @@ else
                 </Card>
 
                 <Card Title="Metadata">
-                    <div class="space-y-4 text-sm">
+                    <div class="space-y-3 text-sm">
                         <div class="flex justify-between">
                             <span class="text-slate-500 dark:text-slate-400">Created</span>
                             <span class="text-slate-900 dark:text-white">@_asset.CreatedAt.ToString("MMM dd, yyyy")</span>
@@ -133,7 +296,7 @@ else
                         }
                         <div class="flex justify-between">
                             <span class="text-slate-500 dark:text-slate-400">Asset ID</span>
-                            <span class="text-slate-900 dark:text-white font-mono">@_asset.Id</span>
+                            <span class="text-slate-900 dark:text-white font-mono text-xs">@_asset.Id</span>
                         </div>
                     </div>
                 </Card>
@@ -143,12 +306,276 @@ else
 
     <!-- Delete Modal -->
     <Modal IsOpen="@_showDeleteModal" Title="Delete Asset" OnClose="() => _showDeleteModal = false">
-        <p class="text-slate-600 dark:text-slate-300">
-            Are you sure you want to delete <strong>@_asset.Name</strong>? This action cannot be undone.
-        </p>
+        <ChildContent>
+            <p class="text-slate-600 dark:text-slate-300">
+                Are you sure you want to delete <strong>@_asset.DisplayName</strong>? This action cannot be undone.
+            </p>
+        </ChildContent>
         <FooterContent>
             <Button Variant="ghost" OnClick="() => _showDeleteModal = false">Cancel</Button>
             <Button Variant="danger" OnClick="DeleteAsset" Loading="@_deleting">Delete</Button>
+        </FooterContent>
+    </Modal>
+
+    <!-- Assign Modal -->
+    <Modal IsOpen="@_showAssignModal" Title="Assign Asset" OnClose="HideAssignModal">
+        <ChildContent>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Assign to</label>
+                    <select @bind="_assignUserId" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+                        <option value="">Select a user...</option>
+                        @if (_users is not null)
+                        {
+                            @foreach (var user in _users)
+                            {
+                                <option value="@user.Id">@user.FullName @(user.Department is not null ? $"({user.Department})" : "")</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Notes (Optional)</label>
+                    <textarea @bind="_assignNotes" rows="2" placeholder="Assignment notes..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
+                </div>
+                @if (!string.IsNullOrEmpty(_assignError))
+                {
+                    <p class="text-sm text-red-600 dark:text-red-400">@_assignError</p>
+                }
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="HideAssignModal">Cancel</Button>
+            <Button OnClick="AssignAsset" Loading="@_assigning" Disabled="@string.IsNullOrEmpty(_assignUserId)">Assign</Button>
+        </FooterContent>
+    </Modal>
+
+    <!-- Return Modal -->
+    <Modal IsOpen="@_showReturnModal" Title="Return Asset" OnClose="HideReturnModal">
+        <ChildContent>
+            <div class="space-y-4">
+                <p class="text-slate-600 dark:text-slate-300">
+                    Return <strong>@_asset.DisplayName</strong> from <strong>@_asset.AssignedToUserName</strong>?
+                </p>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Condition</label>
+                    <select @bind="_returnCondition" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+                        <option value="Good">Good - Ready for reuse</option>
+                        <option value="NeedsRepair">Needs Repair</option>
+                        <option value="Damaged">Damaged</option>
+                        <option value="Lost">Lost</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Notes (Optional)</label>
+                    <textarea @bind="_returnNotes" rows="2" placeholder="Return notes..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
+                </div>
+                @if (!string.IsNullOrEmpty(_returnError))
+                {
+                    <p class="text-sm text-red-600 dark:text-red-400">@_returnError</p>
+                }
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="HideReturnModal">Cancel</Button>
+            <Button OnClick="ReturnAsset" Loading="@_returning">Return</Button>
+        </FooterContent>
+    </Modal>
+
+    <!-- Transfer Modal -->
+    <Modal IsOpen="@_showTransferModal" Title="Transfer Asset" OnClose="HideTransferModal">
+        <ChildContent>
+            <div class="space-y-4">
+                @if (!string.IsNullOrEmpty(_asset.AssignedToUserName))
+                {
+                    <p class="text-slate-600 dark:text-slate-300">
+                        Transfer <strong>@_asset.DisplayName</strong> from <strong>@_asset.AssignedToUserName</strong> to another user.
+                    </p>
+                }
+                else
+                {
+                    <p class="text-slate-600 dark:text-slate-300">
+                        Assign <strong>@_asset.DisplayName</strong> to a user.
+                    </p>
+                }
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Transfer to</label>
+                    <select @bind="_transferUserId" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+                        <option value="">Select a user...</option>
+                        @if (_users is not null)
+                        {
+                            @foreach (var user in _users.Where(u => u.Id != _asset.AssignedToUserId))
+                            {
+                                <option value="@user.Id">@user.FullName @(user.Department is not null ? $"({user.Department})" : "")</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Transfer Notes (Optional)</label>
+                    <textarea @bind="_transferNotes" rows="2" placeholder="Reason for transfer..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
+                </div>
+                @if (!string.IsNullOrEmpty(_transferError))
+                {
+                    <p class="text-sm text-red-600 dark:text-red-400">@_transferError</p>
+                }
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="HideTransferModal">Cancel</Button>
+            <Button OnClick="TransferAsset" Loading="@_transferring" Disabled="@string.IsNullOrEmpty(_transferUserId)">Transfer</Button>
+        </FooterContent>
+    </Modal>
+
+    <!-- Report Modal -->
+    <Modal IsOpen="@_showReportModal" Title="Asset Report" OnClose="() => _showReportModal = false" Size="lg">
+        <ChildContent>
+            <div id="asset-report" class="bg-white dark:bg-slate-800 p-6 space-y-6">
+                <!-- Report Header -->
+                <div class="border-b border-slate-200 dark:border-slate-700 pb-4">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-900 dark:text-white">Asset Report</h2>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Generated on @DateTime.Now.ToString("MMMM dd, yyyy HH:mm")</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-lg font-mono font-semibold text-slate-900 dark:text-white">@_asset.AssetTag</p>
+                            <Badge Text="@_asset.Status" Variant="@_asset.Status" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Device Information -->
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Device Information</h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Device Type:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@_asset.DeviceType</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Manufacturer:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@(_asset.Manufacturer ?? "—")</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Model:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@(_asset.Model ?? "—")</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Serial Number:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white font-mono">@(_asset.SerialNumber ?? "—")</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Location:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@(_asset.Location ?? "—")</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Model Year:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@(_asset.ModelYear?.ToString() ?? "—")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignment Information -->
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Assignment</h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Assigned To:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@(_asset.AssignedToUserName ?? "Unassigned")</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Status:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@_asset.Status</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Purchase & Warranty -->
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Purchase & Warranty</h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Purchase Price:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@FormatPrice(_asset.PurchasePrice, _asset.Currency)</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Purchase Date:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@(_asset.PurchaseDate?.ToString("MMM dd, yyyy") ?? "—")</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Warranty Provider:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@(_asset.WarrantyProvider ?? "—")</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 dark:text-slate-400">Warranty Period:</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@GetWarrantyPeriod()</span>
+                        </div>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_asset.Notes))
+                {
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Notes</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">@_asset.Notes</p>
+                    </div>
+                }
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="() => _showReportModal = false">Close</Button>
+            <Button OnClick="PrintReport">
+                <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print Report
+            </Button>
+        </FooterContent>
+    </Modal>
+
+    <!-- Print Label Modal -->
+    <Modal IsOpen="@_showLabelModal" Title="Print Asset Label" OnClose="() => _showLabelModal = false">
+        <ChildContent>
+            <div id="asset-label" class="bg-white p-6 flex flex-col items-center space-y-4">
+                <!-- QR Code -->
+                <div class="border-2 border-slate-200 rounded-lg p-4">
+                    @if (_loadingQrCode)
+                    {
+                        <div class="w-40 h-40 flex items-center justify-center">
+                            <div class="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    }
+                    else if (!string.IsNullOrEmpty(_qrCodeDataUrl))
+                    {
+                        <img src="@_qrCodeDataUrl" alt="QR Code" class="w-40 h-40" />
+                    }
+                    else
+                    {
+                        <div class="w-40 h-40 flex items-center justify-center text-slate-400">
+                            <span class="text-sm">Failed to load QR code</span>
+                        </div>
+                    }
+                </div>
+                <!-- Asset Info -->
+                <div class="text-center">
+                    <p class="text-2xl font-mono font-bold text-slate-900">@_asset.AssetTag</p>
+                    <p class="text-sm text-slate-600 mt-1">@_asset.DisplayName</p>
+                    @if (!string.IsNullOrEmpty(_asset.SerialNumber))
+                    {
+                        <p class="text-xs text-slate-500 mt-1 font-mono">S/N: @_asset.SerialNumber</p>
+                    }
+                </div>
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="() => _showLabelModal = false">Close</Button>
+            <Button OnClick="PrintLabelContent" Disabled="@(_loadingQrCode || string.IsNullOrEmpty(_qrCodeDataUrl))">
+                <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print Label
+            </Button>
         </FooterContent>
     </Modal>
 }
@@ -161,10 +588,47 @@ else
     private bool _showDeleteModal;
     private AssetDto? _asset;
 
+    // Assignment state
+    private List<AssetAssignmentDto>? _assignmentHistory;
+    private List<UserListItem>? _users;
+    private bool _showAllHistory;
+    private bool _showAssignModal;
+    private bool _showReturnModal;
+    private bool _assigning;
+    private bool _returning;
+    private string _assignUserId = "";
+    private string _assignNotes = "";
+    private string _assignError = "";
+    private string _returnCondition = "Good";
+    private string _returnNotes = "";
+    private string _returnError = "";
+
+    // Transfer state
+    private bool _showTransferModal;
+    private bool _transferring;
+    private string _transferUserId = "";
+    private string _transferNotes = "";
+    private string _transferError = "";
+
+    // Report/Label state
+    private bool _showReportModal;
+    private bool _showLabelModal;
+    private string? _qrCodeDataUrl;
+    private bool _loadingQrCode;
+
     protected override async Task OnInitializedAsync()
     {
         _asset = await Api.GetAssetAsync(Id);
         _loading = false;
+
+        // Load assignment history in background
+        _ = LoadAssignmentHistory();
+    }
+
+    private async Task LoadAssignmentHistory()
+    {
+        _assignmentHistory = await Api.GetAssetHistoryAsync(Id);
+        StateHasChanged();
     }
 
     private async Task DeleteAsset()
@@ -176,5 +640,195 @@ else
             Navigation.NavigateTo("/assets");
         }
         _deleting = false;
+    }
+
+    private async Task ShowAssignModal()
+    {
+        _assignUserId = "";
+        _assignNotes = "";
+        _assignError = "";
+        _users ??= await Api.GetUserListAsync();
+        _showAssignModal = true;
+    }
+
+    private void HideAssignModal() => _showAssignModal = false;
+
+    private async Task AssignAsset()
+    {
+        _assigning = true;
+        _assignError = "";
+
+        var (success, error) = await Api.AssignAssetAsync(Id, _assignUserId, string.IsNullOrWhiteSpace(_assignNotes) ? null : _assignNotes);
+
+        if (success)
+        {
+            _showAssignModal = false;
+            // Reload asset and history
+            _asset = await Api.GetAssetAsync(Id);
+            await LoadAssignmentHistory();
+        }
+        else
+        {
+            _assignError = error ?? "Failed to assign asset";
+        }
+
+        _assigning = false;
+    }
+
+    private void ShowReturnModal()
+    {
+        _returnCondition = "Good";
+        _returnNotes = "";
+        _returnError = "";
+        _showReturnModal = true;
+    }
+
+    private void HideReturnModal() => _showReturnModal = false;
+
+    private async Task ReturnAsset()
+    {
+        _returning = true;
+        _returnError = "";
+
+        var (success, error) = await Api.ReturnAssetAsync(Id, string.IsNullOrWhiteSpace(_returnNotes) ? null : _returnNotes, _returnCondition);
+
+        if (success)
+        {
+            _showReturnModal = false;
+            // Reload asset and history
+            _asset = await Api.GetAssetAsync(Id);
+            await LoadAssignmentHistory();
+        }
+        else
+        {
+            _returnError = error ?? "Failed to return asset";
+        }
+
+        _returning = false;
+    }
+
+    private string FormatPrice(decimal? price, string currency)
+    {
+        if (!price.HasValue) return "—";
+        return currency switch
+        {
+            "USD" => $"${price:N2}",
+            "EUR" => $"\u20AC{price:N2}",
+            "GBP" => $"\u00A3{price:N2}",
+            "PHP" => $"\u20B1{price:N2}",
+            "JPY" => $"\u00A5{price:N0}",
+            _ => $"{currency} {price:N2}"
+        };
+    }
+
+    private string GetWarrantyPeriod()
+    {
+        if (!_asset!.WarrantyStartDate.HasValue && !_asset.WarrantyEndDate.HasValue)
+            return "—";
+
+        var start = _asset.WarrantyStartDate?.ToString("MMM dd, yyyy") ?? "—";
+        var end = _asset.WarrantyEndDate?.ToString("MMM dd, yyyy") ?? "—";
+        return $"{start} — {end}";
+    }
+
+    private string GetWarrantyBadgeVariant() => _asset!.WarrantyStatus switch
+    {
+        WarrantyStatus.Active => "warranty-active",
+        WarrantyStatus.Expiring => "warranty-expiring",
+        WarrantyStatus.Expired => "warranty-expired",
+        _ => "default"
+    };
+
+    private string GetWarrantyBadgeText()
+    {
+        var days = _asset!.WarrantyDaysRemaining ?? 0;
+        return _asset.WarrantyStatus switch
+        {
+            WarrantyStatus.Active => "Active",
+            WarrantyStatus.Expiring => days <= 30 ? $"Expiring ({days}d)" : $"Expiring ({days / 30}mo)",
+            WarrantyStatus.Expired => "Expired",
+            _ => ""
+        };
+    }
+
+    private string GetWarrantyDaysClass() => _asset!.WarrantyStatus switch
+    {
+        WarrantyStatus.Active => "text-emerald-600 dark:text-emerald-400",
+        WarrantyStatus.Expiring => "text-amber-600 dark:text-amber-400",
+        WarrantyStatus.Expired => "text-red-600 dark:text-red-400",
+        _ => "text-slate-500 dark:text-slate-400"
+    };
+
+    // Transfer functionality
+    private async Task ShowTransferModal()
+    {
+        _transferUserId = "";
+        _transferNotes = "";
+        _transferError = "";
+        _users ??= await Api.GetUserListAsync();
+        _showTransferModal = true;
+    }
+
+    private void HideTransferModal() => _showTransferModal = false;
+
+    private async Task TransferAsset()
+    {
+        _transferring = true;
+        _transferError = "";
+
+        // If asset is currently assigned, return it first
+        if (!string.IsNullOrEmpty(_asset!.AssignedToUserId))
+        {
+            var (returnSuccess, returnError) = await Api.ReturnAssetAsync(Id, $"Transferred to another user. {_transferNotes}".Trim(), "Good");
+            if (!returnSuccess)
+            {
+                _transferError = returnError ?? "Failed to return asset before transfer";
+                _transferring = false;
+                return;
+            }
+        }
+
+        // Assign to new user
+        var (success, error) = await Api.AssignAssetAsync(Id, _transferUserId, string.IsNullOrWhiteSpace(_transferNotes) ? "Asset transferred" : _transferNotes);
+
+        if (success)
+        {
+            _showTransferModal = false;
+            // Reload asset and history
+            _asset = await Api.GetAssetAsync(Id);
+            await LoadAssignmentHistory();
+        }
+        else
+        {
+            _transferError = error ?? "Failed to transfer asset";
+        }
+
+        _transferring = false;
+    }
+
+    // Report functionality
+    private void ShowReportModal() => _showReportModal = true;
+
+    private async Task PrintReport()
+    {
+        await JS.InvokeVoidAsync("printElement", "asset-report");
+    }
+
+    // Print Label functionality
+    private async Task PrintLabel()
+    {
+        _showLabelModal = true;
+        _loadingQrCode = true;
+        _qrCodeDataUrl = null;
+        StateHasChanged();
+
+        _qrCodeDataUrl = await Api.GetAssetQrCodeBase64Async(Id);
+        _loadingQrCode = false;
+        StateHasChanged();
+    }
+
+    private async Task PrintLabelContent()
+    {
+        await JS.InvokeVoidAsync("printElement", "asset-label");
     }
 }
