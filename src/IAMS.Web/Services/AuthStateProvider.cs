@@ -15,12 +15,13 @@ public class AuthStateProvider(ILocalStorageService localStorage) : Authenticati
         if (string.IsNullOrEmpty(token) || user is null)
             return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Email, user.Email),
-            new Claim(ClaimTypes.Name, user.FullName),
-            new Claim(ClaimTypes.Role, user.Role)
+            new(ClaimTypes.NameIdentifier, user.Id),
+            new(ClaimTypes.Email, user.Email),
+            new(ClaimTypes.Name, user.FullName),
+            new(ClaimTypes.Role, user.Role),
+            new("department", user.Department ?? "")
         };
 
         var identity = new ClaimsIdentity(claims, "jwt");

@@ -9,7 +9,7 @@ public record AssetDto
     public required string Category { get; init; }
     public required string Status { get; init; }
     public string? Location { get; init; }
-    public int? AssignedToUserId { get; init; }
+    public string? AssignedToUserId { get; init; }
     public string? AssignedToUserName { get; init; }
     public decimal? PurchasePrice { get; init; }
     public DateTime? PurchaseDate { get; init; }
@@ -27,7 +27,7 @@ public record CreateAssetDto
     public required string Category { get; init; }
     public required string Status { get; init; }
     public string? Location { get; init; }
-    public int? AssignedToUserId { get; init; }
+    public string? AssignedToUserId { get; init; }
     public decimal? PurchasePrice { get; init; }
     public DateTime? PurchaseDate { get; init; }
     public DateTime? WarrantyExpiry { get; init; }
@@ -42,7 +42,7 @@ public record UpdateAssetDto
     public string? Category { get; init; }
     public string? Status { get; init; }
     public string? Location { get; init; }
-    public int? AssignedToUserId { get; init; }
+    public string? AssignedToUserId { get; init; }
     public decimal? PurchasePrice { get; init; }
     public DateTime? PurchaseDate { get; init; }
     public DateTime? WarrantyExpiry { get; init; }

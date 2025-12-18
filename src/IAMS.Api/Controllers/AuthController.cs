@@ -1,35 +1,44 @@
 using System.Security.Claims;
-using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Api.Services;
 using IAMS.Shared.DTOs;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace IAMS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController(AppDbContext db, TokenService tokenService) : ControllerBase
+public class AuthController(
+    UserManager<ApplicationUser> userManager,
+    SignInManager<ApplicationUser> signInManager,
+    TokenService tokenService) : ControllerBase
 {
     [HttpPost("login")]
     public async Task<ActionResult<ApiResponse<LoginResponseDto>>> Login(LoginDto dto)
     {
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+        var user = await userManager.FindByEmailAsync(dto.Email);
 
-        if (user is null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+        if (user is null)
+            return Unauthorized(ApiResponse<LoginResponseDto>.Fail("Invalid credentials"));
+
+        var result = await signInManager.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: false);
+
+        if (!result.Succeeded)
             return Unauthorized(ApiResponse<LoginResponseDto>.Fail("Invalid credentials"));
 
         if (!user.IsActive)
             return Forbid();
 
-        var token = tokenService.GenerateToken(user);
+        var token = await tokenService.GenerateTokenAsync(user);
+        var roles = await userManager.GetRolesAsync(user);
+
         var response = new LoginResponseDto
         {
             Token = token,
             ExpiresAt = tokenService.GetTokenExpiry(),
-            User = MapToDto(user)
+            User = MapToDto(user, roles.FirstOrDefault() ?? "Staff")
         };
 
         return Ok(ApiResponse<LoginResponseDto>.Ok(response));
@@ -38,63 +47,108 @@ public class AuthController(AppDbContext db, TokenService tokenService) : Contro
     [HttpPost("register")]
     public async Task<ActionResult<ApiResponse<UserDto>>> Register(CreateUserDto dto)
     {
-        if (await db.Users.AnyAsync(u => u.Email == dto.Email))
+        var existingUser = await userManager.FindByEmailAsync(dto.Email);
+        if (existingUser is not null)
             return BadRequest(ApiResponse<UserDto>.Fail("Email already exists"));
 
-        var user = new User
+        var user = new ApplicationUser
         {
+            UserName = dto.Email,
             Email = dto.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             FullName = dto.FullName,
-            Department = dto.Department,
-            Role = dto.Role
+            Department = dto.Department
         };
 
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
+        var result = await userManager.CreateAsync(user, dto.Password);
 
-        return CreatedAtAction(nameof(GetCurrentUser), ApiResponse<UserDto>.Ok(MapToDto(user)));
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            return BadRequest(ApiResponse<UserDto>.Fail(errors));
+        }
+
+        // Default new users to Staff role
+        var role = dto.Role is "Admin" or "Auditor" ? dto.Role : "Staff";
+        await userManager.AddToRoleAsync(user, role);
+
+        return CreatedAtAction(nameof(GetCurrentUser), ApiResponse<UserDto>.Ok(MapToDto(user, role)));
     }
 
     [Authorize]
     [HttpGet("me")]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetCurrentUser()
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var user = await db.Users.FindAsync(userId);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await userManager.FindByIdAsync(userId!);
 
-        return user is null
-            ? NotFound()
-            : Ok(ApiResponse<UserDto>.Ok(MapToDto(user)));
+        if (user is null)
+            return NotFound();
+
+        var roles = await userManager.GetRolesAsync(user);
+        return Ok(ApiResponse<UserDto>.Ok(MapToDto(user, roles.FirstOrDefault() ?? "Staff")));
     }
 
     [Authorize]
     [HttpPost("change-password")]
     public async Task<ActionResult<ApiResponse<object>>> ChangePassword(ChangePasswordDto dto)
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var user = await db.Users.FindAsync(userId);
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await userManager.FindByIdAsync(userId!);
 
         if (user is null)
             return NotFound();
 
-        if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
-            return BadRequest(ApiResponse<object>.Fail("Current password is incorrect"));
+        var result = await userManager.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
 
-        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            return BadRequest(ApiResponse<object>.Fail(errors));
+        }
+
         user.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        await userManager.UpdateAsync(user);
 
         return Ok(ApiResponse<object>.Ok(new { }, "Password changed successfully"));
     }
 
-    private static UserDto MapToDto(User user) => new()
+    [Authorize]
+    [HttpPost("refresh")]
+    public async Task<ActionResult<ApiResponse<LoginResponseDto>>> RefreshToken()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await userManager.FindByIdAsync(userId!);
+
+        if (user is null || !user.IsActive)
+            return Unauthorized();
+
+        var token = await tokenService.GenerateTokenAsync(user);
+        var roles = await userManager.GetRolesAsync(user);
+
+        var response = new LoginResponseDto
+        {
+            Token = token,
+            ExpiresAt = tokenService.GetTokenExpiry(),
+            User = MapToDto(user, roles.FirstOrDefault() ?? "Staff")
+        };
+
+        return Ok(ApiResponse<LoginResponseDto>.Ok(response));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("roles")]
+    public ActionResult<string[]> GetRoles()
+    {
+        return Ok(new[] { "Admin", "Staff", "Auditor" });
+    }
+
+    private static UserDto MapToDto(ApplicationUser user, string role) => new()
     {
         Id = user.Id,
-        Email = user.Email,
+        Email = user.Email!,
         FullName = user.FullName,
         Department = user.Department,
-        Role = user.Role,
+        Role = role,
         IsActive = user.IsActive,
         CreatedAt = user.CreatedAt
     };

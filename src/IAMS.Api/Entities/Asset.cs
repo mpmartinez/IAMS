@@ -9,8 +9,8 @@ public class Asset
     public required string Category { get; set; }
     public required string Status { get; set; }
     public string? Location { get; set; }
-    public int? AssignedToUserId { get; set; }
-    public User? AssignedToUser { get; set; }
+    public string? AssignedToUserId { get; set; }
+    public ApplicationUser? AssignedToUser { get; set; }
     public decimal? PurchasePrice { get; set; }
     public DateTime? PurchaseDate { get; set; }
     public DateTime? WarrantyExpiry { get; set; }

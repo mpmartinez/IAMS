@@ -12,6 +12,7 @@ namespace IAMS.Api.Controllers;
 [Authorize]
 public class AssetsController(AppDbContext db) : ControllerBase
 {
+    // All authenticated users can view assets
     [HttpGet]
     public async Task<ActionResult<PagedResponse<AssetDto>>> GetAssets(
         [FromQuery] string? search = null,
@@ -66,7 +67,9 @@ public class AssetsController(AppDbContext db) : ControllerBase
             : Ok(ApiResponse<AssetDto>.Ok(MapToDto(asset)));
     }
 
+    // Only Admin and Staff can create assets
     [HttpPost]
+    [Authorize(Roles = "Admin,Staff")]
     public async Task<ActionResult<ApiResponse<AssetDto>>> CreateAsset(CreateAssetDto dto)
     {
         if (await db.Assets.AnyAsync(a => a.AssetTag == dto.AssetTag))
@@ -93,7 +96,9 @@ public class AssetsController(AppDbContext db) : ControllerBase
         return CreatedAtAction(nameof(GetAsset), new { id = asset.Id }, ApiResponse<AssetDto>.Ok(MapToDto(asset)));
     }
 
+    // Only Admin and Staff can update assets
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin,Staff")]
     public async Task<ActionResult<ApiResponse<AssetDto>>> UpdateAsset(int id, UpdateAssetDto dto)
     {
         var asset = await db.Assets.FindAsync(id);
@@ -112,7 +117,7 @@ public class AssetsController(AppDbContext db) : ControllerBase
         if (dto.Category is not null) asset.Category = dto.Category;
         if (dto.Status is not null) asset.Status = dto.Status;
         if (dto.Location is not null) asset.Location = dto.Location;
-        if (dto.AssignedToUserId.HasValue) asset.AssignedToUserId = dto.AssignedToUserId;
+        if (dto.AssignedToUserId is not null) asset.AssignedToUserId = dto.AssignedToUserId;
         if (dto.PurchasePrice.HasValue) asset.PurchasePrice = dto.PurchasePrice;
         if (dto.PurchaseDate.HasValue) asset.PurchaseDate = dto.PurchaseDate;
         if (dto.WarrantyExpiry.HasValue) asset.WarrantyExpiry = dto.WarrantyExpiry;
@@ -124,7 +129,9 @@ public class AssetsController(AppDbContext db) : ControllerBase
         return Ok(ApiResponse<AssetDto>.Ok(MapToDto(asset)));
     }
 
+    // Only Admin can delete assets
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteAsset(int id)
     {
         var asset = await db.Assets.FindAsync(id);
@@ -166,6 +173,33 @@ public class AssetsController(AppDbContext db) : ControllerBase
             AssetStatus.Retired,
             AssetStatus.Lost
         });
+
+    // Reports endpoint - Admin and Auditor only
+    [HttpGet("reports/summary")]
+    [Authorize(Roles = "Admin,Auditor")]
+    public async Task<ActionResult> GetAssetSummary()
+    {
+        var summary = new
+        {
+            TotalAssets = await db.Assets.CountAsync(),
+            ByStatus = await db.Assets
+                .GroupBy(a => a.Status)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync(),
+            ByCategory = await db.Assets
+                .GroupBy(a => a.Category)
+                .Select(g => new { Category = g.Key, Count = g.Count() })
+                .ToListAsync(),
+            TotalValue = await db.Assets
+                .Where(a => a.PurchasePrice.HasValue)
+                .SumAsync(a => a.PurchasePrice ?? 0),
+            AssignedAssets = await db.Assets.CountAsync(a => a.AssignedToUserId != null),
+            ExpiringWarranties = await db.Assets
+                .CountAsync(a => a.WarrantyExpiry.HasValue && a.WarrantyExpiry <= DateTime.UtcNow.AddMonths(3))
+        };
+
+        return Ok(ApiResponse<object>.Ok(summary));
+    }
 
     private static AssetDto MapToDto(Asset asset) => new()
     {

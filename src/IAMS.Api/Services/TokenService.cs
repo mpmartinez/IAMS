@@ -2,13 +2,14 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using IAMS.Api.Entities;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 
 namespace IAMS.Api.Services;
 
-public class TokenService(IConfiguration configuration)
+public class TokenService(IConfiguration configuration, UserManager<ApplicationUser> userManager)
 {
-    public string GenerateToken(User user)
+    public async Task<string> GenerateTokenAsync(ApplicationUser user)
     {
         var key = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(configuration["Jwt:Key"]
@@ -16,13 +17,20 @@ public class TokenService(IConfiguration configuration)
 
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new[]
+        var roles = await userManager.GetRolesAsync(user);
+
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Email, user.Email),
-            new Claim(ClaimTypes.Name, user.FullName),
-            new Claim(ClaimTypes.Role, user.Role)
+            new(ClaimTypes.NameIdentifier, user.Id),
+            new(ClaimTypes.Email, user.Email!),
+            new(ClaimTypes.Name, user.FullName),
+            new("department", user.Department ?? "")
         };
+
+        foreach (var role in roles)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
 
         var expireMinutes = int.Parse(configuration["Jwt:ExpireMinutes"] ?? "60");
 

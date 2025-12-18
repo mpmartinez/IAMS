@@ -42,12 +42,18 @@
 
 <div class="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
     <p class="text-xs text-slate-400 text-center mb-3">Demo credentials</p>
-    <div class="flex gap-2">
-        <button type="button" @onclick='() => FillCredentials("admin@company.com", "admin123")' class="flex-1 px-3 py-2 text-xs bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-            Admin
+    <div class="grid grid-cols-3 gap-2">
+        <button type="button" @onclick='() => FillCredentials("admin@company.com", "Admin123!")' class="px-3 py-2.5 text-xs bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all shadow-sm active:scale-95">
+            <div class="font-semibold">Admin</div>
+            <div class="text-purple-200 text-[10px] mt-0.5">Full access</div>
         </button>
-        <button type="button" @onclick='() => FillCredentials("user@company.com", "user123")' class="flex-1 px-3 py-2 text-xs bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
-            User
+        <button type="button" @onclick='() => FillCredentials("staff@company.com", "Staff123!")' class="px-3 py-2.5 text-xs bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm active:scale-95">
+            <div class="font-semibold">Staff</div>
+            <div class="text-blue-200 text-[10px] mt-0.5">Manage assets</div>
+        </button>
+        <button type="button" @onclick='() => FillCredentials("auditor@company.com", "Auditor123!")' class="px-3 py-2.5 text-xs bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-lg hover:from-teal-600 hover:to-teal-700 transition-all shadow-sm active:scale-95">
+            <div class="font-semibold">Auditor</div>
+            <div class="text-teal-200 text-[10px] mt-0.5">View reports</div>
         </button>
     </div>
 </div>
