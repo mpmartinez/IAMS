@@ -1,7 +1,7 @@
-using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Shared.DTOs;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,8 +9,8 @@ namespace IAMS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = "Admin")]
-public class UsersController(AppDbContext db) : ControllerBase
+[Authorize(Roles = "Admin")]
+public class UsersController(UserManager<ApplicationUser> userManager) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedResponse<UserDto>>> GetUsers(
@@ -18,23 +18,29 @@ public class UsersController(AppDbContext db) : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        var query = db.Users.AsQueryable();
+        var query = userManager.Users.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             search = search.ToLower();
             query = query.Where(u =>
-                u.Email.ToLower().Contains(search) ||
+                (u.Email != null && u.Email.ToLower().Contains(search)) ||
                 u.FullName.ToLower().Contains(search));
         }
 
         var totalCount = await query.CountAsync();
-        var items = await query
+        var users = await query
             .OrderBy(u => u.FullName)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(u => MapToDto(u))
             .ToListAsync();
+
+        var items = new List<UserDto>();
+        foreach (var user in users)
+        {
+            var roles = await userManager.GetRolesAsync(user);
+            items.Add(MapToDto(user, roles.FirstOrDefault() ?? "Staff"));
+        }
 
         return Ok(new PagedResponse<UserDto>
         {
@@ -45,50 +51,73 @@ public class UsersController(AppDbContext db) : ControllerBase
         });
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<ApiResponse<UserDto>>> GetUser(int id)
+    [HttpGet("{id}")]
+    public async Task<ActionResult<ApiResponse<UserDto>>> GetUser(string id)
     {
-        var user = await db.Users.FindAsync(id);
-        return user is null
-            ? NotFound()
-            : Ok(ApiResponse<UserDto>.Ok(MapToDto(user)));
+        var user = await userManager.FindByIdAsync(id);
+        if (user is null)
+            return NotFound();
+
+        var roles = await userManager.GetRolesAsync(user);
+        return Ok(ApiResponse<UserDto>.Ok(MapToDto(user, roles.FirstOrDefault() ?? "Staff")));
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<ActionResult<ApiResponse<UserDto>>> UpdateUser(int id, UpdateUserDto dto)
+    [HttpPut("{id}")]
+    public async Task<ActionResult<ApiResponse<UserDto>>> UpdateUser(string id, UpdateUserDto dto)
     {
-        var user = await db.Users.FindAsync(id);
+        var user = await userManager.FindByIdAsync(id);
         if (user is null)
             return NotFound();
 
         if (dto.Email is not null && dto.Email != user.Email)
         {
-            if (await db.Users.AnyAsync(u => u.Email == dto.Email && u.Id != id))
+            var existingUser = await userManager.FindByEmailAsync(dto.Email);
+            if (existingUser is not null && existingUser.Id != id)
                 return BadRequest(ApiResponse<UserDto>.Fail("Email already exists"));
+
             user.Email = dto.Email;
+            user.UserName = dto.Email;
         }
 
         if (dto.FullName is not null) user.FullName = dto.FullName;
         if (dto.Department is not null) user.Department = dto.Department;
-        if (dto.Role is not null) user.Role = dto.Role;
         if (dto.IsActive.HasValue) user.IsActive = dto.IsActive.Value;
 
         user.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
 
-        return Ok(ApiResponse<UserDto>.Ok(MapToDto(user)));
+        var result = await userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            return BadRequest(ApiResponse<UserDto>.Fail(errors));
+        }
+
+        // Update role if changed
+        if (dto.Role is not null)
+        {
+            var currentRoles = await userManager.GetRolesAsync(user);
+            if (!currentRoles.Contains(dto.Role))
+            {
+                await userManager.RemoveFromRolesAsync(user, currentRoles);
+                await userManager.AddToRoleAsync(user, dto.Role);
+            }
+        }
+
+        var roles = await userManager.GetRolesAsync(user);
+        return Ok(ApiResponse<UserDto>.Ok(MapToDto(user, roles.FirstOrDefault() ?? "Staff")));
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> DeleteUser(int id)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteUser(string id)
     {
-        var user = await db.Users.FindAsync(id);
+        var user = await userManager.FindByIdAsync(id);
         if (user is null)
             return NotFound();
 
+        // Soft delete
         user.IsActive = false;
         user.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        await userManager.UpdateAsync(user);
 
         return NoContent();
     }
@@ -97,7 +126,7 @@ public class UsersController(AppDbContext db) : ControllerBase
     [Authorize]
     public async Task<ActionResult> GetUserList()
     {
-        var users = await db.Users
+        var users = await userManager.Users
             .Where(u => u.IsActive)
             .OrderBy(u => u.FullName)
             .Select(u => new { u.Id, u.FullName, u.Department })
@@ -106,13 +135,13 @@ public class UsersController(AppDbContext db) : ControllerBase
         return Ok(users);
     }
 
-    private static UserDto MapToDto(User user) => new()
+    private static UserDto MapToDto(ApplicationUser user, string role) => new()
     {
         Id = user.Id,
-        Email = user.Email,
+        Email = user.Email!,
         FullName = user.FullName,
         Department = user.Department,
-        Role = user.Role,
+        Role = role,
         IsActive = user.IsActive,
         CreatedAt = user.CreatedAt
     };

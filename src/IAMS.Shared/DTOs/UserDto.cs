@@ -2,7 +2,7 @@ namespace IAMS.Shared.DTOs;
 
 public record UserDto
 {
-    public int Id { get; init; }
+    public required string Id { get; init; }
     public required string Email { get; init; }
     public required string FullName { get; init; }
     public string? Department { get; init; }
@@ -17,7 +17,7 @@ public record CreateUserDto
     public required string Password { get; init; }
     public required string FullName { get; init; }
     public string? Department { get; init; }
-    public string Role { get; init; } = "User";
+    public string Role { get; init; } = "Staff";
 }
 
 public record UpdateUserDto
