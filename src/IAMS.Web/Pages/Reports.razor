@@ -1,85 +1,497 @@
 @page "/reports"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Admin,Auditor")]
+@inject ApiClient Api
+@inject AuthService AuthService
+@inject IJSRuntime JS
 
 <PageTitle>Reports - IAMS</PageTitle>
 
 <div class="space-y-6">
-    <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Reports</h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">Generate and export reports</p>
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Asset Reports</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">Generate and export asset data reports</p>
+        </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div class="stagger-item">
-            <button class="w-full text-left bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 card-hover group">
-                <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-4 transition-transform duration-200 group-hover:scale-110">
+    <!-- Report Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+        <!-- Asset Inventory Report -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 lg:p-6">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
                     <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                     </svg>
                 </div>
-                <h3 class="font-semibold text-slate-900 dark:text-white mb-1">Asset Inventory</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Complete list of all assets with details</p>
-            </button>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Asset Inventory</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Complete list of all assets with details</p>
+
+                    <!-- Filters -->
+                    <div class="mt-4 grid grid-cols-2 gap-3">
+                        <select @bind="_inventoryDeviceType" class="px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white">
+                            <option value="">All Device Types</option>
+                            @if (_deviceTypes != null)
+                            {
+                                @foreach (var type in _deviceTypes)
+                                {
+                                    <option value="@type">@type</option>
+                                }
+                            }
+                        </select>
+                        <select @bind="_inventoryStatus" class="px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white">
+                            <option value="">All Statuses</option>
+                            @if (_statuses != null)
+                            {
+                                @foreach (var status in _statuses)
+                                {
+                                    <option value="@status">@status</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mt-4 flex gap-3">
+                        <button @onclick="ViewInventoryReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Preview
+                        </button>
+                        <button @onclick="ExportInventoryReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Export CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="stagger-item">
-            <button class="w-full text-left bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 card-hover group">
-                <div class="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4 transition-transform duration-200 group-hover:scale-110">
+        <!-- Assigned Assets by User Report -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 lg:p-6">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
                     <svg class="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                </div>
-                <h3 class="font-semibold text-slate-900 dark:text-white mb-1">Status Summary</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Assets grouped by current status</p>
-            </button>
-        </div>
-
-        <div class="stagger-item">
-            <button class="w-full text-left bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 card-hover group">
-                <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4 transition-transform duration-200 group-hover:scale-110">
-                    <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </div>
-                <h3 class="font-semibold text-slate-900 dark:text-white mb-1">Warranty Expiring</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Assets with warranties expiring soon</p>
-            </button>
-        </div>
-
-        <div class="stagger-item">
-            <button class="w-full text-left bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 card-hover group">
-                <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-4 transition-transform duration-200 group-hover:scale-110">
-                    <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                 </div>
-                <h3 class="font-semibold text-slate-900 dark:text-white mb-1">Assignment Report</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Assets assigned to each user</p>
-            </button>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Assigned Assets by User</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Assets grouped by assigned user</p>
+
+                    <!-- Filters -->
+                    <div class="mt-4">
+                        <select @bind="_assignedUserId" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white">
+                            <option value="">All Users</option>
+                            @if (_users != null)
+                            {
+                                @foreach (var user in _users)
+                                {
+                                    <option value="@user.Id">@user.FullName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mt-4 flex gap-3">
+                        <button @onclick="ViewAssignedByUserReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Preview
+                        </button>
+                        <button @onclick="ExportAssignedByUserReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Export CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="stagger-item">
-            <button class="w-full text-left bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 card-hover group">
-                <div class="w-12 h-12 rounded-xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center mb-4 transition-transform duration-200 group-hover:scale-110">
-                    <svg class="w-6 h-6 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <!-- Warranty Expiry Report -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 lg:p-6">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                    <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Warranty Expiry</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Assets with warranty information</p>
+
+                    <!-- Filters -->
+                    <div class="mt-4 grid grid-cols-2 gap-3">
+                        <select @bind="_warrantyStatus" class="px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white">
+                            <option value="">All Statuses</option>
+                            <option value="expired">Expired</option>
+                            <option value="expiring">Expiring</option>
+                            <option value="active">Active</option>
+                        </select>
+                        <select @bind="_warrantyDaysThreshold" class="px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white">
+                            <option value="">No Threshold</option>
+                            <option value="30">Next 30 days</option>
+                            <option value="60">Next 60 days</option>
+                            <option value="90">Next 90 days</option>
+                        </select>
+                    </div>
+
+                    <div class="mt-4 flex gap-3">
+                        <button @onclick="ViewWarrantyExpiryReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Preview
+                        </button>
+                        <button @onclick="ExportWarrantyExpiryReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Export CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Asset Value Report -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 lg:p-6">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                    <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                 </div>
-                <h3 class="font-semibold text-slate-900 dark:text-white mb-1">Value Report</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Total asset value by category</p>
-            </button>
-        </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Total Asset Value</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Asset values by device type and status</p>
 
-        <div class="stagger-item">
-            <button class="w-full text-left bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 card-hover group">
-                <div class="w-12 h-12 rounded-xl bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center mb-4 transition-transform duration-200 group-hover:scale-110">
-                    <svg class="w-6 h-6 text-cyan-600 dark:text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
+                    @if (_assetValueSummary != null)
+                    {
+                        <div class="mt-4 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
+                            <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                                @FormatCurrency(_assetValueSummary.GrandTotalValue, _assetValueSummary.PrimaryCurrency)
+                            </div>
+                            <div class="text-xs text-purple-600/70 dark:text-purple-400/70">
+                                @_assetValueSummary.TotalAssetCount assets
+                            </div>
+                        </div>
+                    }
+
+                    <div class="mt-4 flex gap-3">
+                        <button @onclick="ViewAssetValueReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Preview
+                        </button>
+                        <button @onclick="ExportAssetValueReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Export CSV
+                        </button>
+                    </div>
                 </div>
-                <h3 class="font-semibold text-slate-900 dark:text-white mb-1">Export All Data</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Download complete database as CSV</p>
-            </button>
+            </div>
         </div>
     </div>
+
+    <!-- Report Preview Modal -->
+    @if (_showPreview)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @onclick="ClosePreview"></div>
+            <div class="relative w-full max-w-5xl max-h-[85vh] bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex flex-col animate-scale-in">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">@_previewTitle</h3>
+                    <button @onclick="ClosePreview" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-auto p-6">
+                    @if (_isLoadingPreview)
+                    {
+                        <div class="flex items-center justify-center py-12">
+                            <div class="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin"></div>
+                        </div>
+                    }
+                    else
+                    {
+                        @_previewContent
+                    }
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="flex justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+                    <button @onclick="ClosePreview" class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private string[]? _deviceTypes;
+    private string[]? _statuses;
+    private List<UserListItem>? _users;
+    private AssetValueSummaryDto? _assetValueSummary;
+
+    private string _inventoryDeviceType = "";
+    private string _inventoryStatus = "";
+    private string _assignedUserId = "";
+    private string _warrantyStatus = "";
+    private string _warrantyDaysThreshold = "";
+
+    private bool _showPreview;
+    private bool _isLoadingPreview;
+    private string _previewTitle = "";
+    private RenderFragment? _previewContent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFilters();
+        await LoadAssetValueSummary();
+    }
+
+    private async Task LoadFilters()
+    {
+        try
+        {
+            _deviceTypes = await Api.GetDeviceTypesAsync();
+            _statuses = await Api.GetStatusesAsync();
+            _users = await Api.GetUserListAsync();
+        }
+        catch { }
+    }
+
+    private async Task LoadAssetValueSummary()
+    {
+        try
+        {
+            _assetValueSummary = await Api.GetAssetValueReportAsync();
+        }
+        catch { }
+    }
+
+    private async Task ViewInventoryReport()
+    {
+        _previewTitle = "Asset Inventory Report";
+        _showPreview = true;
+        _isLoadingPreview = true;
+        StateHasChanged();
+
+        try
+        {
+            var data = await Api.GetInventoryReportAsync(
+                string.IsNullOrEmpty(_inventoryDeviceType) ? null : _inventoryDeviceType,
+                string.IsNullOrEmpty(_inventoryStatus) ? null : _inventoryStatus);
+
+            _previewContent = BuildTablePreview(data ?? new(), new[] { "Asset Tag", "Type", "Manufacturer", "Model", "Status", "Assigned To", "Value" },
+                row => new object[] { row.AssetTag, row.DeviceType, row.Manufacturer ?? "—", row.Model ?? "—", row.Status, row.AssignedTo ?? "—", FormatCurrency(row.PurchasePrice, row.Currency) });
+        }
+        catch (Exception ex)
+        {
+            _previewContent = @<div class="text-red-500">Error: @ex.Message</div>;
+        }
+        _isLoadingPreview = false;
+    }
+
+    private async Task ExportInventoryReport()
+    {
+        var filters = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(_inventoryDeviceType)) filters["deviceType"] = _inventoryDeviceType;
+        if (!string.IsNullOrEmpty(_inventoryStatus)) filters["status"] = _inventoryStatus;
+        await DownloadReport("inventory", filters);
+    }
+
+    private async Task ViewAssignedByUserReport()
+    {
+        _previewTitle = "Assigned Assets by User";
+        _showPreview = true;
+        _isLoadingPreview = true;
+        StateHasChanged();
+
+        try
+        {
+            var data = await Api.GetAssignedByUserReportAsync(string.IsNullOrEmpty(_assignedUserId) ? null : _assignedUserId);
+            _previewContent = BuildTablePreview(data ?? new(), new[] { "User", "Department", "Asset Tag", "Type", "Device", "Value" },
+                row => new object[] { row.UserName, row.Department ?? "—", row.AssetTag, row.DeviceType, $"{row.Manufacturer ?? ""} {row.Model ?? ""}".Trim(), FormatCurrency(row.PurchasePrice, row.Currency) });
+        }
+        catch (Exception ex)
+        {
+            _previewContent = @<div class="text-red-500">Error: @ex.Message</div>;
+        }
+        _isLoadingPreview = false;
+    }
+
+    private async Task ExportAssignedByUserReport()
+    {
+        var filters = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(_assignedUserId)) filters["userId"] = _assignedUserId;
+        await DownloadReport("assigned-by-user", filters);
+    }
+
+    private async Task ViewWarrantyExpiryReport()
+    {
+        _previewTitle = "Warranty Expiry Report";
+        _showPreview = true;
+        _isLoadingPreview = true;
+        StateHasChanged();
+
+        try
+        {
+            int? threshold = string.IsNullOrEmpty(_warrantyDaysThreshold) ? null : int.Parse(_warrantyDaysThreshold);
+            var data = await Api.GetWarrantyExpiryReportAsync(string.IsNullOrEmpty(_warrantyStatus) ? null : _warrantyStatus, threshold);
+            _previewContent = BuildTablePreview(data ?? new(), new[] { "Asset Tag", "Type", "Device", "Provider", "Expires", "Days", "Status" },
+                row => new object[] { row.AssetTag, row.DeviceType, $"{row.Manufacturer ?? ""} {row.Model ?? ""}".Trim(), row.WarrantyProvider ?? "—", row.WarrantyEndDate.ToString("MMM dd, yyyy"), row.DaysRemaining, row.WarrantyStatus });
+        }
+        catch (Exception ex)
+        {
+            _previewContent = @<div class="text-red-500">Error: @ex.Message</div>;
+        }
+        _isLoadingPreview = false;
+    }
+
+    private async Task ExportWarrantyExpiryReport()
+    {
+        var filters = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(_warrantyStatus)) filters["warrantyStatus"] = _warrantyStatus;
+        if (!string.IsNullOrEmpty(_warrantyDaysThreshold)) filters["daysThreshold"] = _warrantyDaysThreshold;
+        await DownloadReport("warranty-expiry", filters);
+    }
+
+    private async Task ViewAssetValueReport()
+    {
+        _previewTitle = "Asset Value Report";
+        _showPreview = true;
+        _isLoadingPreview = true;
+        StateHasChanged();
+
+        try
+        {
+            var data = await Api.GetAssetValueReportAsync();
+            if (data != null)
+            {
+                _previewContent = @<div>
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                        <div class="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
+                            <div class="text-sm text-purple-600 dark:text-purple-400">Total Value</div>
+                            <div class="text-2xl font-bold text-purple-700 dark:text-purple-300">@FormatCurrency(data.GrandTotalValue, data.PrimaryCurrency)</div>
+                        </div>
+                        <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
+                            <div class="text-sm text-slate-600 dark:text-slate-400">Total Assets</div>
+                            <div class="text-2xl font-bold text-slate-900 dark:text-white">@data.TotalAssetCount</div>
+                        </div>
+                        <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
+                            <div class="text-sm text-slate-600 dark:text-slate-400">Average</div>
+                            <div class="text-2xl font-bold text-slate-900 dark:text-white">@FormatCurrency(data.AverageAssetValue, data.PrimaryCurrency)</div>
+                        </div>
+                    </div>
+                    <h4 class="font-semibold text-slate-900 dark:text-white mb-3">By Device Type</h4>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-200 dark:border-slate-700">
+                                <th class="text-left py-2 font-medium text-slate-700 dark:text-slate-300">Type</th>
+                                <th class="text-right py-2 font-medium text-slate-700 dark:text-slate-300">Count</th>
+                                <th class="text-right py-2 font-medium text-slate-700 dark:text-slate-300">Total</th>
+                                <th class="text-right py-2 font-medium text-slate-700 dark:text-slate-300">Avg</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in data.ByDeviceType)
+                            {
+                                <tr class="border-b border-slate-100 dark:border-slate-700/50">
+                                    <td class="py-2 text-slate-900 dark:text-white">@row.DeviceType</td>
+                                    <td class="py-2 text-right text-slate-600 dark:text-slate-400">@row.AssetCount</td>
+                                    <td class="py-2 text-right text-slate-900 dark:text-white font-medium">@FormatCurrency(row.TotalValue, row.Currency)</td>
+                                    <td class="py-2 text-right text-slate-600 dark:text-slate-400">@FormatCurrency(row.AverageValue, row.Currency)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>;
+            }
+        }
+        catch (Exception ex)
+        {
+            _previewContent = @<div class="text-red-500">Error: @ex.Message</div>;
+        }
+        _isLoadingPreview = false;
+    }
+
+    private async Task ExportAssetValueReport()
+    {
+        await DownloadReport("asset-value", null);
+    }
+
+    private RenderFragment BuildTablePreview<T>(List<T> data, string[] headers, Func<T, object[]> rowMapper) => @<div>
+        <div class="mb-4 text-sm text-slate-500 dark:text-slate-400">@data.Count rows</div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        @foreach (var h in headers)
+                        {
+                            <th class="text-left py-2 px-3 font-medium text-slate-700 dark:text-slate-300">@h</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in data.Take(50))
+                    {
+                        var cells = rowMapper(row);
+                        <tr class="border-b border-slate-100 dark:border-slate-700/50">
+                            @foreach (var cell in cells)
+                            {
+                                <td class="py-2 px-3 text-slate-600 dark:text-slate-400">@cell</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (data.Count > 50)
+            {
+                <div class="mt-4 text-center text-sm text-slate-500">Showing first 50 of @data.Count rows</div>
+            }
+        </div>
+    </div>;
+
+    private void ClosePreview()
+    {
+        _showPreview = false;
+        _previewContent = null;
+    }
+
+    private async Task DownloadReport(string reportType, Dictionary<string, string>? filters)
+    {
+        var url = Api.GetReportExportUrl(reportType, filters);
+        var token = await AuthService.GetTokenAsync();
+        await JS.InvokeVoidAsync("downloadWithAuth", $"https://localhost:5001/{url}", token);
+    }
+
+    private static string FormatCurrency(decimal? value, string? currency)
+    {
+        if (!value.HasValue) return "—";
+        var symbol = currency switch { "USD" => "$", "EUR" => "€", "GBP" => "£", "PHP" => "₱", _ => currency + " " };
+        return $"{symbol}{value:N2}";
+    }
+}
