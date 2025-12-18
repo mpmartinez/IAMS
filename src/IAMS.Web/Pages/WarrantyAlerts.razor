@@ -1,0 +1,347 @@
+@page "/warranty-alerts"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Warranty Alerts - IAMS</PageTitle>
+
+<div class="space-y-4 sm:space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Warranty Alerts</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Track expiring and expired warranties</p>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    @if (_summary is not null)
+    {
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-slate-900 dark:text-white">@_summary.TotalAlerts</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Total Alerts</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-amber-200 dark:border-amber-900/50 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">@_summary.ExpiringCount</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Expiring Soon</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 dark:border-red-900/50 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-red-600 dark:text-red-400">@_summary.ExpiredCount</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Expired</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-primary-200 dark:border-primary-900/50 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-primary-600 dark:text-primary-400">@_summary.UnacknowledgedCount</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Unacknowledged</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Filters -->
+    <div class="flex flex-col sm:flex-row gap-3">
+        <select @bind="_alertType" @bind:after="LoadAlerts" class="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+            <option value="">All Alert Types</option>
+            <option value="Expiring">Expiring</option>
+            <option value="Expired">Expired</option>
+        </select>
+        <select @bind="_acknowledged" @bind:after="LoadAlerts" class="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+            <option value="">All Statuses</option>
+            <option value="false">Unacknowledged</option>
+            <option value="true">Acknowledged</option>
+        </select>
+        @if (_selectedAlertIds.Count > 0)
+        {
+            <AuthorizeView Roles="Admin,Staff">
+                <button @onclick="AcknowledgeSelected" disabled="@_acknowledging" class="px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 text-sm disabled:opacity-50">
+                    @if (_acknowledging)
+                    {
+                        <span>Acknowledging...</span>
+                    }
+                    else
+                    {
+                        <span>Acknowledge (@_selectedAlertIds.Count)</span>
+                    }
+                </button>
+            </AuthorizeView>
+        }
+    </div>
+
+    <!-- Alerts List -->
+    @if (_loading)
+    {
+        <div class="space-y-4">
+            @for (int i = 0; i < 5; i++)
+            {
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-xl skeleton"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="h-5 w-1/3 rounded skeleton"></div>
+                            <div class="h-4 w-1/2 rounded skeleton"></div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (_alerts?.Items.Any() == true)
+    {
+        <div class="space-y-3">
+            @foreach (var alert in _alerts.Items)
+            {
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border @(alert.IsAcknowledged ? "border-slate-200 dark:border-slate-700 opacity-75" : GetAlertBorderClass(alert.AlertType)) p-4 transition-all duration-200">
+                    <div class="flex items-start gap-4">
+                        <!-- Checkbox for bulk actions -->
+                        <AuthorizeView Roles="Admin,Staff">
+                            @if (!alert.IsAcknowledged)
+                            {
+                                <input type="checkbox"
+                                       checked="@_selectedAlertIds.Contains(alert.Id)"
+                                       @onchange="e => ToggleAlertSelection(alert.Id, (bool)(e.Value ?? false))"
+                                       class="mt-1 w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500" />
+                            }
+                        </AuthorizeView>
+
+                        <!-- Alert Icon -->
+                        <div class="w-10 h-10 rounded-xl @GetAlertBgClass(alert.AlertType) flex items-center justify-center shrink-0">
+                            @if (alert.AlertType == WarrantyAlertType.Expired)
+                            {
+                                <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            }
+                            else
+                            {
+                                <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            }
+                        </div>
+
+                        <!-- Alert Content -->
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <a href="/assets/@alert.AssetId" class="font-semibold text-slate-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                                            @alert.AssetDisplayName
+                                        </a>
+                                        <Badge Text="@(alert.AlertType == WarrantyAlertType.Expired ? "Expired" : "Expiring")"
+                                               Variant="@(alert.AlertType == WarrantyAlertType.Expired ? "warranty-expired" : "warranty-expiring")"
+                                               Pulse="@(alert.AlertType == WarrantyAlertType.Expiring && !alert.IsAcknowledged)" />
+                                    </div>
+                                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-mono">@alert.AssetTag</p>
+                                </div>
+                                @if (!alert.IsAcknowledged)
+                                {
+                                    <AuthorizeView Roles="Admin,Staff">
+                                        <button @onclick="() => AcknowledgeAlert(alert.Id)" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors whitespace-nowrap">
+                                            Acknowledge
+                                        </button>
+                                    </AuthorizeView>
+                                }
+                            </div>
+
+                            <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                                <div>
+                                    <p class="text-xs text-slate-400 dark:text-slate-500">Warranty End</p>
+                                    <p class="text-slate-700 dark:text-slate-300">@alert.WarrantyEndDate.ToString("MMM dd, yyyy")</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400 dark:text-slate-500">Days</p>
+                                    <p class="@GetDaysClass(alert.DaysRemaining)">
+                                        @if (alert.DaysRemaining < 0)
+                                        {
+                                            <span>@Math.Abs(alert.DaysRemaining) overdue</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@alert.DaysRemaining remaining</span>
+                                        }
+                                    </p>
+                                </div>
+                                @if (!string.IsNullOrEmpty(alert.WarrantyProvider))
+                                {
+                                    <div>
+                                        <p class="text-xs text-slate-400 dark:text-slate-500">Provider</p>
+                                        <p class="text-slate-700 dark:text-slate-300 truncate">@alert.WarrantyProvider</p>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(alert.AssignedToUserName))
+                                {
+                                    <div>
+                                        <p class="text-xs text-slate-400 dark:text-slate-500">Assigned To</p>
+                                        <p class="text-slate-700 dark:text-slate-300 truncate">@alert.AssignedToUserName</p>
+                                    </div>
+                                }
+                            </div>
+
+                            @if (alert.IsAcknowledged)
+                            {
+                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
+                                    Acknowledged by @alert.AcknowledgedByUserName on @alert.AcknowledgedAt?.ToString("MMM dd, yyyy")
+                                </p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (_alerts.TotalPages > 1)
+        {
+            <div class="flex items-center justify-center gap-2 pt-4">
+                <button @onclick="() => ChangePage(_page - 1)"
+                        disabled="@(!_alerts.HasPrevious)"
+                        class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <span class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">
+                    Page @_page of @_alerts.TotalPages
+                </span>
+                <button @onclick="() => ChangePage(_page + 1)"
+                        disabled="@(!_alerts.HasNext)"
+                        class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+            </div>
+        }
+    }
+    else
+    {
+        <Card>
+            <EmptyState Title="No warranty alerts" Description="All warranties are in good standing.">
+                <div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="font-medium">All clear!</span>
+                </div>
+            </EmptyState>
+        </Card>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _acknowledging;
+    private PagedResponse<WarrantyAlertDto>? _alerts;
+    private WarrantyAlertSummaryDto? _summary;
+    private string _alertType = "";
+    private string _acknowledged = "";
+    private int _page = 1;
+    private HashSet<int> _selectedAlertIds = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadAlerts(), LoadSummary());
+    }
+
+    private async Task LoadAlerts()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        bool? acknowledged = string.IsNullOrEmpty(_acknowledged) ? null : bool.Parse(_acknowledged);
+        _alerts = await Api.GetWarrantyAlertsAsync(_alertType, acknowledged, _page);
+        _selectedAlertIds.Clear();
+        _loading = false;
+    }
+
+    private async Task LoadSummary()
+    {
+        _summary = await Api.GetWarrantyAlertSummaryAsync();
+    }
+
+    private async Task ChangePage(int newPage)
+    {
+        _page = newPage;
+        await LoadAlerts();
+    }
+
+    private void ToggleAlertSelection(int alertId, bool selected)
+    {
+        if (selected)
+            _selectedAlertIds.Add(alertId);
+        else
+            _selectedAlertIds.Remove(alertId);
+    }
+
+    private async Task AcknowledgeAlert(int alertId)
+    {
+        await Api.AcknowledgeWarrantyAlertAsync(alertId);
+        await Task.WhenAll(LoadAlerts(), LoadSummary());
+    }
+
+    private async Task AcknowledgeSelected()
+    {
+        if (_selectedAlertIds.Count == 0) return;
+
+        _acknowledging = true;
+        await Api.AcknowledgeWarrantyAlertsBulkAsync(_selectedAlertIds.ToList());
+        _acknowledging = false;
+        await Task.WhenAll(LoadAlerts(), LoadSummary());
+    }
+
+    private string GetAlertBorderClass(WarrantyAlertType type) => type switch
+    {
+        WarrantyAlertType.Expired => "border-red-200 dark:border-red-900/50",
+        WarrantyAlertType.Expiring => "border-amber-200 dark:border-amber-900/50",
+        _ => "border-slate-200 dark:border-slate-700"
+    };
+
+    private string GetAlertBgClass(WarrantyAlertType type) => type switch
+    {
+        WarrantyAlertType.Expired => "bg-red-100 dark:bg-red-900/30",
+        WarrantyAlertType.Expiring => "bg-amber-100 dark:bg-amber-900/30",
+        _ => "bg-slate-100 dark:bg-slate-700"
+    };
+
+    private string GetDaysClass(int days)
+    {
+        if (days < 0) return "text-red-600 dark:text-red-400 font-medium";
+        if (days <= 30) return "text-amber-600 dark:text-amber-400 font-medium";
+        return "text-slate-700 dark:text-slate-300";
+    }
+}
