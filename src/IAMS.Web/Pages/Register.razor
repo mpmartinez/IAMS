@@ -1,0 +1,86 @@
+@page "/register"
+@layout AuthLayout
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Register - IAMS</PageTitle>
+
+<h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Create account</h2>
+<p class="text-slate-500 dark:text-slate-400 mb-8">Start managing your IT assets</p>
+
+<EditForm Model="@_model" OnValidSubmit="HandleRegister" class="space-y-5">
+    <Input Label="Full Name" @bind-Value="_model.FullName" Placeholder="John Smith" />
+    <Input Label="Email" Type="email" @bind-Value="_model.Email" Placeholder="you@company.com" />
+    <Input Label="Department" @bind-Value="_model.Department" Placeholder="Engineering" />
+    <Input Label="Password" Type="password" @bind-Value="_model.Password" Placeholder="Create a password" />
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-slide-up">
+            <p class="text-sm text-red-600 dark:text-red-400">@_error</p>
+        </div>
+    }
+
+    @if (_success)
+    {
+        <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 animate-slide-up">
+            <p class="text-sm text-emerald-600 dark:text-emerald-400">Account created! Redirecting to login...</p>
+        </div>
+    }
+
+    <Button Type="submit" Loading="@_loading" Disabled="@_loading">
+        @if (_loading) { <span>Creating account...</span> }
+        else { <span>Create account</span> }
+    </Button>
+</EditForm>
+
+<div class="mt-6 text-center">
+    <p class="text-sm text-slate-500 dark:text-slate-400">
+        Already have an account?
+        <a href="/login" class="text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
+            Sign in
+        </a>
+    </p>
+</div>
+
+@code {
+    private RegisterModel _model = new();
+    private bool _loading;
+    private bool _success;
+    private string? _error;
+
+    private async Task HandleRegister()
+    {
+        _error = null;
+        _loading = true;
+
+        var (success, error) = await AuthService.RegisterAsync(new CreateUserDto
+        {
+            Email = _model.Email,
+            Password = _model.Password,
+            FullName = _model.FullName,
+            Department = _model.Department
+        });
+
+        _loading = false;
+
+        if (success)
+        {
+            _success = true;
+            await Task.Delay(1500);
+            Navigation.NavigateTo("/login");
+        }
+        else
+        {
+            _error = error;
+        }
+    }
+
+    private class RegisterModel
+    {
+        public string FullName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Department { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+}
