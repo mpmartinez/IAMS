@@ -1,0 +1,369 @@
+@page "/users/{UserId}/offboarding"
+@attribute [Authorize(Roles = "Admin,Staff")]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Offboarding - IAMS</PageTitle>
+
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex items-center gap-4">
+        <button @onclick="GoBack" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </button>
+        <div class="flex-1">
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Offboarding</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Return assets from departing employee</p>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <Card>
+            <div class="space-y-4">
+                @for (int i = 0; i < 4; i++)
+                {
+                    <div class="flex items-center gap-4 p-4">
+                        <div class="w-5 h-5 rounded skeleton"></div>
+                        <div class="w-12 h-12 rounded-xl skeleton"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="h-4 w-1/3 rounded skeleton"></div>
+                            <div class="h-3 w-1/4 rounded skeleton"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </Card>
+    }
+    else if (_offboarding is null)
+    {
+        <Card>
+            <EmptyState Title="User not found" Description="The user you're looking for doesn't exist." />
+        </Card>
+    }
+    else
+    {
+        <!-- User Info & Status -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+            <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-2xl font-bold">
+                    @(_offboarding.UserName.FirstOrDefault())
+                </div>
+                <div class="flex-1">
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white">@_offboarding.UserName</h2>
+                    <div class="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+                        @if (_offboarding.Department is not null)
+                        {
+                            <span>@_offboarding.Department</span>
+                            <span class="text-slate-300 dark:text-slate-600">|</span>
+                        }
+                        @if (_offboarding.Email is not null)
+                        {
+                            <span>@_offboarding.Email</span>
+                        }
+                    </div>
+                </div>
+                <div class="text-right">
+                    @if (_offboarding.IsReadyForOffboarding)
+                    {
+                        <div class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-xl">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span class="font-medium">Ready for Offboarding</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-xl">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <span class="font-medium">@_offboarding.TotalUnreturnedAssets Unreturned</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (_offboarding.UnreturnedAssets.Count > 0)
+        {
+            <!-- Summary Stats -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+                    <p class="text-3xl font-bold text-slate-900 dark:text-white">@_offboarding.TotalUnreturnedAssets</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Assets to Return</p>
+                </div>
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+                    <p class="text-3xl font-bold text-slate-900 dark:text-white">@_offboarding.TotalUnreturnedValue.ToString("C0")</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Total Value</p>
+                </div>
+            </div>
+
+            <!-- Unreturned Assets -->
+            <Card>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" @bind="_selectAll" @bind:after="ToggleSelectAll" class="w-5 h-5 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500" />
+                        <span class="text-sm text-slate-600 dark:text-slate-400">
+                            @if (_selectedAssets.Count > 0)
+                            {
+                                <span>@_selectedAssets.Count selected</span>
+                            }
+                            else
+                            {
+                                <span>Select all</span>
+                            }
+                        </span>
+                    </div>
+                    @if (_selectedAssets.Count > 0)
+                    {
+                        <button @onclick="ShowReturnModal" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-colors">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Return Selected (@_selectedAssets.Count)
+                        </button>
+                    }
+                </div>
+
+                <div class="divide-y divide-slate-100 dark:divide-slate-700 -mx-6 -mb-6 border-t border-slate-100 dark:border-slate-700">
+                    @foreach (var asset in _offboarding.UnreturnedAssets)
+                    {
+                        <div class="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                            <input type="checkbox"
+                                   checked="@_selectedAssets.Contains(asset.AssetId)"
+                                   @onchange="() => ToggleAsset(asset.AssetId)"
+                                   class="w-5 h-5 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500" />
+
+                            <div class="w-12 h-12 rounded-xl @GetDeviceTypeBg(asset.DeviceType) flex items-center justify-center">
+                                <svg class="w-6 h-6 @GetDeviceTypeColor(asset.DeviceType)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                            </div>
+
+                            <div class="flex-1 min-w-0">
+                                <p class="font-medium text-slate-900 dark:text-white truncate">@asset.DisplayName</p>
+                                <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                                    <span class="font-mono">@asset.AssetTag</span>
+                                    @if (asset.SerialNumber is not null)
+                                    {
+                                        <span class="text-slate-300 dark:text-slate-600">|</span>
+                                        <span class="font-mono text-xs">@asset.SerialNumber</span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="text-right hidden sm:block">
+                                @if (asset.PurchasePrice.HasValue)
+                                {
+                                    <p class="font-medium text-slate-900 dark:text-white">@asset.PurchasePrice.Value.ToString("C0")</p>
+                                }
+                                <p class="text-xs text-slate-400">@asset.DaysAssigned days assigned</p>
+                            </div>
+
+                            <button @onclick="() => ReturnSingleAsset(asset.AssetId)" class="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </button>
+                        </div>
+                    }
+                </div>
+            </Card>
+        }
+        else
+        {
+            <!-- All Clear -->
+            <Card>
+                <div class="text-center py-12">
+                    <div class="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">All Assets Returned</h3>
+                    <p class="text-slate-500 dark:text-slate-400">This user has no unreturned assets. They're ready for offboarding.</p>
+                </div>
+            </Card>
+        }
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <p class="text-sm text-red-600 dark:text-red-400">@_error</p>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_success))
+        {
+            <div class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 animate-slide-up">
+                <p class="text-sm text-emerald-600 dark:text-emerald-400">@_success</p>
+            </div>
+        }
+    }
+</div>
+
+<!-- Return Modal -->
+@if (_showReturnModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @onclick="HideReturnModal"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl p-6 animate-scale-in">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Return Assets</h3>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Condition</label>
+                    <select @bind="_returnCondition" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+                        <option value="Good">Good - Ready for reuse</option>
+                        <option value="NeedsRepair">Needs Repair</option>
+                        <option value="Damaged">Damaged</option>
+                        <option value="Lost">Lost</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Notes (Optional)</label>
+                    <textarea @bind="_returnNotes" rows="3" placeholder="Any notes about the return..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
+                </div>
+
+                <div class="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 text-sm">
+                    <p class="text-slate-600 dark:text-slate-300">
+                        <strong>@_selectedAssets.Count assets</strong> will be returned and marked as @(_returnCondition == "Good" ? "Available" : _returnCondition == "Lost" ? "Lost" : "Maintenance").
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex gap-3 mt-6">
+                <button @onclick="HideReturnModal" class="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    Cancel
+                </button>
+                <button @onclick="ConfirmBulkReturn" disabled="@_processing" class="flex-1 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors">
+                    @if (_processing)
+                    {
+                        <span>Returning...</span>
+                    }
+                    else
+                    {
+                        <span>Confirm Return</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string UserId { get; set; } = "";
+
+    private bool _loading = true;
+    private bool _processing;
+    private bool _showReturnModal;
+    private bool _selectAll;
+    private string? _error;
+    private string? _success;
+    private OffboardingDto? _offboarding;
+    private HashSet<int> _selectedAssets = [];
+    private string _returnCondition = "Good";
+    private string _returnNotes = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _offboarding = await Api.GetOffboardingSummaryAsync(UserId);
+        _loading = false;
+    }
+
+    private void GoBack() => Navigation.NavigateTo($"/users/{UserId}/assets");
+
+    private void ToggleSelectAll()
+    {
+        if (_selectAll && _offboarding is not null)
+        {
+            _selectedAssets = _offboarding.UnreturnedAssets.Select(a => a.AssetId).ToHashSet();
+        }
+        else
+        {
+            _selectedAssets.Clear();
+        }
+    }
+
+    private void ToggleAsset(int assetId)
+    {
+        if (_selectedAssets.Contains(assetId))
+            _selectedAssets.Remove(assetId);
+        else
+            _selectedAssets.Add(assetId);
+
+        _selectAll = _offboarding is not null && _selectedAssets.Count == _offboarding.UnreturnedAssets.Count;
+    }
+
+    private void ShowReturnModal()
+    {
+        _returnCondition = "Good";
+        _returnNotes = "";
+        _showReturnModal = true;
+    }
+
+    private void HideReturnModal() => _showReturnModal = false;
+
+    private async Task ConfirmBulkReturn()
+    {
+        _processing = true;
+        _error = null;
+        _success = null;
+
+        var (success, returned, error) = await Api.BulkReturnAssetsAsync(
+            UserId,
+            _selectedAssets.ToList(),
+            string.IsNullOrWhiteSpace(_returnNotes) ? null : _returnNotes,
+            _returnCondition);
+
+        _processing = false;
+        _showReturnModal = false;
+
+        if (success)
+        {
+            _success = $"Successfully returned {returned} assets.";
+            _selectedAssets.Clear();
+            _selectAll = false;
+            await LoadData();
+        }
+        else
+        {
+            _error = error;
+        }
+    }
+
+    private void ReturnSingleAsset(int assetId)
+    {
+        _selectedAssets = [assetId];
+        ShowReturnModal();
+    }
+
+    private string GetDeviceTypeBg(string deviceType) => deviceType switch
+    {
+        "Laptop" or "Desktop" => "bg-blue-100 dark:bg-blue-900/30",
+        "Monitor" => "bg-purple-100 dark:bg-purple-900/30",
+        "Phone" or "Tablet" => "bg-green-100 dark:bg-green-900/30",
+        "Printer" => "bg-orange-100 dark:bg-orange-900/30",
+        _ => "bg-slate-100 dark:bg-slate-700"
+    };
+
+    private string GetDeviceTypeColor(string deviceType) => deviceType switch
+    {
+        "Laptop" or "Desktop" => "text-blue-600 dark:text-blue-400",
+        "Monitor" => "text-purple-600 dark:text-purple-400",
+        "Phone" or "Tablet" => "text-green-600 dark:text-green-400",
+        "Printer" => "text-orange-600 dark:text-orange-400",
+        _ => "text-slate-600 dark:text-slate-400"
+    };
+}
