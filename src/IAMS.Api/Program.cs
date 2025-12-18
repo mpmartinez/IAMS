@@ -58,6 +58,10 @@ builder.Services.AddAuthorizationBuilder()
 
 // Services
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddSingleton<IQrCodeService, QrCodeService>();
+
+// Background Services
+builder.Services.AddHostedService<WarrantyCheckService>();
 
 // Controllers
 builder.Services.AddControllers();
@@ -95,8 +99,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
 app.UseCors("AllowBlazor");
+app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

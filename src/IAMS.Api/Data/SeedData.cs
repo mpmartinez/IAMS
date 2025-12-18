@@ -87,62 +87,101 @@ public static class SeedData
             {
                 new Asset
                 {
-                    Name = "MacBook Pro 16\"",
-                    AssetTag = "LAP-001",
+                    AssetTag = "LAP-20251218-0001",
+                    Manufacturer = "Apple",
+                    Model = "MacBook Pro 16\"",
+                    ModelYear = 2024,
                     SerialNumber = "C02X1234ABCD",
-                    Category = AssetCategory.Laptop,
+                    DeviceType = DeviceTypes.Laptop,
                     Status = AssetStatus.InUse,
-                    Location = "Office - Floor 2",
-                    AssignedToUserId = staffUser?.Id,
                     PurchasePrice = 2499.00m,
-                    PurchaseDate = DateTime.UtcNow.AddMonths(-6),
-                    WarrantyExpiry = DateTime.UtcNow.AddYears(2)
-                },
-                new Asset
-                {
-                    Name = "Dell UltraSharp 27\"",
-                    AssetTag = "MON-001",
-                    SerialNumber = "DEL789XYZ",
-                    Category = AssetCategory.Monitor,
-                    Status = AssetStatus.InUse,
-                    Location = "Office - Floor 2",
+                    Currency = "USD",
+                    WarrantyProvider = "Apple Care+",
+                    WarrantyStartDate = DateTime.UtcNow.AddMonths(-6),
+                    WarrantyEndDate = DateTime.UtcNow.AddYears(2),
                     AssignedToUserId = staffUser?.Id,
-                    PurchasePrice = 549.00m,
+                    Location = "Office - Floor 2",
                     PurchaseDate = DateTime.UtcNow.AddMonths(-6)
                 },
                 new Asset
                 {
-                    Name = "iPhone 15 Pro",
-                    AssetTag = "PHN-001",
-                    SerialNumber = "APPL123456",
-                    Category = AssetCategory.Phone,
-                    Status = AssetStatus.Available,
-                    Location = "IT Storage",
-                    PurchasePrice = 999.00m,
-                    PurchaseDate = DateTime.UtcNow.AddMonths(-1),
-                    WarrantyExpiry = DateTime.UtcNow.AddYears(1)
+                    AssetTag = "MON-20251218-0001",
+                    Manufacturer = "Dell",
+                    Model = "UltraSharp 27\"",
+                    ModelYear = 2023,
+                    SerialNumber = "DEL789XYZ",
+                    DeviceType = DeviceTypes.Monitor,
+                    Status = AssetStatus.InUse,
+                    PurchasePrice = 549.00m,
+                    Currency = "USD",
+                    AssignedToUserId = staffUser?.Id,
+                    Location = "Office - Floor 2",
+                    PurchaseDate = DateTime.UtcNow.AddMonths(-6)
                 },
                 new Asset
                 {
-                    Name = "HP LaserJet Pro",
-                    AssetTag = "PRT-001",
+                    AssetTag = "PHN-20251218-0001",
+                    Manufacturer = "Apple",
+                    Model = "iPhone 15 Pro",
+                    ModelYear = 2024,
+                    SerialNumber = "APPL123456",
+                    DeviceType = DeviceTypes.Phone,
+                    Status = AssetStatus.Available,
+                    PurchasePrice = 999.00m,
+                    Currency = "USD",
+                    WarrantyProvider = "Apple Care+",
+                    WarrantyStartDate = DateTime.UtcNow.AddMonths(-1),
+                    WarrantyEndDate = DateTime.UtcNow.AddYears(1),
+                    Location = "IT Storage",
+                    PurchaseDate = DateTime.UtcNow.AddMonths(-1)
+                },
+                new Asset
+                {
+                    AssetTag = "PRN-20251218-0001",
+                    Manufacturer = "HP",
+                    Model = "LaserJet Pro M404dn",
+                    ModelYear = 2022,
                     SerialNumber = "HP9876543",
-                    Category = AssetCategory.Printer,
+                    DeviceType = DeviceTypes.Printer,
                     Status = AssetStatus.InUse,
-                    Location = "Office - Floor 1",
                     PurchasePrice = 399.00m,
+                    Currency = "USD",
+                    Location = "Office - Floor 1",
                     PurchaseDate = DateTime.UtcNow.AddYears(-1)
                 },
                 new Asset
                 {
-                    Name = "Cisco Switch 24-Port",
-                    AssetTag = "NET-001",
+                    AssetTag = "NET-20251218-0001",
+                    Manufacturer = "Cisco",
+                    Model = "Catalyst 2960X-24",
+                    ModelYear = 2021,
                     SerialNumber = "CSC456789",
-                    Category = AssetCategory.Network,
+                    DeviceType = DeviceTypes.Network,
                     Status = AssetStatus.InUse,
-                    Location = "Server Room",
                     PurchasePrice = 1299.00m,
+                    Currency = "USD",
+                    WarrantyProvider = "Cisco SmartNet",
+                    WarrantyStartDate = DateTime.UtcNow.AddYears(-2),
+                    WarrantyEndDate = DateTime.UtcNow.AddYears(1),
+                    Location = "Server Room",
                     PurchaseDate = DateTime.UtcNow.AddYears(-2)
+                },
+                new Asset
+                {
+                    AssetTag = "DSK-20251218-0001",
+                    Manufacturer = "Lenovo",
+                    Model = "ThinkCentre M90q",
+                    ModelYear = 2024,
+                    SerialNumber = "LEN456123",
+                    DeviceType = DeviceTypes.Desktop,
+                    Status = AssetStatus.Available,
+                    PurchasePrice = 899.00m,
+                    Currency = "USD",
+                    WarrantyProvider = "Lenovo Premier Support",
+                    WarrantyStartDate = DateTime.UtcNow.AddMonths(-2),
+                    WarrantyEndDate = DateTime.UtcNow.AddYears(3),
+                    Location = "IT Storage",
+                    PurchaseDate = DateTime.UtcNow.AddMonths(-2)
                 }
             };
 
