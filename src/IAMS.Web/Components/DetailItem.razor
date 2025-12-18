@@ -1,0 +1,26 @@
+<div>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mb-1">@Label</p>
+    <p class="@ValueClasses">@Value</p>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public DateTime? WarningDate { get; set; }
+
+    private bool IsWarning => WarningDate.HasValue && WarningDate.Value < DateTime.Now.AddDays(30);
+    private bool IsExpired => WarningDate.HasValue && WarningDate.Value < DateTime.Now;
+
+    private string ValueClasses
+    {
+        get
+        {
+            var baseClass = "font-medium";
+            if (IsExpired)
+                return $"{baseClass} text-red-600 dark:text-red-400";
+            if (IsWarning)
+                return $"{baseClass} text-amber-600 dark:text-amber-400";
+            return $"{baseClass} text-slate-900 dark:text-white";
+        }
+    }
+}

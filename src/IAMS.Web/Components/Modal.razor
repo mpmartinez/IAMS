@@ -1,0 +1,52 @@
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" @onclick="Close"></div>
+
+        <!-- Modal -->
+        <div class="relative w-full @SizeClass bg-white dark:bg-slate-800 rounded-2xl shadow-2xl animate-scale-in">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">@Title</h3>
+                <button @onclick="Close" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="p-6 max-h-[70vh] overflow-y-auto">
+                @ChildContent
+            </div>
+
+            <!-- Footer -->
+            @if (FooterContent is not null)
+            {
+                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 rounded-b-2xl">
+                    @FooterContent
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Size { get; set; } = "md";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string SizeClass => Size switch
+    {
+        "sm" => "max-w-md",
+        "lg" => "max-w-2xl",
+        "xl" => "max-w-4xl",
+        _ => "max-w-lg"
+    };
+
+    private async Task Close() => await OnClose.InvokeAsync();
+}

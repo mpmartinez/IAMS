@@ -1,0 +1,31 @@
+<div class="@CardClasses">
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <div class="@HeaderClasses">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">@Title</h3>
+            @if (HeaderContent is not null)
+            {
+                @HeaderContent
+            }
+        </div>
+    }
+    <div class="@ContentClasses">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public bool Hoverable { get; set; }
+    [Parameter] public bool NoPadding { get; set; }
+    [Parameter] public RenderFragment? HeaderContent { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string CardClasses => Hoverable
+        ? "bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm card-hover"
+        : "bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm";
+
+    private string HeaderClasses => "flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700";
+
+    private string ContentClasses => NoPadding ? "" : "p-6";
+}

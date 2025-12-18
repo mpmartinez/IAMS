@@ -1,0 +1,180 @@
+@page "/assets/{Id:int}"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>@(_asset?.Name ?? "Asset") - IAMS</PageTitle>
+
+@if (_loading)
+{
+    <div class="space-y-6 animate-pulse">
+        <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-lg skeleton"></div>
+            <div class="h-8 w-48 rounded skeleton"></div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+            <div class="space-y-4">
+                <div class="h-6 w-1/3 rounded skeleton"></div>
+                <div class="h-4 w-1/2 rounded skeleton"></div>
+                <div class="h-4 w-2/3 rounded skeleton"></div>
+            </div>
+        </div>
+    </div>
+}
+else if (_asset is null)
+{
+    <Card>
+        <EmptyState Title="Asset not found" Description="The asset you're looking for doesn't exist or has been deleted.">
+            <a href="/assets" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                Back to Assets
+            </a>
+        </EmptyState>
+    </Card>
+}
+else
+{
+    <div class="space-y-6">
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+            <a href="/assets" class="inline-flex items-center gap-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                Back
+            </a>
+            <div class="flex-1">
+                <div class="flex items-center gap-3">
+                    <h1 class="text-2xl font-bold text-slate-900 dark:text-white">@_asset.Name</h1>
+                    <Badge Text="@_asset.Status" Variant="@_asset.Status" Pulse="@(_asset.Status == "InUse")" />
+                </div>
+                <p class="text-slate-500 dark:text-slate-400 mt-1">@_asset.AssetTag</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/assets/@Id/edit" class="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                </a>
+                <button @onclick="() => _showDeleteModal = true" class="inline-flex items-center gap-2 px-4 py-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all duration-200">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Main Info -->
+            <div class="lg:col-span-2 space-y-6">
+                <Card Title="Details">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <DetailItem Label="Category" Value="@_asset.Category" />
+                        <DetailItem Label="Serial Number" Value="@(_asset.SerialNumber ?? "—")" />
+                        <DetailItem Label="Location" Value="@(_asset.Location ?? "—")" />
+                        <DetailItem Label="Assigned To" Value="@(_asset.AssignedToUserName ?? "Unassigned")" />
+                    </div>
+                </Card>
+
+                <Card Title="Purchase Information">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <DetailItem Label="Purchase Price" Value="@(_asset.PurchasePrice?.ToString("C") ?? "—")" />
+                        <DetailItem Label="Purchase Date" Value="@(_asset.PurchaseDate?.ToString("MMM dd, yyyy") ?? "—")" />
+                        <DetailItem Label="Warranty Expiry" Value="@(_asset.WarrantyExpiry?.ToString("MMM dd, yyyy") ?? "—")" WarningDate="@_asset.WarrantyExpiry" />
+                    </div>
+                </Card>
+
+                @if (!string.IsNullOrEmpty(_asset.Notes))
+                {
+                    <Card Title="Notes">
+                        <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap">@_asset.Notes</p>
+                    </Card>
+                }
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                <Card Title="Quick Actions">
+                    <div class="space-y-2">
+                        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200">
+                            <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                            </svg>
+                            Transfer Asset
+                        </button>
+                        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200">
+                            <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Generate Report
+                        </button>
+                        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200">
+                            <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                            </svg>
+                            Print Label
+                        </button>
+                    </div>
+                </Card>
+
+                <Card Title="Metadata">
+                    <div class="space-y-4 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-slate-500 dark:text-slate-400">Created</span>
+                            <span class="text-slate-900 dark:text-white">@_asset.CreatedAt.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        @if (_asset.UpdatedAt.HasValue)
+                        {
+                            <div class="flex justify-between">
+                                <span class="text-slate-500 dark:text-slate-400">Updated</span>
+                                <span class="text-slate-900 dark:text-white">@_asset.UpdatedAt.Value.ToString("MMM dd, yyyy")</span>
+                            </div>
+                        }
+                        <div class="flex justify-between">
+                            <span class="text-slate-500 dark:text-slate-400">Asset ID</span>
+                            <span class="text-slate-900 dark:text-white font-mono">@_asset.Id</span>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <Modal IsOpen="@_showDeleteModal" Title="Delete Asset" OnClose="() => _showDeleteModal = false">
+        <p class="text-slate-600 dark:text-slate-300">
+            Are you sure you want to delete <strong>@_asset.Name</strong>? This action cannot be undone.
+        </p>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="() => _showDeleteModal = false">Cancel</Button>
+            <Button Variant="danger" OnClick="DeleteAsset" Loading="@_deleting">Delete</Button>
+        </FooterContent>
+    </Modal>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _loading = true;
+    private bool _deleting;
+    private bool _showDeleteModal;
+    private AssetDto? _asset;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _asset = await Api.GetAssetAsync(Id);
+        _loading = false;
+    }
+
+    private async Task DeleteAsset()
+    {
+        _deleting = true;
+        var success = await Api.DeleteAssetAsync(Id);
+        if (success)
+        {
+            Navigation.NavigateTo("/assets");
+        }
+        _deleting = false;
+    }
+}

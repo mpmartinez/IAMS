@@ -1,0 +1,35 @@
+<div class="space-y-1.5">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">@Label</label>
+    }
+    <input type="@Type"
+           value="@Value"
+           @oninput="OnInput"
+           placeholder="@Placeholder"
+           disabled="@Disabled"
+           class="@InputClasses" />
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <p class="text-sm text-red-500 animate-slide-up">@Error</p>
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Type { get; set; } = "text";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public string Placeholder { get; set; } = "";
+    [Parameter] public string Error { get; set; } = "";
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    private string InputClasses => string.IsNullOrEmpty(Error)
+        ? "w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 dark:focus:border-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        : "w-full px-4 py-2.5 rounded-xl border border-red-300 dark:border-red-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 focus:border-red-500 disabled:opacity-50 disabled:cursor-not-allowed";
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        await ValueChanged.InvokeAsync(e.Value?.ToString() ?? "");
+    }
+}

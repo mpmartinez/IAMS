@@ -1,0 +1,261 @@
+@page "/assets"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Assets - IAMS</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Assets</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">Manage your IT inventory</p>
+        </div>
+        <a href="/assets/new" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Asset
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex flex-col sm:flex-row gap-3">
+        <div class="flex-1">
+            <div class="relative">
+                <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input type="text"
+                       @bind="_search"
+                       @bind:event="oninput"
+                       @onkeyup="HandleSearch"
+                       placeholder="Search assets..."
+                       class="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500" />
+            </div>
+        </div>
+        <select @bind="_category" @bind:after="LoadAssets" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200">
+            <option value="">All Categories</option>
+            @if (_categories is not null)
+            {
+                @foreach (var cat in _categories)
+                {
+                    <option value="@cat">@cat</option>
+                }
+            }
+        </select>
+        <select @bind="_status" @bind:after="LoadAssets" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200">
+            <option value="">All Statuses</option>
+            @if (_statuses is not null)
+            {
+                @foreach (var stat in _statuses)
+                {
+                    <option value="@stat">@stat</option>
+                }
+            }
+        </select>
+    </div>
+
+    <!-- Assets Grid -->
+    @if (_loading)
+    {
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            @for (int i = 0; i < 6; i++)
+            {
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+                    <div class="flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-xl skeleton"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="h-5 w-2/3 rounded skeleton"></div>
+                            <div class="h-4 w-1/2 rounded skeleton"></div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (_assets?.Items.Any() == true)
+    {
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            @foreach (var asset in _assets.Items)
+            {
+                <a href="/assets/@asset.Id" class="group stagger-item">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 card-hover">
+                        <div class="flex items-start gap-4">
+                            <div class="w-12 h-12 rounded-xl @GetCategoryBg(asset.Category) flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110">
+                                @GetCategoryIcon(asset.Category)
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <h3 class="font-semibold text-slate-900 dark:text-white truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                                            @asset.Name
+                                        </h3>
+                                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">@asset.AssetTag</p>
+                                    </div>
+                                    <Badge Text="@asset.Status" Variant="@asset.Status" />
+                                </div>
+                                <div class="flex items-center gap-4 mt-3 text-sm text-slate-500 dark:text-slate-400">
+                                    <span class="flex items-center gap-1.5">
+                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                        </svg>
+                                        @asset.Category
+                                    </span>
+                                    @if (!string.IsNullOrEmpty(asset.Location))
+                                    {
+                                        <span class="flex items-center gap-1.5 truncate">
+                                            <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                            <span class="truncate">@asset.Location</span>
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (_assets.TotalPages > 1)
+        {
+            <div class="flex items-center justify-center gap-2 pt-4">
+                <button @onclick="() => ChangePage(_page - 1)"
+                        disabled="@(!_assets.HasPrevious)"
+                        class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <span class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">
+                    Page @_page of @_assets.TotalPages
+                </span>
+                <button @onclick="() => ChangePage(_page + 1)"
+                        disabled="@(!_assets.HasNext)"
+                        class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+            </div>
+        }
+    }
+    else
+    {
+        <Card>
+            <EmptyState Title="No assets found" Description="@(_hasFilters ? "Try adjusting your filters." : "Add your first asset to get started.")">
+                @if (!_hasFilters)
+                {
+                    <a href="/assets/new" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Asset
+                    </a>
+                }
+                else
+                {
+                    <button @onclick="ClearFilters" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200">
+                        Clear Filters
+                    </button>
+                }
+            </EmptyState>
+        </Card>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private PagedResponse<AssetDto>? _assets;
+    private string[]? _categories;
+    private string[]? _statuses;
+    private string _search = "";
+    private string _category = "";
+    private string _status = "";
+    private int _page = 1;
+    private System.Timers.Timer? _searchTimer;
+
+    private bool _hasFilters => !string.IsNullOrEmpty(_search) || !string.IsNullOrEmpty(_category) || !string.IsNullOrEmpty(_status);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _categories = await Api.GetCategoriesAsync();
+        _statuses = await Api.GetStatusesAsync();
+        await LoadAssets();
+    }
+
+    private async Task LoadAssets()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        _assets = await Api.GetAssetsAsync(_search, _category, _status, _page);
+        _loading = false;
+    }
+
+    private void HandleSearch(KeyboardEventArgs e)
+    {
+        _searchTimer?.Stop();
+        _searchTimer?.Dispose();
+        _searchTimer = new System.Timers.Timer(300);
+        _searchTimer.Elapsed += async (s, ev) =>
+        {
+            _searchTimer?.Stop();
+            _page = 1;
+            await InvokeAsync(async () =>
+            {
+                await LoadAssets();
+                StateHasChanged();
+            });
+        };
+        _searchTimer.Start();
+    }
+
+    private async Task ChangePage(int newPage)
+    {
+        _page = newPage;
+        await LoadAssets();
+    }
+
+    private async Task ClearFilters()
+    {
+        _search = "";
+        _category = "";
+        _status = "";
+        _page = 1;
+        await LoadAssets();
+    }
+
+    private string GetCategoryBg(string category) => category switch
+    {
+        "Laptop" or "Desktop" => "bg-blue-100 dark:bg-blue-900/30",
+        "Monitor" => "bg-purple-100 dark:bg-purple-900/30",
+        "Phone" or "Tablet" => "bg-green-100 dark:bg-green-900/30",
+        "Printer" => "bg-orange-100 dark:bg-orange-900/30",
+        "Network" or "Server" => "bg-red-100 dark:bg-red-900/30",
+        _ => "bg-slate-100 dark:bg-slate-700"
+    };
+
+    private RenderFragment GetCategoryIcon(string category) => category switch
+    {
+        "Laptop" => @<svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+        "Desktop" => @<svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+        "Monitor" => @<svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+        "Phone" => @<svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>,
+        "Tablet" => @<svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>,
+        "Printer" => @<svg class="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
+        "Network" => @<svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>,
+        "Server" => @<svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>,
+        _ => @<svg class="w-6 h-6 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+    };
+
+    public void Dispose()
+    {
+        _searchTimer?.Dispose();
+    }
+}

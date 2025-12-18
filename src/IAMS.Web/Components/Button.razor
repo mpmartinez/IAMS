@@ -1,0 +1,62 @@
+@if (Type == "submit")
+{
+    <button type="submit" class="@ButtonClasses" disabled="@Disabled">
+        @if (Loading)
+        {
+            <svg class="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        }
+        @ChildContent
+    </button>
+}
+else
+{
+    <button type="button" class="@ButtonClasses" disabled="@Disabled" @onclick="OnClick">
+        @if (Loading)
+        {
+            <svg class="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        }
+        @ChildContent
+    </button>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string Variant { get; set; } = "primary";
+    [Parameter] public string Size { get; set; } = "md";
+    [Parameter] public string Type { get; set; } = "button";
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private string ButtonClasses
+    {
+        get
+        {
+            var baseClasses = "inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 btn-press focus-ring disabled:opacity-50 disabled:cursor-not-allowed";
+
+            var sizeClasses = Size switch
+            {
+                "sm" => "px-3 py-1.5 text-sm",
+                "lg" => "px-6 py-3 text-base",
+                _ => "px-4 py-2.5 text-sm"
+            };
+
+            var variantClasses = Variant switch
+            {
+                "secondary" => "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600",
+                "danger" => "bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-500/25",
+                "ghost" => "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700",
+                "outline" => "border-2 border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800",
+                _ => "bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-500/25"
+            };
+
+            return $"{baseClasses} {sizeClasses} {variantClasses}";
+        }
+    }
+}

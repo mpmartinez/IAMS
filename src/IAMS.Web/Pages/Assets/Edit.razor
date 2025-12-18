@@ -1,0 +1,229 @@
+@page "/assets/new"
+@page "/assets/{Id:int}/edit"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>@(IsNew ? "Add Asset" : "Edit Asset") - IAMS</PageTitle>
+
+<div class="max-w-2xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex items-center gap-4">
+        <a href="@(IsNew ? "/assets" : $"/assets/{Id}")" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </a>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">@(IsNew ? "Add Asset" : "Edit Asset")</h1>
+    </div>
+
+    @if (_loading)
+    {
+        <Card>
+            <div class="space-y-4">
+                @for (int i = 0; i < 6; i++)
+                {
+                    <div class="h-12 rounded-xl skeleton"></div>
+                }
+            </div>
+        </Card>
+    }
+    else
+    {
+        <Card>
+            <EditForm Model="@_model" OnValidSubmit="HandleSubmit" class="space-y-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div class="sm:col-span-2">
+                        <Input Label="Asset Name" @bind-Value="_model.Name" Placeholder="MacBook Pro 16&quot;" />
+                    </div>
+                    <Input Label="Asset Tag" @bind-Value="_model.AssetTag" Placeholder="LAP-001" />
+                    <Input Label="Serial Number" @bind-Value="_model.SerialNumber" Placeholder="C02X1234ABCD" />
+
+                    <Select Label="Category" @bind-Value="_model.Category" Placeholder="Select category">
+                        @if (_categories is not null)
+                        {
+                            @foreach (var cat in _categories)
+                            {
+                                <option value="@cat">@cat</option>
+                            }
+                        }
+                    </Select>
+
+                    <Select Label="Status" @bind-Value="_model.Status" Placeholder="Select status">
+                        @if (_statuses is not null)
+                        {
+                            @foreach (var stat in _statuses)
+                            {
+                                <option value="@stat">@stat</option>
+                            }
+                        }
+                    </Select>
+
+                    <Input Label="Location" @bind-Value="_model.Location" Placeholder="Office - Floor 2" />
+
+                    <Select Label="Assigned To" @bind-Value="_model.AssignedToUserId" Placeholder="Unassigned">
+                        @if (_users is not null)
+                        {
+                            @foreach (var user in _users)
+                            {
+                                <option value="@user.Id">@user.FullName @(user.Department is not null ? $"({user.Department})" : "")</option>
+                            }
+                        }
+                    </Select>
+
+                    <Input Label="Purchase Price" Type="number" @bind-Value="_model.PurchasePrice" Placeholder="2499.00" />
+                    <Input Label="Purchase Date" Type="date" @bind-Value="_model.PurchaseDate" />
+                    <Input Label="Warranty Expiry" Type="date" @bind-Value="_model.WarrantyExpiry" />
+
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Notes</label>
+                        <textarea @bind="_model.Notes"
+                                  rows="3"
+                                  placeholder="Additional notes about this asset..."
+                                  class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 resize-none"></textarea>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-slide-up">
+                        <p class="text-sm text-red-600 dark:text-red-400">@_error</p>
+                    </div>
+                }
+
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <a href="@(IsNew ? "/assets" : $"/assets/{Id}")" class="px-4 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200">
+                        Cancel
+                    </a>
+                    <Button Type="submit" Loading="@_saving">
+                        @(IsNew ? "Create Asset" : "Save Changes")
+                    </Button>
+                </div>
+            </EditForm>
+        </Card>
+    }
+</div>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private bool IsNew => Id is null;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private AssetModel _model = new();
+    private string[]? _categories;
+    private string[]? _statuses;
+    private List<UserListItem>? _users;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _categories = await Api.GetCategoriesAsync();
+        _statuses = await Api.GetStatusesAsync();
+        _users = await Api.GetUserListAsync();
+
+        if (!IsNew)
+        {
+            var asset = await Api.GetAssetAsync(Id!.Value);
+            if (asset is not null)
+            {
+                _model = new AssetModel
+                {
+                    Name = asset.Name,
+                    AssetTag = asset.AssetTag,
+                    SerialNumber = asset.SerialNumber ?? "",
+                    Category = asset.Category,
+                    Status = asset.Status,
+                    Location = asset.Location ?? "",
+                    AssignedToUserId = asset.AssignedToUserId?.ToString() ?? "",
+                    PurchasePrice = asset.PurchasePrice?.ToString() ?? "",
+                    PurchaseDate = asset.PurchaseDate?.ToString("yyyy-MM-dd") ?? "",
+                    WarrantyExpiry = asset.WarrantyExpiry?.ToString("yyyy-MM-dd") ?? "",
+                    Notes = asset.Notes ?? ""
+                };
+            }
+        }
+
+        _loading = false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        _error = null;
+        _saving = true;
+
+        if (string.IsNullOrWhiteSpace(_model.Name) || string.IsNullOrWhiteSpace(_model.AssetTag) ||
+            string.IsNullOrWhiteSpace(_model.Category) || string.IsNullOrWhiteSpace(_model.Status))
+        {
+            _error = "Please fill in all required fields.";
+            _saving = false;
+            return;
+        }
+
+        bool success;
+        string? error;
+
+        if (IsNew)
+        {
+            var dto = new CreateAssetDto
+            {
+                Name = _model.Name,
+                AssetTag = _model.AssetTag,
+                SerialNumber = string.IsNullOrWhiteSpace(_model.SerialNumber) ? null : _model.SerialNumber,
+                Category = _model.Category,
+                Status = _model.Status,
+                Location = string.IsNullOrWhiteSpace(_model.Location) ? null : _model.Location,
+                AssignedToUserId = int.TryParse(_model.AssignedToUserId, out var uid) ? uid : null,
+                PurchasePrice = decimal.TryParse(_model.PurchasePrice, out var price) ? price : null,
+                PurchaseDate = DateTime.TryParse(_model.PurchaseDate, out var pdate) ? pdate : null,
+                WarrantyExpiry = DateTime.TryParse(_model.WarrantyExpiry, out var wdate) ? wdate : null,
+                Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes
+            };
+            (success, error) = await Api.CreateAssetAsync(dto);
+        }
+        else
+        {
+            var dto = new UpdateAssetDto
+            {
+                Name = _model.Name,
+                AssetTag = _model.AssetTag,
+                SerialNumber = string.IsNullOrWhiteSpace(_model.SerialNumber) ? null : _model.SerialNumber,
+                Category = _model.Category,
+                Status = _model.Status,
+                Location = string.IsNullOrWhiteSpace(_model.Location) ? null : _model.Location,
+                AssignedToUserId = int.TryParse(_model.AssignedToUserId, out var uid) ? uid : null,
+                PurchasePrice = decimal.TryParse(_model.PurchasePrice, out var price) ? price : null,
+                PurchaseDate = DateTime.TryParse(_model.PurchaseDate, out var pdate) ? pdate : null,
+                WarrantyExpiry = DateTime.TryParse(_model.WarrantyExpiry, out var wdate) ? wdate : null,
+                Notes = string.IsNullOrWhiteSpace(_model.Notes) ? null : _model.Notes
+            };
+            (success, error) = await Api.UpdateAssetAsync(Id!.Value, dto);
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            Navigation.NavigateTo("/assets");
+        }
+        else
+        {
+            _error = error;
+        }
+    }
+
+    private class AssetModel
+    {
+        public string Name { get; set; } = "";
+        public string AssetTag { get; set; } = "";
+        public string SerialNumber { get; set; } = "";
+        public string Category { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string Location { get; set; } = "";
+        public string AssignedToUserId { get; set; } = "";
+        public string PurchasePrice { get; set; } = "";
+        public string PurchaseDate { get; set; } = "";
+        public string WarrantyExpiry { get; set; } = "";
+        public string Notes { get; set; } = "";
+    }
+}
