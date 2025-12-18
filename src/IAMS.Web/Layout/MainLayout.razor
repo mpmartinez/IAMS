@@ -1,6 +1,10 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Navigation
 @inject AuthService AuthService
+@inject ApiClient Api
+@inject NetworkStatusService NetworkStatus
+@inject SyncService Sync
+@implements IAsyncDisposable
 
 <div class="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-900">
     <!-- Mobile menu overlay -->
@@ -31,6 +35,8 @@
             <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
                 <NavItem Href="/" Icon="home" Label="Dashboard" />
                 <NavItem Href="/assets" Icon="cube" Label="Assets" />
+                <NavItem Href="/scan" Icon="qr-scan" Label="Scan QR" />
+                <NavItem Href="/warranty-alerts" Icon="shield-exclamation" Label="Warranty Alerts" BadgeCount="@_alertCount" />
                 <NavItem Href="/categories" Icon="tag" Label="Categories" />
 
                 <AuthorizeView Roles="Admin">
@@ -95,6 +101,41 @@
 
             <div class="flex-1"></div>
 
+            <!-- Sync Status Indicator -->
+            @if (_syncStatus is not null)
+            {
+                <button @onclick="TriggerSync" disabled="@_syncStatus.IsSyncing" class="@GetSyncButtonClasses()" title="@GetSyncTooltip()">
+                    @if (_syncStatus.IsSyncing)
+                    {
+                        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    }
+                    else if (!_syncStatus.IsOnline)
+                    {
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+                        </svg>
+                    }
+                    else if (_syncStatus.PendingActionCount > 0)
+                    {
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                    }
+                    @if (_syncStatus.PendingActionCount > 0)
+                    {
+                        <span class="text-xs font-medium">@_syncStatus.PendingActionCount</span>
+                    }
+                </button>
+            }
+
             <!-- Quick actions -->
             <button class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -110,20 +151,69 @@
         </header>
 
         <!-- Page content -->
-        <main class="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main class="flex-1 overflow-y-auto p-4 lg:p-6 pb-24 lg:pb-6">
             <div class="animate-fade-in">
                 @Body
             </div>
         </main>
     </div>
+
+    <!-- Floating Scan Button (Mobile) -->
+    @if (!_isOnScanPage)
+    {
+        <a href="/scan" class="lg:hidden fixed bottom-6 right-6 z-40 w-14 h-14 bg-primary-600 text-white rounded-full shadow-lg shadow-primary-500/40 flex items-center justify-center hover:bg-primary-700 active:scale-95 transition-all duration-200">
+            <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h2M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+            </svg>
+        </a>
+    }
 </div>
 
 @code {
     private bool _mobileMenuOpen;
+    private bool _isOnScanPage => Navigation.Uri.Contains("/scan");
+    private int _alertCount;
+    private SyncStatus? _syncStatus;
 
     private string SidebarClasses => _mobileMenuOpen
         ? "fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 shadow-xl sidebar-transition lg:relative lg:shadow-none"
         : "fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 shadow-xl sidebar-transition -translate-x-full lg:translate-x-0 lg:relative lg:shadow-none";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAlertCount();
+
+        // Initialize sync services
+        try
+        {
+            await Sync.InitializeAsync();
+            Sync.OnSyncStatusChanged += OnSyncStatusChangedAsync;
+            _syncStatus = Sync.Status;
+        }
+        catch
+        {
+            // Offline services may fail in some browsers
+        }
+    }
+
+    private async Task OnSyncStatusChangedAsync(SyncStatus status)
+    {
+        _syncStatus = status;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadAlertCount()
+    {
+        try
+        {
+            _alertCount = await Api.GetUnacknowledgedWarrantyAlertCountAsync();
+        }
+        catch
+        {
+            // Silently fail if not authenticated or API unavailable
+            _alertCount = 0;
+        }
+    }
 
     private void OpenMobileMenu() => _mobileMenuOpen = true;
     private void CloseMobileMenu() => _mobileMenuOpen = false;
@@ -132,5 +222,49 @@
     {
         await AuthService.LogoutAsync();
         Navigation.NavigateTo("/login", forceLoad: true);
+    }
+
+    private async Task TriggerSync()
+    {
+        if (_syncStatus?.IsOnline == true && !_syncStatus.IsSyncing)
+        {
+            await Sync.SyncAsync();
+        }
+    }
+
+    private string GetSyncButtonClasses()
+    {
+        var baseClasses = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200";
+
+        if (_syncStatus?.IsSyncing == true)
+        {
+            return $"{baseClasses} bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+        }
+        if (_syncStatus?.IsOnline == false)
+        {
+            return $"{baseClasses} bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+        }
+        if (_syncStatus?.PendingActionCount > 0)
+        {
+            return $"{baseClasses} bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/50 cursor-pointer";
+        }
+        return $"{baseClasses} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+    }
+
+    private string GetSyncTooltip()
+    {
+        if (_syncStatus is null) return "";
+
+        if (_syncStatus.IsSyncing) return "Syncing...";
+        if (!_syncStatus.IsOnline) return "Offline - changes will sync when back online";
+        if (_syncStatus.PendingActionCount > 0) return $"{_syncStatus.PendingActionCount} pending changes - click to sync";
+
+        var lastSync = _syncStatus.LastSyncTime?.ToString("g") ?? "Never";
+        return $"All synced. Last sync: {lastSync}";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Sync.OnSyncStatusChanged -= OnSyncStatusChangedAsync;
     }
 }

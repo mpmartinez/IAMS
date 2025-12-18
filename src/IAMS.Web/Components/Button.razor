@@ -1,6 +1,6 @@
 @if (Type == "submit")
 {
-    <button type="submit" class="@ButtonClasses" disabled="@Disabled">
+    <button type="submit" class="@AllClasses" disabled="@Disabled" @attributes="NonClassAttributes">
         @if (Loading)
         {
             <svg class="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -13,7 +13,7 @@
 }
 else
 {
-    <button type="button" class="@ButtonClasses" disabled="@Disabled" @onclick="OnClick">
+    <button type="button" class="@AllClasses" disabled="@Disabled" @onclick="OnClick" @attributes="NonClassAttributes">
         @if (Loading)
         {
             <svg class="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -33,6 +33,7 @@ else
     [Parameter] public bool Loading { get; set; }
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
 
     private string ButtonClasses
     {
@@ -59,4 +60,16 @@ else
             return $"{baseClasses} {sizeClasses} {variantClasses}";
         }
     }
+
+    private string AllClasses
+    {
+        get
+        {
+            var customClass = AdditionalAttributes?.TryGetValue("class", out var cls) == true ? cls?.ToString() : null;
+            return string.IsNullOrEmpty(customClass) ? ButtonClasses : $"{ButtonClasses} {customClass}";
+        }
+    }
+
+    private Dictionary<string, object>? NonClassAttributes =>
+        AdditionalAttributes?.Where(kv => kv.Key != "class").ToDictionary(kv => kv.Key, kv => kv.Value);
 }
