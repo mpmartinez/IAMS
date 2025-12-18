@@ -51,6 +51,36 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
         });
     }
 
+    [HttpPost]
+    public async Task<ActionResult<ApiResponse<UserDto>>> CreateUser(CreateUserDto dto)
+    {
+        var existingUser = await userManager.FindByEmailAsync(dto.Email);
+        if (existingUser is not null)
+            return BadRequest(ApiResponse<UserDto>.Fail("Email already exists"));
+
+        var user = new ApplicationUser
+        {
+            UserName = dto.Email,
+            Email = dto.Email,
+            FullName = dto.FullName,
+            Department = dto.Department,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var result = await userManager.CreateAsync(user, dto.Password);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            return BadRequest(ApiResponse<UserDto>.Fail(errors));
+        }
+
+        var role = dto.Role ?? "Staff";
+        await userManager.AddToRoleAsync(user, role);
+
+        return Ok(ApiResponse<UserDto>.Ok(MapToDto(user, role)));
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetUser(string id)
     {
