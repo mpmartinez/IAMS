@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(dotnet ef migrations add:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet add:*)",
+      "Bash(dir:*)",
+      "Bash(ren Users UserDetails)",
+      "Bash(move Users UserDetails)",
+      "Bash(cmd.exe /c \"cd C:\\\\M2NET PROJECTS\\\\IAMS\\\\src\\\\IAMS.Web\\\\Pages && move Users UserDetails\")",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n[ENHANCEMENT] Add warranty alerts with background check service\n\nImplement proactive warranty monitoring:\n- WarrantyAlert entity to track warranty status\n- WarrantyCheckService as background hosted service\n- Runs daily to check expiring warranties\n- WarrantyAlertsController for alert management\n- Web page to view and acknowledge alerts\n\nAlert types:\n- ExpiringSoon: 30/60/90 days before expiry\n- Expired: Warranty has expired\n- Bulk acknowledge support\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n[ENHANCEMENT] Add QR code generation service\n\nImplement QR code generation for asset labels:\n- QrCodeService using QRCoder library\n- PNG and SVG output formats\n- Configurable module size\n- Asset URL or tag-only content modes\n- Added QRCoder NuGet package dependency\n\nGenerates printable QR codes for physical asset labeling.\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git reset:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n[DOCS] Add Claude Code project documentation\n\nAdd CLAUDE.md with comprehensive project guidance including:\n- Build commands for API and Web projects\n- Database migration instructions\n- Architecture overview \\(auth flow, policies, API patterns\\)\n- Offline support and QR scanning documentation\n- Key entities and conventions reference\n- Default development credentials\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}
