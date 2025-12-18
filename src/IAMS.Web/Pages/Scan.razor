@@ -1,0 +1,424 @@
+@page "/scan"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject OfflineStorageService OfflineStorage
+@inject NetworkStatusService NetworkStatus
+@inject SyncService SyncService
+@implements IAsyncDisposable
+
+<PageTitle>Scan QR Code - IAMS</PageTitle>
+
+<div class="min-h-[calc(100vh-8rem)] flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-4">
+        <button @onclick="GoBack" class="p-2 -ml-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </button>
+        <div class="flex-1">
+            <h1 class="text-xl font-bold text-slate-900 dark:text-white">Scan Asset</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Point camera at QR code</p>
+        </div>
+        <!-- Offline indicator -->
+        @if (!_isOnline)
+        {
+            <div class="flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg text-xs font-medium">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+                </svg>
+                Offline
+            </div>
+        }
+    </div>
+
+    <!-- Scanner Container -->
+    <div class="flex-1 flex flex-col items-center justify-center">
+        @if (_error is not null)
+        {
+            <!-- Error State -->
+            <div class="text-center px-6 animate-fade-in">
+                <div class="w-20 h-20 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Camera Error</h2>
+                <p class="text-slate-500 dark:text-slate-400 mb-6">@_error</p>
+                <button @onclick="RetryScanner" class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Try Again
+                </button>
+            </div>
+        }
+        else if (_scanSuccess)
+        {
+            <!-- Success State -->
+            <div class="text-center px-6 animate-scale-in">
+                <div class="w-24 h-24 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4 success-pulse">
+                    <svg class="w-12 h-12 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-2">Asset Found!</h2>
+                @if (_scannedAsset is not null)
+                {
+                    <p class="text-slate-600 dark:text-slate-300 font-medium">@_scannedAsset.DisplayName</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">@_scannedAsset.AssetTag</p>
+                }
+                @if (_isFromCache)
+                {
+                    <div class="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-medium">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                        </svg>
+                        From cache
+                    </div>
+                }
+                <p class="text-sm text-slate-400 dark:text-slate-500 mt-4">Redirecting...</p>
+            </div>
+        }
+        else if (_assetNotFound)
+        {
+            <!-- Asset Not Found State -->
+            <div class="text-center px-6 animate-fade-in">
+                <div class="w-20 h-20 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-10 h-10 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Asset Not Found</h2>
+                <p class="text-slate-500 dark:text-slate-400 mb-1">No asset matches this QR code</p>
+                <p class="text-sm text-slate-400 dark:text-slate-500 mb-6 font-mono">@_scannedTag</p>
+                <button @onclick="ScanAgain" class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Scan Again
+                </button>
+            </div>
+        }
+        else
+        {
+            <!-- Scanner View -->
+            <div class="w-full max-w-sm mx-auto">
+                <!-- Camera viewport -->
+                <div class="relative rounded-2xl overflow-hidden bg-black aspect-square shadow-2xl">
+                    <!-- QR Reader element -->
+                    <div id="qr-reader" class="w-full h-full"></div>
+
+                    <!-- Scanning overlay -->
+                    @if (_isScanning)
+                    {
+                        <div class="absolute inset-0 pointer-events-none">
+                            <!-- Corner markers -->
+                            <div class="absolute inset-[15%]">
+                                <!-- Top-left -->
+                                <div class="absolute top-0 left-0 w-8 h-8 border-l-4 border-t-4 border-white rounded-tl-lg"></div>
+                                <!-- Top-right -->
+                                <div class="absolute top-0 right-0 w-8 h-8 border-r-4 border-t-4 border-white rounded-tr-lg"></div>
+                                <!-- Bottom-left -->
+                                <div class="absolute bottom-0 left-0 w-8 h-8 border-l-4 border-b-4 border-white rounded-bl-lg"></div>
+                                <!-- Bottom-right -->
+                                <div class="absolute bottom-0 right-0 w-8 h-8 border-r-4 border-b-4 border-white rounded-br-lg"></div>
+                            </div>
+
+                            <!-- Scanning line animation -->
+                            <div class="absolute inset-x-[15%] top-[15%] bottom-[15%]">
+                                <div class="h-0.5 bg-gradient-to-r from-transparent via-primary-400 to-transparent animate-scan"></div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Loading state -->
+                    @if (_isInitializing)
+                    {
+                        <div class="absolute inset-0 bg-slate-900/80 flex items-center justify-center">
+                            <div class="text-center text-white">
+                                <div class="w-12 h-12 rounded-full border-4 border-white/20 border-t-white animate-spin mx-auto mb-3"></div>
+                                <p class="text-sm">Starting camera...</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Instructions -->
+                <div class="text-center mt-6 space-y-2">
+                    <p class="text-slate-600 dark:text-slate-300">
+                        Position the QR code within the frame
+                    </p>
+                    <p class="text-sm text-slate-400 dark:text-slate-500">
+                        The scan is automatic
+                    </p>
+                </div>
+
+                <!-- Manual Entry Link -->
+                <div class="mt-8 text-center">
+                    <button @onclick="ShowManualEntry" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium transition-colors">
+                        Enter asset tag manually
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Manual Entry Modal -->
+@if (_showManualEntry)
+{
+    <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @onclick="HideManualEntry"></div>
+        <div class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl p-6 animate-slide-up">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Enter Asset Tag</h3>
+            <div class="space-y-4">
+                <input @bind="_manualTag" @bind:event="oninput" @onkeydown="OnManualEntryKeyDown"
+                    type="text"
+                    placeholder="e.g., LAP-20251218-0001"
+                    class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all font-mono uppercase" />
+                <div class="flex gap-3">
+                    <button @onclick="HideManualEntry" class="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                        Cancel
+                    </button>
+                    <button @onclick="LookupManualTag" disabled="@string.IsNullOrWhiteSpace(_manualTag)" class="flex-1 px-4 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                        Look Up
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    @@keyframes scan {
+        0%, 100% { transform: translateY(0); opacity: 0; }
+        50% { transform: translateY(calc(100% - 2px)); opacity: 1; }
+    }
+    .animate-scan {
+        animation: scan 2s ease-in-out infinite;
+    }
+    .success-pulse {
+        animation: successPulse 0.6s ease-out;
+    }
+    @@keyframes successPulse {
+        0% { transform: scale(0.8); opacity: 0; }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    /* Hide html5-qrcode UI elements we don't need */
+    #qr-reader__dashboard_section_swaplink,
+    #qr-reader__status_span,
+    #qr-reader__dashboard_section_csr button {
+        display: none !important;
+    }
+    #qr-reader video {
+        object-fit: cover !important;
+        border-radius: 0 !important;
+    }
+    #qr-reader__scan_region {
+        min-height: 100% !important;
+    }
+    #qr-reader__dashboard {
+        padding: 0 !important;
+        display: none !important;
+    }
+</style>
+
+@code {
+    private DotNetObjectReference<Scan>? _objRef;
+    private bool _isInitializing = true;
+    private bool _isScanning;
+    private bool _scanSuccess;
+    private bool _assetNotFound;
+    private string? _error;
+    private string? _scannedTag;
+    private AssetDto? _scannedAsset;
+    private bool _showManualEntry;
+    private string _manualTag = "";
+    private bool _isOnline = true;
+    private bool _isFromCache;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await NetworkStatus.InitializeAsync();
+        _isOnline = NetworkStatus.IsOnline;
+        NetworkStatus.OnStatusChanged += OnNetworkStatusChangedAsync;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _objRef = DotNetObjectReference.Create(this);
+            await InitializeScanner();
+        }
+    }
+
+    private async Task OnNetworkStatusChangedAsync(bool isOnline)
+    {
+        _isOnline = isOnline;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task InitializeScanner()
+    {
+        try
+        {
+            var initialized = await JS.InvokeAsync<bool>("QrScanner.init", _objRef, "qr-reader");
+            if (initialized)
+            {
+                var started = await JS.InvokeAsync<bool>("QrScanner.start");
+                if (started)
+                {
+                    _isInitializing = false;
+                    _isScanning = true;
+                    StateHasChanged();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = "Failed to access camera: " + ex.Message;
+            _isInitializing = false;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnScanSuccess(string assetTag)
+    {
+        _scannedTag = assetTag;
+        _isScanning = false;
+        _isFromCache = false;
+        StateHasChanged();
+
+        AssetDto? asset = null;
+
+        // Try to fetch from API first if online
+        if (_isOnline)
+        {
+            try
+            {
+                asset = await Api.GetAssetByTagAsync(assetTag);
+            }
+            catch
+            {
+                // API call failed, try offline cache
+            }
+        }
+
+        // If not found online or we're offline, try local cache
+        if (asset is null)
+        {
+            asset = await OfflineStorage.GetAssetByTagAsync(assetTag);
+            if (asset is not null)
+            {
+                _isFromCache = true;
+            }
+        }
+
+        if (asset is not null)
+        {
+            _scannedAsset = asset;
+            _scanSuccess = true;
+            StateHasChanged();
+
+            // Navigate after short delay for visual feedback
+            await Task.Delay(1200);
+            Navigation.NavigateTo($"/assets/{asset.Id}");
+        }
+        else
+        {
+            // Trigger error haptic
+            await JS.InvokeVoidAsync("QrScanner.triggerErrorHaptic");
+            _assetNotFound = true;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public void OnScanError(string error)
+    {
+        _error = error;
+        _isInitializing = false;
+        StateHasChanged();
+    }
+
+    private async Task RetryScanner()
+    {
+        _error = null;
+        _isInitializing = true;
+        StateHasChanged();
+        await InitializeScanner();
+    }
+
+    private async Task ScanAgain()
+    {
+        _assetNotFound = false;
+        _scannedTag = null;
+        _isScanning = true;
+        StateHasChanged();
+
+        await JS.InvokeVoidAsync("QrScanner.resume");
+    }
+
+    private void ShowManualEntry()
+    {
+        _showManualEntry = true;
+        _manualTag = "";
+    }
+
+    private void HideManualEntry()
+    {
+        _showManualEntry = false;
+    }
+
+    private async Task OnManualEntryKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_manualTag))
+        {
+            await LookupManualTag();
+        }
+    }
+
+    private async Task LookupManualTag()
+    {
+        if (string.IsNullOrWhiteSpace(_manualTag)) return;
+
+        _showManualEntry = false;
+        _isScanning = false;
+
+        // Stop the scanner
+        await JS.InvokeVoidAsync("QrScanner.stop");
+
+        // Trigger haptic
+        await JS.InvokeVoidAsync("QrScanner.triggerHaptic");
+
+        // Look up the asset
+        await OnScanSuccess(_manualTag.Trim().ToUpperInvariant());
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/assets");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        NetworkStatus.OnStatusChanged -= OnNetworkStatusChangedAsync;
+
+        try
+        {
+            await JS.InvokeVoidAsync("QrScanner.stop");
+        }
+        catch
+        {
+            // Ignore disposal errors
+        }
+        _objRef?.Dispose();
+    }
+}
