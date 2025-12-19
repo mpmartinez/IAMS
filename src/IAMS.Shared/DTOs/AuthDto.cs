@@ -18,3 +18,15 @@ public record ChangePasswordDto
     public required string CurrentPassword { get; init; }
     public required string NewPassword { get; init; }
 }
+
+public record ForgotPasswordDto
+{
+    public required string Email { get; init; }
+}
+
+public record ResetPasswordDto
+{
+    public required string Email { get; init; }
+    public required string Token { get; init; }
+    public required string NewPassword { get; init; }
+}
