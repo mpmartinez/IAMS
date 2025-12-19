@@ -39,19 +39,6 @@ public class AuthService(
         return (true, null);
     }
 
-    public async Task<(bool Success, string? Error)> RegisterAsync(CreateUserDto dto)
-    {
-        var response = await http.PostAsJsonAsync("api/auth/register", dto);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
-            return (false, error?.Message ?? "Registration failed");
-        }
-
-        return (true, null);
-    }
-
     public async Task LogoutAsync()
     {
         await localStorage.RemoveItemAsync(TokenKey);

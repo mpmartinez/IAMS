@@ -44,36 +44,6 @@ public class AuthController(
         return Ok(ApiResponse<LoginResponseDto>.Ok(response));
     }
 
-    [HttpPost("register")]
-    public async Task<ActionResult<ApiResponse<UserDto>>> Register(CreateUserDto dto)
-    {
-        var existingUser = await userManager.FindByEmailAsync(dto.Email);
-        if (existingUser is not null)
-            return BadRequest(ApiResponse<UserDto>.Fail("Email already exists"));
-
-        var user = new ApplicationUser
-        {
-            UserName = dto.Email,
-            Email = dto.Email,
-            FullName = dto.FullName,
-            Department = dto.Department
-        };
-
-        var result = await userManager.CreateAsync(user, dto.Password);
-
-        if (!result.Succeeded)
-        {
-            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return BadRequest(ApiResponse<UserDto>.Fail(errors));
-        }
-
-        // Default new users to Staff role
-        var role = dto.Role is "Admin" or "Auditor" ? dto.Role : "Staff";
-        await userManager.AddToRoleAsync(user, role);
-
-        return CreatedAtAction(nameof(GetCurrentUser), ApiResponse<UserDto>.Ok(MapToDto(user, role)));
-    }
-
     [Authorize]
     [HttpGet("me")]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetCurrentUser()
@@ -140,6 +110,58 @@ public class AuthController(
     public ActionResult<string[]> GetRoles()
     {
         return Ok(new[] { "Admin", "Staff", "Auditor" });
+    }
+
+    /// <summary>
+    /// Request a password reset link
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("forgot-password")]
+    public async Task<ActionResult<ApiResponse<object>>> ForgotPassword(ForgotPasswordDto dto)
+    {
+        var user = await userManager.FindByEmailAsync(dto.Email);
+
+        // Always return success to prevent email enumeration
+        if (user is null || !user.IsActive)
+            return Ok(ApiResponse<object>.Ok(new { }, "If an account exists, a reset link will be sent"));
+
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+
+        // In a real application, you would send an email here with the reset link
+        // For now, we'll log it to the console (development only)
+        var resetUrl = $"https://localhost:5002/reset-password?email={Uri.EscapeDataString(user.Email!)}&token={Uri.EscapeDataString(token)}";
+        Console.WriteLine($"[Password Reset] User: {user.Email}, Reset URL: {resetUrl}");
+
+        return Ok(ApiResponse<object>.Ok(new { }, "If an account exists, a reset link will be sent"));
+    }
+
+    /// <summary>
+    /// Reset password using token
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("reset-password")]
+    public async Task<ActionResult<ApiResponse<object>>> ResetPassword(ResetPasswordDto dto)
+    {
+        var user = await userManager.FindByEmailAsync(dto.Email);
+
+        if (user is null)
+            return BadRequest(ApiResponse<object>.Fail("Invalid or expired token"));
+
+        var result = await userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+
+        if (!result.Succeeded)
+        {
+            var errors = result.Errors.Select(e => e.Description).ToList();
+            if (errors.Any(e => e.Contains("token")))
+                return BadRequest(ApiResponse<object>.Fail("Invalid or expired token"));
+
+            return BadRequest(ApiResponse<object>.Fail(string.Join(", ", errors)));
+        }
+
+        user.UpdatedAt = DateTime.UtcNow;
+        await userManager.UpdateAsync(user);
+
+        return Ok(ApiResponse<object>.Ok(new { }, "Password has been reset successfully"));
     }
 
     private static UserDto MapToDto(ApplicationUser user, string role) => new()
