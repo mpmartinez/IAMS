@@ -3,6 +3,7 @@
 @inject ApiClient Api
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject SnackbarService Snackbar
 
 <PageTitle>@(_asset?.DisplayName ?? "Asset") - IAMS</PageTitle>
 
@@ -252,6 +253,75 @@ else
                         <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-sm">@_asset.Notes</p>
                     </Card>
                 }
+
+                <!-- Attachments -->
+                <Card Title="Attachments">
+                    <HeaderContent>
+                        <AuthorizeView Roles="Admin,Staff">
+                            <a href="/assets/@Id/edit" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
+                                Manage
+                            </a>
+                        </AuthorizeView>
+                    </HeaderContent>
+                    <ChildContent>
+                        @if (_attachmentsLoading)
+                        {
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                @for (int i = 0; i < 3; i++)
+                                {
+                                    <div class="aspect-square rounded-xl skeleton"></div>
+                                }
+                            </div>
+                        }
+                        else if (_attachments is null || _attachments.Count == 0)
+                        {
+                            <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No attachments</p>
+                        }
+                        else
+                        {
+                            <!-- Group by category -->
+                            @foreach (var group in _attachments.GroupBy(a => a.Category))
+                            {
+                                <div class="mb-4 last:mb-0">
+                                    <h4 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">@group.Key</h4>
+                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        @foreach (var attachment in group)
+                                        {
+                                            <a @onclick="() => ViewAttachment(attachment)" @onclick:preventDefault
+                                               class="group relative aspect-square rounded-xl bg-slate-100 dark:bg-slate-700 overflow-hidden cursor-pointer">
+                                                @if (attachment.IsImage && _attachmentThumbnails.TryGetValue(attachment.Id, out var thumbnailUrl))
+                                                {
+                                                    <img src="@thumbnailUrl"
+                                                         alt="@attachment.FileName"
+                                                         class="w-full h-full object-cover" />
+                                                }
+                                                else if (attachment.IsImage)
+                                                {
+                                                    <div class="w-full h-full flex items-center justify-center">
+                                                        <div class="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="w-full h-full flex flex-col items-center justify-center p-2">
+                                                        <svg class="w-10 h-10 text-slate-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                        </svg>
+                                                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate w-full text-center">@attachment.FileName</p>
+                                                    </div>
+                                                }
+                                                <!-- Overlay on hover -->
+                                                <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <span class="text-white text-sm font-medium">View</span>
+                                                </div>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </ChildContent>
+                </Card>
             </div>
 
             <!-- Sidebar -->
@@ -578,6 +648,53 @@ else
             </Button>
         </FooterContent>
     </Modal>
+
+    <!-- Attachment Viewer Modal -->
+    <Modal IsOpen="@_showAttachmentModal" Title="@(_viewingAttachment?.FileName ?? "Attachment")" OnClose="() => _showAttachmentModal = false" Size="lg">
+        <ChildContent>
+            <div class="flex flex-col items-center">
+                @if (_viewingAttachmentUrl is null)
+                {
+                    <div class="w-full h-64 flex items-center justify-center">
+                        <div class="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                }
+                else if (_viewingAttachment?.IsImage == true)
+                {
+                    <img src="@_viewingAttachmentUrl" alt="@_viewingAttachment.FileName" class="max-w-full max-h-[60vh] object-contain rounded-lg" />
+                }
+                else
+                {
+                    <div class="text-center py-8">
+                        <svg class="w-16 h-16 text-slate-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <p class="text-slate-600 dark:text-slate-300">@_viewingAttachment?.FileName</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">@_viewingAttachment?.FileSizeDisplay</p>
+                    </div>
+                }
+                @if (_viewingAttachment is not null)
+                {
+                    <div class="mt-4 text-sm text-slate-500 dark:text-slate-400 text-center">
+                        <p>@_viewingAttachment.Category &bull; Uploaded @_viewingAttachment.CreatedAt.ToString("MMM dd, yyyy") by @_viewingAttachment.UploadedByUserName</p>
+                        @if (!string.IsNullOrEmpty(_viewingAttachment.Description))
+                        {
+                            <p class="mt-1 text-slate-600 dark:text-slate-300">@_viewingAttachment.Description</p>
+                        }
+                    </div>
+                }
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="() => _showAttachmentModal = false">Close</Button>
+            <Button OnClick="DownloadAttachment" Disabled="@(_viewingAttachmentUrl is null)">
+                <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download
+            </Button>
+        </FooterContent>
+    </Modal>
 }
 
 @code {
@@ -616,13 +733,22 @@ else
     private string? _qrCodeDataUrl;
     private bool _loadingQrCode;
 
+    // Attachments state
+    private List<AttachmentDto>? _attachments;
+    private bool _attachmentsLoading;
+    private Dictionary<int, string> _attachmentThumbnails = new();
+    private bool _showAttachmentModal;
+    private AttachmentDto? _viewingAttachment;
+    private string? _viewingAttachmentUrl;
+
     protected override async Task OnInitializedAsync()
     {
         _asset = await Api.GetAssetAsync(Id);
         _loading = false;
 
-        // Load assignment history in background
+        // Load assignment history and attachments in background
         _ = LoadAssignmentHistory();
+        _ = LoadAttachments();
     }
 
     private async Task LoadAssignmentHistory()
@@ -631,13 +757,71 @@ else
         StateHasChanged();
     }
 
+    private async Task LoadAttachments()
+    {
+        _attachmentsLoading = true;
+        StateHasChanged();
+
+        _attachments = await Api.GetAttachmentsAsync(Id);
+        _attachmentsLoading = false;
+        StateHasChanged();
+
+        // Load thumbnails for images in background
+        if (_attachments is not null)
+        {
+            foreach (var attachment in _attachments.Where(a => a.IsImage))
+            {
+                _ = LoadAttachmentThumbnail(attachment);
+            }
+        }
+    }
+
+    private async Task LoadAttachmentThumbnail(AttachmentDto attachment)
+    {
+        var dataUrl = await Api.GetAttachmentBase64Async(Id, attachment.Id, attachment.ContentType);
+        if (dataUrl is not null)
+        {
+            _attachmentThumbnails[attachment.Id] = dataUrl;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ViewAttachment(AttachmentDto attachment)
+    {
+        _viewingAttachment = attachment;
+        _viewingAttachmentUrl = null;
+        _showAttachmentModal = true;
+
+        // Load the full image/file
+        if (_attachmentThumbnails.TryGetValue(attachment.Id, out var cachedUrl))
+        {
+            _viewingAttachmentUrl = cachedUrl;
+        }
+        else
+        {
+            _viewingAttachmentUrl = await Api.GetAttachmentBase64Async(Id, attachment.Id, attachment.ContentType);
+        }
+        StateHasChanged();
+    }
+
+    private async Task DownloadAttachment()
+    {
+        if (_viewingAttachment is null || _viewingAttachmentUrl is null) return;
+        await JS.InvokeVoidAsync("downloadFile", _viewingAttachmentUrl, _viewingAttachment.FileName);
+    }
+
     private async Task DeleteAsset()
     {
         _deleting = true;
         var success = await Api.DeleteAssetAsync(Id);
         if (success)
         {
+            Snackbar.Success("Asset deleted successfully");
             Navigation.NavigateTo("/assets");
+        }
+        else
+        {
+            Snackbar.Error("Failed to delete asset");
         }
         _deleting = false;
     }
@@ -663,6 +847,7 @@ else
         if (success)
         {
             _showAssignModal = false;
+            Snackbar.Success("Asset assigned successfully");
             // Reload asset and history
             _asset = await Api.GetAssetAsync(Id);
             await LoadAssignmentHistory();
@@ -670,6 +855,7 @@ else
         else
         {
             _assignError = error ?? "Failed to assign asset";
+            Snackbar.Error(_assignError);
         }
 
         _assigning = false;
@@ -695,6 +881,7 @@ else
         if (success)
         {
             _showReturnModal = false;
+            Snackbar.Success("Asset returned successfully");
             // Reload asset and history
             _asset = await Api.GetAssetAsync(Id);
             await LoadAssignmentHistory();
@@ -702,6 +889,7 @@ else
         else
         {
             _returnError = error ?? "Failed to return asset";
+            Snackbar.Error(_returnError);
         }
 
         _returning = false;
@@ -783,6 +971,7 @@ else
             if (!returnSuccess)
             {
                 _transferError = returnError ?? "Failed to return asset before transfer";
+                Snackbar.Error(_transferError);
                 _transferring = false;
                 return;
             }
@@ -794,6 +983,7 @@ else
         if (success)
         {
             _showTransferModal = false;
+            Snackbar.Success("Asset transferred successfully");
             // Reload asset and history
             _asset = await Api.GetAssetAsync(Id);
             await LoadAssignmentHistory();
@@ -801,6 +991,7 @@ else
         else
         {
             _transferError = error ?? "Failed to transfer asset";
+            Snackbar.Error(_transferError);
         }
 
         _transferring = false;

@@ -187,3 +187,33 @@ input:focus, select:focus, textarea:focus {
     backdrop-filter: blur(2px);
     transition: opacity 0.3s ease;
 }
+
+/* Snackbar slide up animation */
+.animate-slide-up {
+    animation: slide-up 0.3s ease-out forwards;
+}
+
+@keyframes slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Snackbar progress bar shrink */
+.animate-shrink-width {
+    animation: shrink-width linear forwards;
+}
+
+@keyframes shrink-width {
+    from {
+        width: 100%;
+    }
+    to {
+        width: 0%;
+    }
+}

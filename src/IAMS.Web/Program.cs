@@ -23,6 +23,12 @@ builder.Services.AddScoped<OfflineStorageService>();
 builder.Services.AddScoped<NetworkStatusService>();
 builder.Services.AddScoped<SyncService>();
 
+// Notification service for SSE
+builder.Services.AddScoped<NotificationService>();
+
+// Global snackbar service
+builder.Services.AddSingleton<SnackbarService>();
+
 builder.Services.AddScoped(sp =>
 {
     var client = new HttpClient { BaseAddress = new Uri("https://localhost:5001") };
