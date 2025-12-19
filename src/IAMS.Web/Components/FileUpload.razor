@@ -1,0 +1,182 @@
+@inject IJSRuntime JS
+
+<div class="space-y-3">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">@Label</label>
+    }
+
+    <div class="relative">
+        <InputFile id="@_inputId"
+                   accept="@Accept"
+                   OnChange="OnFileSelected"
+                   disabled="@Disabled"
+                   class="sr-only" />
+
+        <label for="@_inputId"
+               class="@DropZoneClasses"
+               @ondragover="OnDragOver"
+               @ondragover:preventDefault
+               @ondragleave="OnDragLeave"
+               @ondrop="OnDrop"
+               @ondrop:preventDefault>
+            @if (_selectedFile is null)
+            {
+                <div class="flex flex-col items-center gap-2 py-6 px-4">
+                    <svg class="w-10 h-10 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <div class="text-center">
+                        <span class="text-primary-600 dark:text-primary-400 font-medium">Click to upload</span>
+                        <span class="text-slate-500 dark:text-slate-400"> or drag and drop</span>
+                    </div>
+                    <p class="text-xs text-slate-400 dark:text-slate-500">@HelpText</p>
+                </div>
+            }
+            else
+            {
+                <div class="flex items-center gap-3 py-4 px-4">
+                    @if (_previewUrl is not null)
+                    {
+                        <img src="@_previewUrl" alt="Preview" class="w-16 h-16 object-cover rounded-lg" />
+                    }
+                    else
+                    {
+                        <div class="w-16 h-16 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                    }
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@_selectedFile.Name</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">@FormatFileSize(_selectedFile.Size)</p>
+                    </div>
+                    <button type="button" @onclick="ClearSelection" @onclick:stopPropagation
+                            class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            }
+        </label>
+    </div>
+
+    @if (EnableCameraCapture)
+    {
+        <button type="button" @onclick="TriggerCameraCapture"
+                class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Take Photo
+        </button>
+    }
+
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <p class="text-sm text-red-500">@Error</p>
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Accept { get; set; } = "image/*,.pdf,.doc,.docx,.txt";
+    [Parameter] public string HelpText { get; set; } = "PNG, JPG, PDF up to 5MB";
+    [Parameter] public bool EnableCameraCapture { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string Error { get; set; } = "";
+    [Parameter] public EventCallback<IBrowserFile?> OnFileChanged { get; set; }
+    [Parameter] public long MaxFileSize { get; set; } = 5 * 1024 * 1024; // 5 MB
+
+    private string _inputId = $"file-upload-{Guid.NewGuid():N}";
+    private IBrowserFile? _selectedFile;
+    private string? _previewUrl;
+    private bool _isDragging;
+
+    private string DropZoneClasses => _isDragging
+        ? "flex cursor-pointer rounded-xl border-2 border-dashed border-primary-500 bg-primary-50 dark:bg-primary-900/20 transition-all duration-200"
+        : "flex cursor-pointer rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 hover:border-primary-400 dark:hover:border-primary-500 bg-slate-50 dark:bg-slate-800 transition-all duration-200";
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+
+        // Validate size
+        if (file.Size > MaxFileSize)
+        {
+            await OnFileChanged.InvokeAsync(null);
+            return;
+        }
+
+        _selectedFile = file;
+        _previewUrl = null;
+
+        // Generate preview for images
+        if (file.ContentType.StartsWith("image/"))
+        {
+            await GeneratePreview(file);
+        }
+
+        await OnFileChanged.InvokeAsync(file);
+    }
+
+    private void OnDragOver() => _isDragging = true;
+    private void OnDragLeave() => _isDragging = false;
+
+    private void OnDrop()
+    {
+        _isDragging = false;
+        // File drop is handled by InputFile component
+    }
+
+    private async Task GeneratePreview(IBrowserFile file)
+    {
+        try
+        {
+            var resizedImage = await file.RequestImageFileAsync(file.ContentType, 200, 200);
+            using var stream = resizedImage.OpenReadStream(MaxFileSize);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            _previewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+            StateHasChanged();
+        }
+        catch
+        {
+            // Silently fail preview generation
+        }
+    }
+
+    private async Task ClearSelection()
+    {
+        _selectedFile = null;
+        _previewUrl = null;
+        await OnFileChanged.InvokeAsync(null);
+    }
+
+    private async Task TriggerCameraCapture()
+    {
+        await JS.InvokeVoidAsync("triggerFileInput", _inputId);
+    }
+
+    public IBrowserFile? GetSelectedFile() => _selectedFile;
+
+    public void Reset()
+    {
+        _selectedFile = null;
+        _previewUrl = null;
+        StateHasChanged();
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+        if (bytes < 1024 * 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F2} MB";
+    }
+}
