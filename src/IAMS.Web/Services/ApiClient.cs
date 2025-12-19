@@ -314,6 +314,124 @@ public class ApiClient(HttpClient http, AuthService authService)
         }
     }
 
+    // Attachment APIs
+    public async Task<List<AttachmentDto>?> GetAttachmentsAsync(int assetId)
+    {
+        var client = await GetAuthenticatedClient();
+        return await client.GetFromJsonAsync<List<AttachmentDto>>($"api/assets/{assetId}/attachments");
+    }
+
+    public async Task<AttachmentSummaryDto?> GetAttachmentSummaryAsync(int assetId)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<AttachmentSummaryDto>>(
+            $"api/assets/{assetId}/attachments/summary");
+        return response?.Data;
+    }
+
+    public async Task<(bool Success, AttachmentDto? Attachment, string? Error)> UploadAttachmentAsync(
+        int assetId,
+        Stream fileStream,
+        string fileName,
+        string contentType,
+        string category,
+        string? description = null)
+    {
+        var client = await GetAuthenticatedClient();
+
+        using var content = new MultipartFormDataContent();
+        using var fileContent = new StreamContent(fileStream);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+
+        content.Add(fileContent, "file", fileName);
+        content.Add(new StringContent(category), "category");
+        if (!string.IsNullOrEmpty(description))
+            content.Add(new StringContent(description), "description");
+
+        var response = await client.PostAsync($"api/assets/{assetId}/attachments", content);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, null, error?.Message ?? "Failed to upload attachment");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<ApiResponse<AttachmentDto>>();
+        return (true, result?.Data, null);
+    }
+
+    public async Task<bool> DeleteAttachmentAsync(int assetId, int attachmentId)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.DeleteAsync($"api/assets/{assetId}/attachments/{attachmentId}");
+        return response.IsSuccessStatusCode;
+    }
+
+    public string GetAttachmentDownloadUrl(int assetId, int attachmentId)
+    {
+        return $"{http.BaseAddress}api/assets/{assetId}/attachments/{attachmentId}/download";
+    }
+
+    public async Task<string?> GetAttachmentBase64Async(int assetId, int attachmentId, string contentType)
+    {
+        try
+        {
+            var client = await GetAuthenticatedClient();
+            var response = await client.GetAsync($"api/assets/{assetId}/attachments/{attachmentId}/download");
+            if (!response.IsSuccessStatusCode) return null;
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            return $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<string[]?> GetAttachmentCategoriesAsync()
+    {
+        return await http.GetFromJsonAsync<string[]>("api/attachments/categories");
+    }
+
+    // Notification APIs
+    public async Task<List<NotificationDto>?> GetNotificationsAsync(int take = 20)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<NotificationDto>>>($"api/notifications?take={take}");
+        return response?.Data;
+    }
+
+    public async Task<NotificationCountDto?> GetNotificationCountAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<NotificationCountDto>>("api/notifications/count");
+        return response?.Data;
+    }
+
+    public async Task<bool> MarkNotificationAsReadAsync(int notificationId)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsync($"api/notifications/{notificationId}/read", null);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> MarkAllNotificationsAsReadAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsync("api/notifications/read-all", null);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> DeleteNotificationAsync(int notificationId)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.DeleteAsync($"api/notifications/{notificationId}");
+        return response.IsSuccessStatusCode;
+    }
+
+    public string GetBaseUrl() => http.BaseAddress?.ToString().TrimEnd('/') ?? "";
+
     // User Management APIs
     public async Task<PagedResponse<UserDto>?> GetUsersAsync(string? search = null, int page = 1, int pageSize = 20)
     {

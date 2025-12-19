@@ -61,17 +61,37 @@
         </div>
     </div>
 
-    <!-- Results Summary -->
+    <!-- Results Summary & View Toggle -->
     @if (_assets is not null && !_loading)
     {
-        <div class="text-sm text-slate-500 dark:text-slate-400">
-            Showing @_assets.Items.Count of @_assets.TotalCount assets
-            @if (_hasFilters)
-            {
-                <button @onclick="ClearFilters" class="ml-2 text-primary-600 dark:text-primary-400 hover:underline">
-                    Clear filters
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="text-sm text-slate-500 dark:text-slate-400">
+                Showing @_assets.Items.Count of @_assets.TotalCount assets
+                @if (_hasFilters)
+                {
+                    <button @onclick="ClearFilters" class="ml-2 text-primary-600 dark:text-primary-400 hover:underline">
+                        Clear filters
+                    </button>
+                }
+            </div>
+
+            <!-- View Toggle -->
+            <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+                <button @onclick="() => _viewMode = ViewMode.Cards"
+                        class="@GetViewToggleClass(ViewMode.Cards) flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                    </svg>
+                    Cards
                 </button>
-            }
+                <button @onclick="() => _viewMode = ViewMode.Grid"
+                        class="@GetViewToggleClass(ViewMode.Grid) flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    Grid
+                </button>
+            </div>
         </div>
     }
 
@@ -103,14 +123,102 @@
     }
     else if (_assets?.Items.Any() == true)
     {
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            @foreach (var asset in _assets.Items)
-            {
-                <div class="stagger-item">
-                    <AssetCard Asset="asset" />
+        @if (_viewMode == ViewMode.Cards)
+        {
+            <!-- Cards View -->
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                @foreach (var asset in _assets.Items)
+                {
+                    <div class="stagger-item">
+                        <AssetCard Asset="asset" />
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <!-- Grid/Table View -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Asset</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Type</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden sm:table-cell">Serial</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden md:table-cell">Assigned To</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden lg:table-cell">Warranty</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden xl:table-cell">Price</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                            @foreach (var asset in _assets.Items)
+                            {
+                                <tr @onclick="() => NavigateToAsset(asset.Id)"
+                                    class="hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors duration-150">
+                                    <td class="px-4 py-3">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-8 h-8 rounded-lg @GetDeviceTypeBg(asset.DeviceType) flex items-center justify-center shrink-0">
+                                                @GetDeviceIcon(asset.DeviceType)
+                                            </div>
+                                            <div class="min-w-0">
+                                                <div class="font-medium text-slate-900 dark:text-white truncate text-sm">@asset.DisplayName</div>
+                                                <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">@asset.AssetTag</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="text-sm text-slate-600 dark:text-slate-300">@asset.DeviceType</span>
+                                    </td>
+                                    <td class="px-4 py-3 hidden sm:table-cell">
+                                        <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">@(asset.SerialNumber ?? "-")</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <Badge Text="@asset.Status" Variant="@asset.Status" />
+                                    </td>
+                                    <td class="px-4 py-3 hidden md:table-cell">
+                                        @if (!string.IsNullOrEmpty(asset.AssignedToUserName))
+                                        {
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+                                                    <span class="text-primary-600 dark:text-primary-400 font-medium text-xs">@GetInitials(asset.AssignedToUserName)</span>
+                                                </div>
+                                                <span class="text-sm text-slate-600 dark:text-slate-300 truncate max-w-[120px]">@asset.AssignedToUserName</span>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-sm text-slate-400 dark:text-slate-500">Unassigned</span>
+                                        }
+                                    </td>
+                                    <td class="px-4 py-3 hidden lg:table-cell">
+                                        @if (asset.WarrantyStatus != WarrantyStatus.None)
+                                        {
+                                            <Badge Text="@GetWarrantyBadgeText(asset)" Variant="@GetWarrantyBadgeVariant(asset)" Pulse="@(asset.WarrantyStatus == WarrantyStatus.Expiring)" />
+                                        }
+                                        else
+                                        {
+                                            <span class="text-sm text-slate-400 dark:text-slate-500">-</span>
+                                        }
+                                    </td>
+                                    <td class="px-4 py-3 text-right hidden xl:table-cell">
+                                        @if (asset.PurchasePrice.HasValue)
+                                        {
+                                            <span class="text-sm text-slate-600 dark:text-slate-300">@FormatPrice(asset.PurchasePrice.Value, asset.Currency)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-sm text-slate-400 dark:text-slate-500">-</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
-            }
-        </div>
+            </div>
+        }
 
         <!-- Pagination -->
         @if (_assets.TotalPages > 1)
@@ -172,8 +280,15 @@
     private string _status = "";
     private int _page = 1;
     private System.Timers.Timer? _searchTimer;
+    private ViewMode _viewMode = ViewMode.Cards;
+
+    private enum ViewMode { Cards, Grid }
 
     private bool _hasFilters => !string.IsNullOrEmpty(_search) || !string.IsNullOrEmpty(_deviceType) || !string.IsNullOrEmpty(_status);
+
+    private string GetViewToggleClass(ViewMode mode) => _viewMode == mode
+        ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+        : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300";
 
     protected override async Task OnInitializedAsync()
     {
@@ -227,5 +342,69 @@
     public void Dispose()
     {
         _searchTimer?.Dispose();
+    }
+
+    private void NavigateToAsset(int id)
+    {
+        Navigation.NavigateTo($"/assets/{id}");
+    }
+
+    private string GetDeviceTypeBg(string deviceType) => deviceType switch
+    {
+        "Laptop" or "Desktop" => "bg-blue-100 dark:bg-blue-900/30",
+        "Monitor" => "bg-purple-100 dark:bg-purple-900/30",
+        "Phone" or "Tablet" => "bg-green-100 dark:bg-green-900/30",
+        "Printer" => "bg-orange-100 dark:bg-orange-900/30",
+        "Network" or "Server" => "bg-red-100 dark:bg-red-900/30",
+        _ => "bg-slate-100 dark:bg-slate-700"
+    };
+
+    private RenderFragment GetDeviceIcon(string deviceType) => deviceType switch
+    {
+        "Laptop" or "Desktop" => @<svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+        "Monitor" => @<svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+        "Phone" => @<svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>,
+        "Tablet" => @<svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>,
+        "Printer" => @<svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
+        "Network" or "Server" => @<svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>,
+        _ => @<svg class="w-4 h-4 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+    };
+
+    private string FormatPrice(decimal price, string currency) => currency switch
+    {
+        "USD" => $"${price:N2}",
+        "EUR" => $"\u20AC{price:N2}",
+        "GBP" => $"\u00A3{price:N2}",
+        "PHP" => $"\u20B1{price:N2}",
+        "JPY" => $"\u00A5{price:N0}",
+        _ => $"{currency} {price:N2}"
+    };
+
+    private string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+        return parts.Length > 0 ? parts[0][0].ToString().ToUpper() : "?";
+    }
+
+    private string GetWarrantyBadgeVariant(AssetDto asset) => asset.WarrantyStatus switch
+    {
+        WarrantyStatus.Active => "warranty-active",
+        WarrantyStatus.Expiring => "warranty-expiring",
+        WarrantyStatus.Expired => "warranty-expired",
+        _ => "default"
+    };
+
+    private string GetWarrantyBadgeText(AssetDto asset)
+    {
+        var days = asset.WarrantyDaysRemaining ?? 0;
+        return asset.WarrantyStatus switch
+        {
+            WarrantyStatus.Active => asset.WarrantyEndDate?.ToString("MMM yyyy") ?? "Active",
+            WarrantyStatus.Expiring => days <= 30 ? $"{days}d left" : $"{days / 30}mo left",
+            WarrantyStatus.Expired => "Expired",
+            _ => ""
+        };
     }
 }
