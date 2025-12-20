@@ -4,11 +4,11 @@ using IAMS.Shared.DTOs;
 
 namespace IAMS.Web.Services;
 
-public class ApiClient(HttpClient http, AuthService authService)
+public class ApiClient(HttpClient http, ITokenProvider tokenProvider)
 {
     private async Task<HttpClient> GetAuthenticatedClient()
     {
-        var token = await authService.GetTokenAsync();
+        var token = await tokenProvider.GetAccessTokenAsync();
         if (!string.IsNullOrEmpty(token))
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return http;
