@@ -394,7 +394,7 @@
     {
         _deviceTypes = await Api.GetDeviceTypesAsync();
         _statuses = await Api.GetStatusesAsync();
-        _currencies = await Api.GetCurrenciesAsync();
+        _currencies = ["PHP", "USD"]; // Only Peso and Dollar
         _users = await Api.GetUserListAsync();
 
         if (!IsNew)
@@ -425,7 +425,7 @@
         }
         else
         {
-            _model.Currency = "USD";
+            _model.Currency = "PHP"; // Default to Peso
             _model.Status = "Available";
         }
 
@@ -751,7 +751,7 @@
         public string Status { get; set; } = "";
         public string AssignedToUserId { get; set; } = "";
         public string PurchasePrice { get; set; } = "";
-        public string Currency { get; set; } = "USD";
+        public string Currency { get; set; } = "PHP";
         public string PurchaseDate { get; set; } = "";
         public string WarrantyProvider { get; set; } = "";
         public string WarrantyStartDate { get; set; } = "";

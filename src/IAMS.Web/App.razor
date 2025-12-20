@@ -1,4 +1,5 @@
 @using IAMS.Web.Layout
+@inject NavigationManager Navigation
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
@@ -11,12 +12,18 @@
                     }
                     else
                     {
-                        <p class="text-center py-8 text-slate-600">You are not authorized to view this page.</p>
+                        <LayoutView Layout="@typeof(MainLayout)">
+                            <p class="text-center py-8 text-slate-600">You are not authorized to view this page.</p>
+                        </LayoutView>
                     }
                 </NotAuthorized>
                 <Authorizing>
-                    <div class="flex items-center justify-center h-64">
-                        <div class="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                    @* Full-page loading - no layout shown during auth check *@
+                    <div class="min-h-screen bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                            <p class="text-slate-500 dark:text-slate-400 text-sm">@(IsLoggingOut ? "Logging out..." : "Checking authentication...")</p>
+                        </div>
                     </div>
                 </Authorizing>
             </AuthorizeRouteView>
@@ -36,3 +43,7 @@
         </NotFound>
     </Router>
 </CascadingAuthenticationState>
+
+@code {
+    private bool IsLoggingOut => Navigation.Uri.Contains("/authentication/logout", StringComparison.OrdinalIgnoreCase);
+}

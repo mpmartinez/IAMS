@@ -1,8 +1,9 @@
 @page "/reports"
-@attribute [Authorize(Roles = "Admin,Auditor")]
+@attribute [Authorize]
 @inject ApiClient Api
-@inject AuthService AuthService
+@inject ITokenProvider TokenProvider
 @inject IJSRuntime JS
+@inject IConfiguration Configuration
 
 <PageTitle>Reports - IAMS</PageTitle>
 
@@ -484,8 +485,9 @@
     private async Task DownloadReport(string reportType, Dictionary<string, string>? filters)
     {
         var url = Api.GetReportExportUrl(reportType, filters);
-        var token = await AuthService.GetTokenAsync();
-        await JS.InvokeVoidAsync("downloadWithAuth", $"https://localhost:5001/{url}", token);
+        var token = await TokenProvider.GetAccessTokenAsync();
+        var baseUrl = Configuration["ApiBaseUrl"] ?? "https://localhost:5021";
+        await JS.InvokeVoidAsync("downloadWithAuth", $"{baseUrl}/{url}", token);
     }
 
     private static string FormatCurrency(decimal? value, string? currency)

@@ -1,8 +1,8 @@
 @page "/"
 @attribute [Authorize]
 @inject ApiClient Api
-@inject AuthService AuthService
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Dashboard - IAMS</PageTitle>
 
@@ -273,6 +273,19 @@
                 </div>
             </Card>
         </div>
+
+        <!-- DEBUG: User Claims -->
+        <Card Title="Debug: User Claims">
+            <div class="text-xs font-mono space-y-1 max-h-48 overflow-auto">
+                @foreach (var claim in _userClaims)
+                {
+                    <div class="flex gap-2">
+                        <span class="text-slate-500">@claim.Type:</span>
+                        <span class="text-slate-900 dark:text-white">@claim.Value</span>
+                    </div>
+                }
+            </div>
+        </Card>
     }
     else
     {
@@ -295,11 +308,25 @@
     private bool _loading = true;
     private string _userName = "";
     private DashboardDto? _dashboard;
+    private List<System.Security.Claims.Claim> _userClaims = new();
 
     protected override async Task OnInitializedAsync()
     {
-        var user = await AuthService.GetCurrentUserAsync();
-        _userName = user?.FullName.Split(' ').FirstOrDefault() ?? "User";
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Collect all claims for debugging
+        _userClaims = user.Claims.ToList();
+
+        // Try to get name from various claim types
+        _userName = user.FindFirst("name")?.Value
+            ?? user.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+            ?? user.FindFirst("given_name")?.Value
+            ?? user.Identity?.Name?.Split('@').FirstOrDefault()
+            ?? "User";
+
+        // Get first name only
+        _userName = _userName.Split(' ').FirstOrDefault() ?? "User";
 
         _dashboard = await Api.GetDashboardAsync();
         _loading = false;

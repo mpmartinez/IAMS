@@ -1,43 +1,54 @@
 @page "/login"
 @layout AuthLayout
-@inject AuthService AuthService
 @inject NavigationManager Navigation
+@inject IConfiguration Configuration
+@inject IServiceProvider ServiceProvider
 
 <PageTitle>Login - IAMS</PageTitle>
 
-<h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Welcome back</h2>
-<p class="text-slate-500 dark:text-slate-400 mb-8">Sign in to manage your assets</p>
-
-<EditForm Model="@_model" OnValidSubmit="HandleLogin" class="space-y-5">
-    <Input Label="Email" Type="email" @bind-Value="_model.Email" Placeholder="you@company.com" Error="@_emailError" />
-
-    <div>
-        <Input Label="Password" Type="password" @bind-Value="_model.Password" Placeholder="Enter your password" Error="@_passwordError" />
-        <div class="mt-2 text-right">
-            <a href="/forgot-password" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors">
-                Forgot password?
-            </a>
-        </div>
+@if (_useM2ID)
+{
+    <div class="text-center">
+        <div class="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p class="text-slate-600 dark:text-slate-400">Redirecting to login...</p>
     </div>
+}
+else
+{
+    <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Welcome back</h2>
+    <p class="text-slate-500 dark:text-slate-400 mb-8">Sign in to manage your assets</p>
 
-    @if (!string.IsNullOrEmpty(_error))
-    {
-        <div class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-slide-up">
-            <p class="text-sm text-red-600 dark:text-red-400">@_error</p>
+    <EditForm Model="@_model" OnValidSubmit="HandleLogin" class="space-y-5">
+        <Input Label="Email" Type="email" @bind-Value="_model.Email" Placeholder="you@company.com" Error="@_emailError" />
+
+        <div>
+            <Input Label="Password" Type="password" @bind-Value="_model.Password" Placeholder="Enter your password" Error="@_passwordError" />
+            <div class="mt-2 text-right">
+                <a href="/forgot-password" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors">
+                    Forgot password?
+                </a>
+            </div>
         </div>
-    }
 
-    <Button Type="submit" Size="lg" Loading="@_loading" Disabled="@_loading" class="w-full">
-        @if (_loading)
+        @if (!string.IsNullOrEmpty(_error))
         {
-            <span>Signing in...</span>
+            <div class="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-slide-up">
+                <p class="text-sm text-red-600 dark:text-red-400">@_error</p>
+            </div>
         }
-        else
-        {
-            <span>Sign in</span>
-        }
-    </Button>
-</EditForm>
+
+        <Button Type="submit" Size="lg" Loading="@_loading" Disabled="@_loading" class="w-full">
+            @if (_loading)
+            {
+                <span>Signing in...</span>
+            }
+            else
+            {
+                <span>Sign in</span>
+            }
+        </Button>
+    </EditForm>
+}
 
 @code {
     private LoginModel _model = new();
@@ -45,9 +56,30 @@
     private string? _error;
     private string? _emailError;
     private string? _passwordError;
+    private bool _useM2ID;
+    private AuthService? _authService;
+
+    protected override void OnInitialized()
+    {
+        var m2idAuthority = Configuration["m2ID:Authority"];
+        _useM2ID = !string.IsNullOrEmpty(m2idAuthority);
+
+        if (_useM2ID)
+        {
+            // Redirect to OIDC login flow
+            Navigation.NavigateTo("authentication/login", forceLoad: true);
+        }
+        else
+        {
+            // Get AuthService for legacy mode
+            _authService = ServiceProvider.GetService<AuthService>();
+        }
+    }
 
     private async Task HandleLogin()
     {
+        if (_authService == null) return;
+
         _error = null;
         _emailError = null;
         _passwordError = null;
@@ -66,7 +98,7 @@
 
         _loading = true;
 
-        var (success, error) = await AuthService.LoginAsync(_model.Email, _model.Password);
+        var (success, error) = await _authService.LoginAsync(_model.Email, _model.Password);
 
         if (success)
         {
