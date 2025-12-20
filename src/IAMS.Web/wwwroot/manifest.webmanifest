@@ -10,14 +10,29 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "icon-192.png",
-      "type": "image/png",
-      "sizes": "192x192"
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
     },
     {
-      "src": "icon-512.png",
-      "type": "image/png",
-      "sizes": "512x512"
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Scan QR Code",
+      "url": "/scan",
+      "description": "Scan asset QR codes"
+    },
+    {
+      "name": "Add Asset",
+      "url": "/assets/new",
+      "description": "Add a new asset"
     }
   ]
 }
