@@ -1,0 +1,42 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+@if (_hasPermission)
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public string Permission { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _hasPermission;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckPermission();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CheckPermission();
+    }
+
+    private async Task CheckPermission()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            // Check for specific permission claim
+            _hasPermission = user.HasClaim("permission", Permission);
+
+            // Also allow if user is Admin (has all permissions)
+            if (!_hasPermission)
+            {
+                _hasPermission = user.IsInRole("Admin") || user.IsInRole("Administrator");
+            }
+        }
+    }
+}

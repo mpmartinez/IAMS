@@ -1,0 +1,28 @@
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+
+<div class="min-h-screen bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+    <div class="text-center">
+        <div class="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p class="text-slate-500 dark:text-slate-400 text-sm">Redirecting to login...</p>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        var m2idAuthority = Configuration["m2ID:Authority"];
+        var useM2ID = !string.IsNullOrEmpty(m2idAuthority);
+
+        if (useM2ID)
+        {
+            // Use NavigateToLogin extension for proper OIDC flow
+            Navigation.NavigateToLogin("authentication/login");
+        }
+        else
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+    }
+}
