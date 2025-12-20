@@ -1,5 +1,6 @@
 using IAMS.Api.Entities;
 using IAMS.Shared.DTOs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -9,10 +10,11 @@ namespace IAMS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class UsersController(UserManager<ApplicationUser> userManager) : ControllerBase
 {
     [HttpGet]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<ActionResult<PagedResponse<UserDto>>> GetUsers(
         [FromQuery] string? search = null,
         [FromQuery] int page = 1,
@@ -52,6 +54,7 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
     }
 
     [HttpPost]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<UserDto>>> CreateUser(CreateUserDto dto)
     {
         var existingUser = await userManager.FindByEmailAsync(dto.Email);
@@ -82,6 +85,7 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
     }
 
     [HttpGet("{id}")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetUser(string id)
     {
         var user = await userManager.FindByIdAsync(id);
@@ -93,6 +97,7 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
     }
 
     [HttpPut("{id}")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<UserDto>>> UpdateUser(string id, UpdateUserDto dto)
     {
         var user = await userManager.FindByIdAsync(id);
@@ -138,6 +143,7 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
     }
 
     [HttpDelete("{id}")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<IActionResult> DeleteUser(string id)
     {
         var user = await userManager.FindByIdAsync(id);
@@ -152,8 +158,9 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
         return NoContent();
     }
 
+    // Users with iams:users:read permission can view the users list (for asset assignment)
     [HttpGet("list")]
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewUsersList")]
     public async Task<ActionResult> GetUserList()
     {
         var users = await userManager.Users

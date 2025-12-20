@@ -2,6 +2,7 @@ using System.Security.Claims;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Shared.DTOs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,14 +11,14 @@ namespace IAMS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AssignmentsController(AppDbContext db) : ControllerBase
 {
     /// <summary>
     /// Assign an asset to a user
     /// </summary>
     [HttpPost("assets/{assetId:int}/assign")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanAssignAssets")]
     public async Task<ActionResult<ApiResponse<AssetAssignmentDto>>> AssignAsset(int assetId, AssignAssetRequest request)
     {
         var asset = await db.Assets.FindAsync(assetId);
@@ -66,7 +67,7 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     /// Return an asset from a user
     /// </summary>
     [HttpPost("assets/{assetId:int}/return")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanReturnAssets")]
     public async Task<ActionResult<ApiResponse<AssetAssignmentDto>>> ReturnAsset(int assetId, ReturnAssetRequest request)
     {
         var asset = await db.Assets.FindAsync(assetId);
@@ -195,7 +196,7 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     /// Get offboarding summary for a user
     /// </summary>
     [HttpGet("users/{userId}/offboarding")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewAssignments")]
     public async Task<ActionResult<OffboardingDto>> GetOffboardingSummary(string userId)
     {
         var user = await db.Users.FindAsync(userId);
@@ -237,7 +238,7 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     /// Bulk return assets for offboarding
     /// </summary>
     [HttpPost("users/{userId}/offboarding/return")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanReturnAssets")]
     public async Task<ActionResult<ApiResponse<BulkReturnResult>>> BulkReturnAssets(string userId, BulkReturnRequest request)
     {
         var user = await db.Users.FindAsync(userId);
@@ -299,7 +300,7 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     /// Get all users with unreturned assets (for offboarding dashboard)
     /// </summary>
     [HttpGet("offboarding/pending")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewAssignments")]
     public async Task<ActionResult<List<OffboardingSummaryItem>>> GetPendingOffboardings()
     {
         var usersWithAssets = await db.AssetAssignments
@@ -326,7 +327,7 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     /// Get assignment audit log
     /// </summary>
     [HttpGet("audit")]
-    [Authorize(Roles = "Admin,Auditor")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewReports")]
     public async Task<ActionResult<PagedResponse<AssetAssignmentDto>>> GetAuditLog(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,

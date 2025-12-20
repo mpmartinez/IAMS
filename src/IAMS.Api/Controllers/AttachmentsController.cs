@@ -3,6 +3,7 @@ using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Api.Services;
 using IAMS.Shared.DTOs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,7 @@ namespace IAMS.Api.Controllers;
 
 [ApiController]
 [Route("api/assets/{assetId:int}/attachments")]
-[Authorize]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AttachmentsController(
     AppDbContext db,
     IFileStorageService fileStorage) : ControllerBase
@@ -70,7 +71,7 @@ public class AttachmentsController(
     /// Upload a new attachment
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin,Staff")]
     [RequestSizeLimit(MaxFileSizeBytes + 1024)] // Add margin for form data
     [Consumes("multipart/form-data")]
     public async Task<ActionResult<ApiResponse<AttachmentDto>>> UploadAttachment(
@@ -168,7 +169,7 @@ public class AttachmentsController(
     /// Delete an attachment
     /// </summary>
     [HttpDelete("{attachmentId:int}")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin,Staff")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAttachment(int assetId, int attachmentId)
     {
         var attachment = await db.Attachments

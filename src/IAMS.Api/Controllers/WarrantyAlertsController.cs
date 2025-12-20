@@ -2,6 +2,7 @@ using System.Security.Claims;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Shared.DTOs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,7 @@ namespace IAMS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class WarrantyAlertsController(AppDbContext db) : ControllerBase
 {
     /// <summary>
@@ -96,7 +97,7 @@ public class WarrantyAlertsController(AppDbContext db) : ControllerBase
     /// Acknowledge an alert
     /// </summary>
     [HttpPost("{id:int}/acknowledge")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin,Staff")]
     public async Task<ActionResult<ApiResponse<WarrantyAlertDto>>> AcknowledgeAlert(int id)
     {
         var alert = await db.WarrantyAlerts
@@ -126,7 +127,7 @@ public class WarrantyAlertsController(AppDbContext db) : ControllerBase
     /// Acknowledge multiple alerts at once
     /// </summary>
     [HttpPost("acknowledge-bulk")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin,Staff")]
     public async Task<ActionResult<ApiResponse<object>>> AcknowledgeAlerts([FromBody] List<int> alertIds)
     {
         if (alertIds == null || alertIds.Count == 0)
@@ -154,7 +155,7 @@ public class WarrantyAlertsController(AppDbContext db) : ControllerBase
     /// Delete an acknowledged alert
     /// </summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAlert(int id)
     {
         var alert = await db.WarrantyAlerts.FindAsync(id);

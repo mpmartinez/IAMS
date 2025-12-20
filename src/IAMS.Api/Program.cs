@@ -24,11 +24,16 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.Password.RequiredLength = 8;
     options.User.RequireUniqueEmail = true;
     options.SignIn.RequireConfirmedEmail = false;
+    // Match the role claim type used by m2ID JWT tokens
+    options.ClaimsIdentity.RoleClaimType = System.Security.Claims.ClaimTypes.Role;
 })
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 
-// Authentication
+// Authentication - Support both m2ID OIDC and local JWT
+var m2idAuthority = builder.Configuration["m2ID:Authority"];
+var useM2ID = !string.IsNullOrEmpty(m2idAuthority);
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -36,23 +41,46 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.TokenValidationParameters = new TokenValidationParameters
+    if (useM2ID)
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
-    };
+        // Use m2ID as identity provider via OIDC discovery
+        options.Authority = m2idAuthority;
+        options.RequireHttpsMetadata = builder.Configuration.GetValue<bool>("m2ID:RequireHttpsMetadata", false);
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = false, // m2ID tokens may have different audience
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            NameClaimType = "name",
+            RoleClaimType = System.Security.Claims.ClaimTypes.Role
+        };
+    }
+    else
+    {
+        // Fallback to local JWT validation
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+        };
+    }
 
     // Support token from query string for SSE (EventSource doesn't support headers)
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
         {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+            logger.LogInformation("=== OnMessageReceived: Auth header = {AuthHeader}", authHeader ?? "(none)");
+
             var accessToken = context.Request.Query["access_token"];
             var path = context.HttpContext.Request.Path;
 
@@ -62,20 +90,81 @@ builder.Services.AddAuthentication(options =>
                 context.Token = accessToken;
             }
             return Task.CompletedTask;
+        },
+        OnAuthenticationFailed = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(context.Exception, "=== JWT Authentication Failed ===");
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = async context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            var request = context.HttpContext.Request;
+            var isStaff = context.Principal?.IsInRole("Staff") ?? false;
+            var isAdmin = context.Principal?.IsInRole("Admin") ?? false;
+            logger.LogWarning("=== {Method} {Path} | Staff={Staff} Admin={Admin}",
+                request.Method, request.Path, isStaff, isAdmin);
+
+            // Sync m2ID user to local database on first authenticated request
+            if (context.Principal is not null)
+            {
+                try
+                {
+                    var userSyncService = context.HttpContext.RequestServices.GetRequiredService<UserSyncService>();
+                    await userSyncService.SyncUserFromClaimsAsync(context.Principal);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to sync m2ID user to local database");
+                }
+            }
         }
     };
 });
 
-// Authorization policies
+// Authorization policies - Permission-based (m2ID centralized RBAC)
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("Admin", policy => policy.RequireRole("Admin"))
-    .AddPolicy("Staff", policy => policy.RequireRole("Admin", "Staff"))
-    .AddPolicy("Auditor", policy => policy.RequireRole("Admin", "Auditor"))
-    .AddPolicy("CanManageAssets", policy => policy.RequireRole("Admin", "Staff"))
-    .AddPolicy("CanViewReports", policy => policy.RequireRole("Admin", "Auditor"));
+    // Fallback role-based policies (for backwards compatibility)
+    .AddPolicy("Admin", policy => policy.RequireRole("Admin", "Administrator"))
+    .AddPolicy("Staff", policy => policy.RequireRole("Admin", "Administrator", "Staff"))
+    .AddPolicy("Auditor", policy => policy.RequireRole("Admin", "Administrator", "Auditor"))
+    // Permission-based policies (from m2ID JWT token)
+    .AddPolicy("CanCreateAssets", policy => policy.RequireAssertion(ctx =>
+        ctx.User.HasClaim("permission", "iams:assets:create") ||
+        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("Administrator")))
+    .AddPolicy("CanReadAssets", policy => policy.RequireAssertion(ctx =>
+        ctx.User.HasClaim("permission", "iams:assets:read") ||
+        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("Administrator") ||
+        ctx.User.IsInRole("Staff") || ctx.User.IsInRole("Auditor")))
+    .AddPolicy("CanEditAssets", policy => policy.RequireAssertion(ctx =>
+        ctx.User.HasClaim("permission", "iams:assets:edit") ||
+        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("Administrator")))
+    .AddPolicy("CanDeleteAssets", policy => policy.RequireAssertion(ctx =>
+        ctx.User.HasClaim("permission", "iams:assets:delete") ||
+        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("Administrator")))
+    .AddPolicy("CanAssignAssets", policy => policy.RequireAssertion(ctx =>
+        ctx.User.HasClaim("permission", "iams:assignments:create") ||
+        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("Administrator")))
+    .AddPolicy("CanViewAssignments", policy => policy.RequireAssertion(ctx =>
+        ctx.User.HasClaim("permission", "iams:assignments:read") ||
+        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("Administrator") ||
+        ctx.User.IsInRole("Staff")))
+    .AddPolicy("CanReturnAssets", policy => policy.RequireAssertion(ctx =>
+        ctx.User.HasClaim("permission", "iams:assignments:return") ||
+        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("Administrator")))
+    .AddPolicy("CanViewReports", policy => policy.RequireAssertion(ctx =>
+        ctx.User.HasClaim("permission", "iams:reports:view") ||
+        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("Administrator") ||
+        ctx.User.IsInRole("Auditor")))
+    .AddPolicy("CanViewUsersList", policy => policy.RequireAssertion(ctx =>
+        ctx.User.HasClaim("permission", "iams:users:read") ||
+        ctx.User.IsInRole("Admin") || ctx.User.IsInRole("Administrator") ||
+        ctx.User.IsInRole("Staff")));
 
 // Services
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<UserSyncService>();
 builder.Services.AddSingleton<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddSingleton<INotificationService, NotificationService>();
@@ -121,7 +210,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazor", policy =>
     {
-        policy.WithOrigins("https://localhost:5002", "http://localhost:5003")
+        policy.WithOrigins("https://localhost:5022")  // IAMS.Web
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
@@ -146,9 +235,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors("AllowBlazor");
-app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

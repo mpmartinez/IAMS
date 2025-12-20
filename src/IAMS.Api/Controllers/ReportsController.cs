@@ -4,6 +4,7 @@ using System.Text;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Shared.DTOs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,7 @@ namespace IAMS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Policy = "CanViewReports")]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewReports")]
 public class ReportsController(AppDbContext db) : ControllerBase
 {
     private string CurrentUserName => User.FindFirstValue(ClaimTypes.Name) ?? "Unknown";

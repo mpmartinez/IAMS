@@ -2,6 +2,7 @@ using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Api.Services;
 using IAMS.Shared.DTOs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,7 @@ namespace IAMS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : ControllerBase
 {
     // All authenticated users can view assets
@@ -74,9 +75,9 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
             : Ok(ApiResponse<AssetDto>.Ok(MapToDto(asset)));
     }
 
-    // Only Admin and Staff can create assets
+    // Users with iams:assets:create permission can create assets
     [HttpPost]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanCreateAssets")]
     public async Task<ActionResult<ApiResponse<AssetDto>>> CreateAsset(CreateAssetDto dto)
     {
         if (!ModelState.IsValid)
@@ -143,9 +144,9 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
         return CreatedAtAction(nameof(GetAsset), new { id = asset.Id }, ApiResponse<AssetDto>.Ok(MapToDto(asset), "Asset created successfully"));
     }
 
-    // Only Admin and Staff can update assets
+    // Users with iams:assets:edit permission can update assets
     [HttpPut("{id:int}")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanEditAssets")]
     public async Task<ActionResult<ApiResponse<AssetDto>>> UpdateAsset(int id, UpdateAssetDto dto)
     {
         if (!ModelState.IsValid)
@@ -212,9 +213,9 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
         return Ok(ApiResponse<AssetDto>.Ok(MapToDto(asset), "Asset updated successfully"));
     }
 
-    // Only Admin can delete assets
+    // Users with iams:assets:delete permission can delete assets
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanDeleteAssets")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAsset(int id)
     {
         var asset = await db.Assets.FindAsync(id);
@@ -240,9 +241,9 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
     [AllowAnonymous]
     public ActionResult<string[]> GetCurrencies() => Ok(Currencies.All);
 
-    // Reports endpoint - Admin and Auditor only
+    // Users with iams:reports:view permission can view reports
     [HttpGet("reports/summary")]
-    [Authorize(Roles = "Admin,Auditor")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewReports")]
     public async Task<ActionResult> GetAssetSummary()
     {
         var summary = new

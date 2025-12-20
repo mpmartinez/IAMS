@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using IAMS.Api.Services;
 using IAMS.Shared.DTOs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,7 +10,7 @@ namespace IAMS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class NotificationsController : ControllerBase
 {
     private readonly INotificationService _notificationService;
@@ -140,7 +141,7 @@ public class NotificationsController : ControllerBase
     /// Create a test notification (Admin only - for testing)
     /// </summary>
     [HttpPost("test")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<NotificationDto>>> CreateTestNotification([FromBody] CreateTestNotificationRequest request)
     {
         // Validate link - must start with "/" or be null/empty

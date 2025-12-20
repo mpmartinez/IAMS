@@ -2,6 +2,7 @@ using System.Security.Claims;
 using IAMS.Api.Entities;
 using IAMS.Api.Services;
 using IAMS.Shared.DTOs;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -44,7 +45,7 @@ public class AuthController(
         return Ok(ApiResponse<LoginResponseDto>.Ok(response));
     }
 
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [HttpGet("me")]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetCurrentUser()
     {
@@ -58,7 +59,7 @@ public class AuthController(
         return Ok(ApiResponse<UserDto>.Ok(MapToDto(user, roles.FirstOrDefault() ?? "Staff")));
     }
 
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [HttpPost("change-password")]
     public async Task<ActionResult<ApiResponse<object>>> ChangePassword(ChangePasswordDto dto)
     {
@@ -82,7 +83,7 @@ public class AuthController(
         return Ok(ApiResponse<object>.Ok(new { }, "Password changed successfully"));
     }
 
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [HttpPost("refresh")]
     public async Task<ActionResult<ApiResponse<LoginResponseDto>>> RefreshToken()
     {
