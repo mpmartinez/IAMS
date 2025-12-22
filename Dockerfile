@@ -2,7 +2,7 @@
 # Multi-stage Dockerfile for API and Blazor WebAssembly
 
 # Build stage
-FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy solution and project files
@@ -24,7 +24,7 @@ RUN dotnet publish src/IAMS.Api/IAMS.Api.csproj -c Release -o /app/api --no-rest
 RUN dotnet publish src/IAMS.Web/IAMS.Web.csproj -c Release -o /app/web --no-restore
 
 # Runtime stage for API
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS api
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS api
 WORKDIR /app
 
 # Create directory for SQLite database and uploads
