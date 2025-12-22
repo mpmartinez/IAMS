@@ -1,0 +1,43 @@
+services:
+  # API Service (pre-built image from GHCR)
+  api:
+    image: ghcr.io/${GHCR_USER:-mpmartinez}/iams-api:latest
+    container_name: iams-api
+    ports:
+      - "5000:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/iams.db
+      - Jwt__Key=${JWT_KEY:-YourSuperSecretKeyThatIsAtLeast32CharactersLong!}
+      - Jwt__Issuer=${JWT_ISSUER:-IAMS}
+      - Jwt__Audience=${JWT_AUDIENCE:-IAMS}
+      - Cors__AllowedOrigins__0=${CORS_ORIGIN:-https://m2netsolutions.com}
+    volumes:
+      - iams-data:/app/data
+      - iams-uploads:/app/Uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Web Service (pre-built image from GHCR)
+  web:
+    image: ghcr.io/${GHCR_USER:-mpmartinez}/iams-web:latest
+    container_name: iams-web
+    ports:
+      - "5022:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  iams-data:
+    driver: local
+  iams-uploads:
+    driver: local
