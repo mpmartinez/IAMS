@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Admin,Staff")]
 @inject ApiClient Api
 @inject NavigationManager Navigation
+@inject SnackbarService Snackbar
 
 <PageTitle>Offboarding - IAMS</PageTitle>
 
@@ -189,20 +190,6 @@
                 </div>
             </Card>
         }
-
-        @if (!string.IsNullOrEmpty(_error))
-        {
-            <div class="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                <p class="text-sm text-red-600 dark:text-red-400">@_error</p>
-            </div>
-        }
-
-        @if (!string.IsNullOrEmpty(_success))
-        {
-            <div class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 animate-slide-up">
-                <p class="text-sm text-emerald-600 dark:text-emerald-400">@_success</p>
-            </div>
-        }
     }
 </div>
 
@@ -263,8 +250,6 @@
     private bool _processing;
     private bool _showReturnModal;
     private bool _selectAll;
-    private string? _error;
-    private string? _success;
     private OffboardingDto? _offboarding;
     private HashSet<int> _selectedAssets = [];
     private string _returnCondition = "Good";
@@ -318,8 +303,6 @@
     private async Task ConfirmBulkReturn()
     {
         _processing = true;
-        _error = null;
-        _success = null;
 
         var (success, returned, error) = await Api.BulkReturnAssetsAsync(
             UserId,
@@ -332,14 +315,14 @@
 
         if (success)
         {
-            _success = $"Successfully returned {returned} assets.";
+            Snackbar.Success($"Successfully returned {returned} asset{(returned != 1 ? "s" : "")}");
             _selectedAssets.Clear();
             _selectAll = false;
             await LoadData();
         }
         else
         {
-            _error = error;
+            Snackbar.Error(error ?? "Failed to return assets");
         }
     }
 

@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject ApiClient Api
 @inject NavigationManager Navigation
+@inject SnackbarService Snackbar
 
 <PageTitle>Users - IAMS</PageTitle>
 
@@ -375,6 +376,7 @@
 
         if (success)
         {
+            Snackbar.Success(_isEditing ? "User updated successfully" : "User created successfully");
             CloseModal();
             await LoadUsers();
         }
@@ -406,8 +408,13 @@
 
         if (success)
         {
+            Snackbar.Success("User deactivated successfully");
             CloseDeleteModal();
             await LoadUsers();
+        }
+        else
+        {
+            Snackbar.Error("Failed to deactivate user");
         }
     }
 

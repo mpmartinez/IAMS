@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Navigation
+@inject SnackbarService Snackbar
 
 <PageTitle>Warranty Alerts - IAMS</PageTitle>
 
@@ -311,6 +312,7 @@
     private async Task AcknowledgeAlert(int alertId)
     {
         await Api.AcknowledgeWarrantyAlertAsync(alertId);
+        Snackbar.Success("Alert acknowledged");
         await Task.WhenAll(LoadAlerts(), LoadSummary());
     }
 
@@ -319,8 +321,10 @@
         if (_selectedAlertIds.Count == 0) return;
 
         _acknowledging = true;
+        var count = _selectedAlertIds.Count;
         await Api.AcknowledgeWarrantyAlertsBulkAsync(_selectedAlertIds.ToList());
         _acknowledging = false;
+        Snackbar.Success($"{count} alerts acknowledged");
         await Task.WhenAll(LoadAlerts(), LoadSummary());
     }
 
