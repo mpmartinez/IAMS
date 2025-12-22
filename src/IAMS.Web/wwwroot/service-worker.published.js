@@ -1,4 +1,4 @@
-const cacheName = 'iams-cache-v1';
+const cacheName = 'iams-cache-v2';
 const offlineUrl = 'offline.html';
 
 self.addEventListener('install', event => {
@@ -27,6 +27,14 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
     if (event.request.method !== 'GET') return;
+
+    const url = new URL(event.request.url);
+
+    // Don't cache _framework files - they have hash-based versioning
+    if (url.pathname.startsWith('/_framework/')) {
+        event.respondWith(fetch(event.request));
+        return;
+    }
 
     event.respondWith(
         fetch(event.request)
