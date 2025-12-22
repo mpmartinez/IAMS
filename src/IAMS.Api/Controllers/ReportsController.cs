@@ -171,7 +171,7 @@ public class ReportsController(AppDbContext db) : ControllerBase
             .ToListAsync();
 
         var csv = GenerateAssignedByUserCsv(data);
-        var fileName = $"Assigned Assets By User {DateTime.UtcNow:yyyy-MM-dd}.csv";
+        var fileName = $"Assigned Assets by User {DateTime.UtcNow:yyyy-MM-dd}.csv";
 
         return File(Encoding.UTF8.GetBytes(csv), "text/csv", fileName);
     }

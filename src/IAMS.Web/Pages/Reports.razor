@@ -486,7 +486,7 @@
     {
         var url = Api.GetReportExportUrl(reportType, filters);
         var token = await AuthService.GetTokenAsync();
-        var baseUrl = Configuration["ApiBaseUrl"] ?? "https://localhost:5021";
+        var baseUrl = (Configuration["ApiBaseUrl"] ?? "https://localhost:5021").TrimEnd('/');
         await JS.InvokeVoidAsync("downloadWithAuth", $"{baseUrl}/{url}", token);
     }
 
