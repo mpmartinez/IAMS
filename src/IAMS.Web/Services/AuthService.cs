@@ -49,4 +49,27 @@ public class AuthService(
     public async Task<string?> GetTokenAsync() => await localStorage.GetItemAsync<string>(TokenKey);
 
     public async Task<UserDto?> GetCurrentUserAsync() => await localStorage.GetItemAsync<UserDto>(UserKey);
+
+    public async Task<(bool Success, string? Error)> ChangePasswordAsync(string currentPassword, string newPassword)
+    {
+        var token = await GetTokenAsync();
+        if (string.IsNullOrEmpty(token))
+            return (false, "Not authenticated");
+
+        http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var response = await http.PostAsJsonAsync("api/auth/change-password", new ChangePasswordDto
+        {
+            CurrentPassword = currentPassword,
+            NewPassword = newPassword
+        });
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to change password");
+        }
+
+        return (true, null);
+    }
 }
