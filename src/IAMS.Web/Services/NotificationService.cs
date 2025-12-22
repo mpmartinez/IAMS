@@ -7,7 +7,7 @@ public class NotificationService : IAsyncDisposable
 {
     private readonly IJSRuntime _js;
     private readonly ApiClient _apiClient;
-    private readonly ITokenProvider _tokenProvider;
+    private readonly AuthService _authService;
     private DotNetObjectReference<NotificationService>? _dotNetRef;
     private bool _isConnected;
     private List<NotificationDto> _notifications = new();
@@ -21,11 +21,11 @@ public class NotificationService : IAsyncDisposable
     public IReadOnlyList<NotificationDto> Notifications => _notifications;
     public int UnreadCount => _unreadCount;
 
-    public NotificationService(IJSRuntime js, ApiClient apiClient, ITokenProvider tokenProvider)
+    public NotificationService(IJSRuntime js, ApiClient apiClient, AuthService authService)
     {
         _js = js;
         _apiClient = apiClient;
-        _tokenProvider = tokenProvider;
+        _authService = authService;
     }
 
     public async Task InitializeAsync()
@@ -56,7 +56,7 @@ public class NotificationService : IAsyncDisposable
     {
         try
         {
-            var token = await _tokenProvider.GetAccessTokenAsync();
+            var token = await _authService.GetTokenAsync();
             if (string.IsNullOrEmpty(token)) return;
 
             _dotNetRef = DotNetObjectReference.Create(this);

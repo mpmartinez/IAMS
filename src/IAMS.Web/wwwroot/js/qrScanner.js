@@ -213,9 +213,16 @@ window.downloadWithAuth = async function (url, token) {
         const contentDisposition = response.headers.get('Content-Disposition');
         let filename = 'report.csv';
         if (contentDisposition) {
-            const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-            if (match && match[1]) {
-                filename = match[1].replace(/['"]/g, '');
+            // Try filename*= first (RFC 5987 encoded, e.g., filename*=UTF-8''Asset%20Inventory.csv)
+            const utf8Match = contentDisposition.match(/filename\*=(?:UTF-8''|utf-8'')([^;\n]+)/i);
+            if (utf8Match && utf8Match[1]) {
+                filename = decodeURIComponent(utf8Match[1]);
+            } else {
+                // Fall back to regular filename= (may be quoted)
+                const match = contentDisposition.match(/filename=(?:"([^"]+)"|([^;\n]+))/);
+                if (match) {
+                    filename = match[1] || match[2];
+                }
             }
         }
 

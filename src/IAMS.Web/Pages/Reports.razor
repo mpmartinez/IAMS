@@ -1,7 +1,7 @@
 @page "/reports"
 @attribute [Authorize]
 @inject ApiClient Api
-@inject ITokenProvider TokenProvider
+@inject AuthService AuthService
 @inject IJSRuntime JS
 @inject IConfiguration Configuration
 
@@ -485,7 +485,7 @@
     private async Task DownloadReport(string reportType, Dictionary<string, string>? filters)
     {
         var url = Api.GetReportExportUrl(reportType, filters);
-        var token = await TokenProvider.GetAccessTokenAsync();
+        var token = await AuthService.GetTokenAsync();
         var baseUrl = Configuration["ApiBaseUrl"] ?? "https://localhost:5021";
         await JS.InvokeVoidAsync("downloadWithAuth", $"{baseUrl}/{url}", token);
     }

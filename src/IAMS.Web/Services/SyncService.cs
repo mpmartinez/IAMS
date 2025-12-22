@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using IAMS.Shared.DTOs;
-using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 
 namespace IAMS.Web.Services;
 
@@ -10,7 +9,7 @@ public class SyncService : IAsyncDisposable
     private readonly OfflineStorageService _offlineStorage;
     private readonly NetworkStatusService _networkStatus;
     private readonly ApiClient _apiClient;
-    private readonly ITokenProvider _tokenProvider;
+    private readonly AuthService _authService;
     private readonly ILogger<SyncService> _logger;
 
     private bool _isSyncing;
@@ -25,13 +24,13 @@ public class SyncService : IAsyncDisposable
         OfflineStorageService offlineStorage,
         NetworkStatusService networkStatus,
         ApiClient apiClient,
-        ITokenProvider tokenProvider,
+        AuthService authService,
         ILogger<SyncService> logger)
     {
         _offlineStorage = offlineStorage;
         _networkStatus = networkStatus;
         _apiClient = apiClient;
-        _tokenProvider = tokenProvider;
+        _authService = authService;
         _logger = logger;
     }
 
@@ -92,7 +91,7 @@ public class SyncService : IAsyncDisposable
         // Check if access token is available before syncing
         try
         {
-            var token = await _tokenProvider.GetAccessTokenAsync();
+            var token = await _authService.GetTokenAsync();
             if (string.IsNullOrEmpty(token))
             {
                 _logger.LogDebug("Sync skipped: No access token available yet");
@@ -130,11 +129,6 @@ public class SyncService : IAsyncDisposable
         catch (OperationCanceledException)
         {
             _logger.LogInformation("Sync was cancelled");
-            return false;
-        }
-        catch (AccessTokenNotAvailableException)
-        {
-            _logger.LogDebug("Sync skipped: Access token not available");
             return false;
         }
         catch (Exception ex)

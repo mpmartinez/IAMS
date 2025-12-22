@@ -98,7 +98,7 @@ public class ReportsController(AppDbContext db) : ControllerBase
             .ToListAsync();
 
         var csv = GenerateInventoryCsv(data);
-        var fileName = $"asset-inventory-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
+        var fileName = $"Asset Inventory {DateTime.UtcNow:yyyy-MM-dd}.csv";
 
         return File(Encoding.UTF8.GetBytes(csv), "text/csv", fileName);
     }
@@ -171,7 +171,7 @@ public class ReportsController(AppDbContext db) : ControllerBase
             .ToListAsync();
 
         var csv = GenerateAssignedByUserCsv(data);
-        var fileName = $"assigned-assets-by-user-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
+        var fileName = $"Assigned Assets By User {DateTime.UtcNow:yyyy-MM-dd}.csv";
 
         return File(Encoding.UTF8.GetBytes(csv), "text/csv", fileName);
     }
@@ -296,7 +296,7 @@ public class ReportsController(AppDbContext db) : ControllerBase
         }).ToList();
 
         var csv = GenerateWarrantyExpiryCsv(data);
-        var fileName = $"warranty-expiry-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
+        var fileName = $"Warranty Expiry {DateTime.UtcNow:yyyy-MM-dd}.csv";
 
         return File(Encoding.UTF8.GetBytes(csv), "text/csv", fileName);
     }
@@ -404,7 +404,7 @@ public class ReportsController(AppDbContext db) : ControllerBase
             .ToList();
 
         var csv = GenerateAssetValueCsv(byDeviceType, assets.Sum(a => a.PurchasePrice ?? 0), primaryCurrency);
-        var fileName = $"asset-value-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
+        var fileName = $"Asset Value {DateTime.UtcNow:yyyy-MM-dd}.csv";
 
         return File(Encoding.UTF8.GetBytes(csv), "text/csv", fileName);
     }

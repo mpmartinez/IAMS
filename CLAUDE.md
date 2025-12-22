@@ -98,6 +98,6 @@ Tailwind CSS with custom theme. Dark mode supported via `dark:` prefix classes.
 ## Default Credentials (Development)
 
 Seeded via `SeedData.cs`:
-- Admin: `admin@iams.local` / `Admin@123`
-- Staff: `staff@iams.local` / `Staff@123`
-- Auditor: `auditor@iams.local` / `Auditor@123`
+- Admin: `admin@company.com` / `Admin123!`
+- Staff: `staff@company.com` / `Staff123!`
+- Auditor: `auditor@company.com` / `Auditor123!`
