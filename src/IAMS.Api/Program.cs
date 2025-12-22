@@ -172,6 +172,10 @@ builder.Services.AddSingleton<INotificationService, NotificationService>();
 // Background Services
 builder.Services.AddHostedService<WarrantyCheckService>();
 
+// Health Checks
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<AppDbContext>();
+
 // Controllers
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -244,5 +248,6 @@ app.UseCors("AllowBlazor");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();

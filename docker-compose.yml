@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # API Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    container_name: iams-api
+    ports:
+      - "5000:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/iams.db
+      - Jwt__Key=${JWT_KEY:-YourSuperSecretKeyThatIsAtLeast32CharactersLong!}
+      - Jwt__Issuer=${JWT_ISSUER:-IAMS}
+      - Jwt__Audience=${JWT_AUDIENCE:-IAMS}
+    volumes:
+      - iams-data:/app/data
+      - iams-uploads:/app/Uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Web Service (Blazor WASM served via Nginx)
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    container_name: iams-web
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  iams-data:
+    driver: local
+  iams-uploads:
+    driver: local
