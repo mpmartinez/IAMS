@@ -17,6 +17,7 @@ services:
       - Jwt__Key=${JWT_KEY:-YourSuperSecretKeyThatIsAtLeast32CharactersLong!}
       - Jwt__Issuer=${JWT_ISSUER:-IAMS}
       - Jwt__Audience=${JWT_AUDIENCE:-IAMS}
+      - Cors__AllowedOrigins__0=${CORS_ORIGIN:-http://localhost}
     volumes:
       - iams-data:/app/data
       - iams-uploads:/app/Uploads
