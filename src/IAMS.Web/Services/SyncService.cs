@@ -14,6 +14,8 @@ public class SyncService : IAsyncDisposable
 
     private bool _isSyncing;
     private CancellationTokenSource? _syncCts;
+    private DateTime _lastSyncAttempt = DateTime.MinValue;
+    private static readonly TimeSpan SyncCooldown = TimeSpan.FromSeconds(10);
 
     public event Func<SyncStatus, Task>? OnSyncStatusChanged;
     public event Func<int, Task>? OnPendingCountChanged;
@@ -87,6 +89,16 @@ public class SyncService : IAsyncDisposable
         {
             return false;
         }
+
+        // Prevent rapid sync attempts (cooldown)
+        var timeSinceLastSync = DateTime.UtcNow - _lastSyncAttempt;
+        if (timeSinceLastSync < SyncCooldown)
+        {
+            _logger.LogDebug("Sync skipped: Cooldown active ({TimeSince}s)", timeSinceLastSync.TotalSeconds);
+            return false;
+        }
+
+        _lastSyncAttempt = DateTime.UtcNow;
 
         // Check if access token is available before syncing
         try

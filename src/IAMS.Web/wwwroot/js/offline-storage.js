@@ -257,22 +257,43 @@ window.iamsOffline = {
     }
 };
 
-// Network status event handling
+// Network status event handling with debouncing for mobile
 let networkStatusCallback = null;
+let networkDebounceTimer = null;
+let lastReportedStatus = null;
+const NETWORK_DEBOUNCE_MS = 2000; // Wait 2 seconds before reporting status change
+
+function reportNetworkStatus(isOnline) {
+    // Only report if status actually changed from last reported
+    if (networkStatusCallback && lastReportedStatus !== isOnline) {
+        lastReportedStatus = isOnline;
+        networkStatusCallback.invokeMethodAsync('OnNetworkStatusChanged', isOnline);
+    }
+}
+
+function debouncedNetworkChange(isOnline) {
+    // Clear any pending debounce
+    if (networkDebounceTimer) {
+        clearTimeout(networkDebounceTimer);
+    }
+
+    // Wait before reporting to avoid rapid toggling on mobile
+    networkDebounceTimer = setTimeout(() => {
+        reportNetworkStatus(isOnline);
+    }, NETWORK_DEBOUNCE_MS);
+}
 
 window.iamsOffline.registerNetworkCallback = function(dotNetHelper) {
     networkStatusCallback = dotNetHelper;
+    lastReportedStatus = navigator.onLine;
 
     window.addEventListener('online', () => {
-        if (networkStatusCallback) {
-            networkStatusCallback.invokeMethodAsync('OnNetworkStatusChanged', true);
-        }
+        debouncedNetworkChange(true);
     });
 
     window.addEventListener('offline', () => {
-        if (networkStatusCallback) {
-            networkStatusCallback.invokeMethodAsync('OnNetworkStatusChanged', false);
-        }
+        // Report offline immediately (important for UX)
+        reportNetworkStatus(false);
     });
 
     return navigator.onLine;
@@ -280,6 +301,10 @@ window.iamsOffline.registerNetworkCallback = function(dotNetHelper) {
 
 window.iamsOffline.unregisterNetworkCallback = function() {
     networkStatusCallback = null;
+    if (networkDebounceTimer) {
+        clearTimeout(networkDebounceTimer);
+        networkDebounceTimer = null;
+    }
 };
 
 console.log('IAMS Offline Storage module loaded');
