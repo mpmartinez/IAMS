@@ -21,8 +21,22 @@ builder.Services.AddScoped<ApiClient>();
 builder.Services.AddSingleton<AppleDeviceLookupService>();
 
 // HTTP Client
-var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:5001";
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
+var configuredUrl = builder.Configuration["ApiBaseUrl"] ?? "https://localhost:5001";
+Uri apiBaseUri;
+
+if (Uri.IsWellFormedUriString(configuredUrl, UriKind.Absolute))
+{
+    // Absolute URL (development)
+    apiBaseUri = new Uri(configuredUrl);
+}
+else
+{
+    // Relative URL (production) - combine with browser's base URI
+    var baseUri = new Uri(builder.HostEnvironment.BaseAddress);
+    apiBaseUri = new Uri(baseUri, configuredUrl.TrimStart('/') + "/");
+}
+
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = apiBaseUri });
 
 // Offline support services
 builder.Services.AddScoped<OfflineStorageService>();
