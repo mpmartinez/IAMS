@@ -58,6 +58,7 @@
     [Parameter] public string Icon { get; set; } = "home";
     [Parameter] public string Label { get; set; } = "";
     [Parameter] public int BadgeCount { get; set; }
+    [Parameter] public EventCallback OnNavigation { get; set; }
 
     private bool IsActive => Navigation.Uri.EndsWith(Href) ||
         (Href != "/" && Navigation.Uri.Contains(Href));
@@ -66,8 +67,9 @@
         ? "flex items-center gap-3 px-3 py-2.5 rounded-xl text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 font-medium transition-all duration-200"
         : "flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-all duration-200";
 
-    private void OnClick()
+    private async Task OnClick()
     {
-        // Navigation handled by href
+        // Notify parent to close mobile menu
+        await OnNavigation.InvokeAsync();
     }
 }
