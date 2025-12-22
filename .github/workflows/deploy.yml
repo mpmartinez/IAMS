@@ -62,12 +62,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Debug secrets
+        run: |
+          echo "DO_HOST length: ${#DO_HOST}"
+          echo "DO_USERNAME length: ${#DO_USERNAME}"
+          echo "DO_SSH_KEY length: ${#DO_SSH_KEY}"
+        env:
+          DO_HOST: ${{ secrets.DO_HOST }}
+          DO_USERNAME: ${{ secrets.DO_USERNAME }}
+          DO_SSH_KEY: ${{ secrets.DO_SSH_KEY }}
+
       - name: Deploy to DigitalOcean
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DO_HOST }}
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
+          debug: true
           script: |
             cd ${{ secrets.DO_PROJECT_PATH }}
 
