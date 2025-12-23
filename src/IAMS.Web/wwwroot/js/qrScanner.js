@@ -172,6 +172,79 @@ window.QrScanner = {
         }
     },
 
+    // Scan QR code from uploaded image file
+    scanFile: async function (file) {
+        if (!file) return null;
+
+        try {
+            // Create a temporary scanner instance for file scanning
+            const html5QrCode = new Html5Qrcode("qr-file-scanner-temp");
+
+            const result = await html5QrCode.scanFile(file, /* showImage */ false);
+
+            // Extract asset tag from URL or use raw value
+            let assetTag = result;
+            const urlPattern = /\/assets\/scan\/([^\/\?]+)/;
+            const match = result.match(urlPattern);
+            if (match) {
+                assetTag = decodeURIComponent(match[1]);
+            }
+
+            // Trigger haptic feedback
+            this.triggerHaptic();
+
+            return assetTag;
+        } catch (error) {
+            console.error('QR file scan error:', error);
+            return null;
+        }
+    },
+
+    // Scan QR code from byte array (called from Blazor)
+    scanFileFromBytes: async function (bytes, contentType) {
+        if (!bytes || bytes.length === 0) return null;
+
+        try {
+            // Convert byte array to Blob
+            const uint8Array = new Uint8Array(bytes);
+            const blob = new Blob([uint8Array], { type: contentType || 'image/png' });
+            const file = new File([blob], "qr-upload.png", { type: contentType || 'image/png' });
+
+            // Create temporary element for scanner
+            let tempDiv = document.getElementById('qr-file-scanner-temp');
+            if (!tempDiv) {
+                tempDiv = document.createElement('div');
+                tempDiv.id = 'qr-file-scanner-temp';
+                tempDiv.style.display = 'none';
+                document.body.appendChild(tempDiv);
+            }
+
+            // Create a temporary scanner instance for file scanning
+            const html5QrCode = new Html5Qrcode("qr-file-scanner-temp");
+
+            const result = await html5QrCode.scanFile(file, /* showImage */ false);
+
+            // Clean up
+            html5QrCode.clear();
+
+            // Extract asset tag from URL or use raw value
+            let assetTag = result;
+            const urlPattern = /\/assets\/scan\/([^\/\?]+)/;
+            const match = result.match(urlPattern);
+            if (match) {
+                assetTag = decodeURIComponent(match[1]);
+            }
+
+            // Trigger haptic feedback
+            this.triggerHaptic();
+
+            return assetTag;
+        } catch (error) {
+            console.error('QR file scan error:', error);
+            return null;
+        }
+    },
+
     // Toggle flashlight (torch)
     toggleFlash: async function () {
         if (!this.scanner || !this.isScanning) return false;
