@@ -11,6 +11,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<WarrantyAlert> WarrantyAlerts => Set<WarrantyAlert>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -156,6 +157,30 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
             entity.HasIndex(e => e.IsRead);
             entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => new { e.UserId, e.IsRead });
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Token).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.ReplacedByToken).HasMaxLength(500);
+            entity.Property(e => e.CreatedByIp).HasMaxLength(50);
+            entity.Property(e => e.RevokedByIp).HasMaxLength(50);
+
+            // Index for fast token lookup
+            entity.HasIndex(e => e.Token);
+            entity.HasIndex(e => e.UserId);
+
+            // Ignore computed properties
+            entity.Ignore(e => e.IsExpired);
+            entity.Ignore(e => e.IsRevoked);
+            entity.Ignore(e => e.IsActive);
 
             entity.HasOne(e => e.User)
                 .WithMany()

@@ -32,13 +32,17 @@ public class AuthController(
         if (!user.IsActive)
             return Forbid();
 
-        var token = await tokenService.GenerateTokenAsync(user);
+        var ipAddress = GetIpAddress();
+        var accessToken = await tokenService.GenerateTokenAsync(user);
+        var refreshToken = await tokenService.GenerateRefreshTokenAsync(user.Id, ipAddress);
         var roles = await userManager.GetRolesAsync(user);
 
         var response = new LoginResponseDto
         {
-            Token = token,
+            Token = accessToken,
+            RefreshToken = refreshToken.Token,
             ExpiresAt = tokenService.GetTokenExpiry(),
+            RefreshTokenExpiresAt = refreshToken.ExpiresAt,
             User = MapToDto(user, roles.FirstOrDefault() ?? "Staff")
         };
 
@@ -83,27 +87,69 @@ public class AuthController(
         return Ok(ApiResponse<object>.Ok(new { }, "Password changed successfully"));
     }
 
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    /// <summary>
+    /// Refresh access token using refresh token (no auth required)
+    /// </summary>
+    [AllowAnonymous]
     [HttpPost("refresh")]
-    public async Task<ActionResult<ApiResponse<LoginResponseDto>>> RefreshToken()
+    public async Task<ActionResult<ApiResponse<LoginResponseDto>>> RefreshToken(RefreshTokenRequestDto dto)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var user = await userManager.FindByIdAsync(userId!);
+        var ipAddress = GetIpAddress();
 
-        if (user is null || !user.IsActive)
-            return Unauthorized();
+        // Rotate refresh token (revoke old, create new)
+        var result = await tokenService.RotateRefreshTokenAsync(dto.RefreshToken, ipAddress);
 
-        var token = await tokenService.GenerateTokenAsync(user);
+        if (result is null)
+            return Unauthorized(ApiResponse<LoginResponseDto>.Fail("Invalid or expired refresh token"));
+
+        var (newRefreshToken, oldRefreshToken) = result.Value;
+        var user = newRefreshToken.User;
+
+        if (!user.IsActive)
+        {
+            await tokenService.RevokeRefreshTokenAsync(newRefreshToken.Token, ipAddress);
+            return Unauthorized(ApiResponse<LoginResponseDto>.Fail("User account is disabled"));
+        }
+
+        var accessToken = await tokenService.GenerateTokenAsync(user);
         var roles = await userManager.GetRolesAsync(user);
 
         var response = new LoginResponseDto
         {
-            Token = token,
+            Token = accessToken,
+            RefreshToken = newRefreshToken.Token,
             ExpiresAt = tokenService.GetTokenExpiry(),
+            RefreshTokenExpiresAt = newRefreshToken.ExpiresAt,
             User = MapToDto(user, roles.FirstOrDefault() ?? "Staff")
         };
 
         return Ok(ApiResponse<LoginResponseDto>.Ok(response));
+    }
+
+    /// <summary>
+    /// Logout - revoke refresh token
+    /// </summary>
+    [AllowAnonymous]
+    [HttpPost("logout")]
+    public async Task<ActionResult<ApiResponse<object>>> Logout(RefreshTokenRequestDto dto)
+    {
+        var ipAddress = GetIpAddress();
+        await tokenService.RevokeRefreshTokenAsync(dto.RefreshToken, ipAddress);
+        return Ok(ApiResponse<object>.Ok(new { }, "Logged out successfully"));
+    }
+
+    /// <summary>
+    /// Logout from all devices - revoke all refresh tokens for user
+    /// </summary>
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [HttpPost("logout-all")]
+    public async Task<ActionResult<ApiResponse<object>>> LogoutAll()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var ipAddress = GetIpAddress();
+
+        await tokenService.RevokeAllUserTokensAsync(userId!, ipAddress);
+        return Ok(ApiResponse<object>.Ok(new { }, "Logged out from all devices"));
     }
 
     [AllowAnonymous]
@@ -162,7 +208,18 @@ public class AuthController(
         user.UpdatedAt = DateTime.UtcNow;
         await userManager.UpdateAsync(user);
 
+        // Revoke all refresh tokens on password reset for security
+        await tokenService.RevokeAllUserTokensAsync(user.Id, GetIpAddress());
+
         return Ok(ApiResponse<object>.Ok(new { }, "Password has been reset successfully"));
+    }
+
+    private string? GetIpAddress()
+    {
+        if (Request.Headers.ContainsKey("X-Forwarded-For"))
+            return Request.Headers["X-Forwarded-For"].FirstOrDefault();
+
+        return HttpContext.Connection.RemoteIpAddress?.MapToIPv4().ToString();
     }
 
     private static UserDto MapToDto(ApplicationUser user, string role) => new()

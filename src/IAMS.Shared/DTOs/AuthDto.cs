@@ -9,8 +9,15 @@ public record LoginDto
 public record LoginResponseDto
 {
     public required string Token { get; init; }
+    public required string RefreshToken { get; init; }
     public required UserDto User { get; init; }
     public DateTime ExpiresAt { get; init; }
+    public DateTime RefreshTokenExpiresAt { get; init; }
+}
+
+public record RefreshTokenRequestDto
+{
+    public required string RefreshToken { get; init; }
 }
 
 public record ChangePasswordDto
