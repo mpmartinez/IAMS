@@ -19,10 +19,18 @@ public class QrCodeService(IConfiguration configuration) : IQrCodeService
     /// <returns>PNG image as byte array</returns>
     public byte[] GeneratePng(string content, int pixelsPerModule = 10)
     {
+        if (string.IsNullOrWhiteSpace(content))
+            throw new ArgumentException("QR code content cannot be empty", nameof(content));
+
+        Console.WriteLine($"Generating QR PNG for: '{content}' with size {pixelsPerModule}");
+
         using var qrGenerator = new QRCodeGenerator();
         using var qrCodeData = qrGenerator.CreateQrCode(content, QRCodeGenerator.ECCLevel.M);
         using var qrCode = new PngByteQRCode(qrCodeData);
-        return qrCode.GetGraphic(pixelsPerModule);
+        var result = qrCode.GetGraphic(pixelsPerModule);
+
+        Console.WriteLine($"QR PNG generated: {result.Length} bytes");
+        return result;
     }
 
     /// <summary>

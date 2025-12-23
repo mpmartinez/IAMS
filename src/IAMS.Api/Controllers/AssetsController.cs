@@ -279,20 +279,31 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetQrCodePng(int id, [FromQuery] int size = 10, [FromQuery] string contentType = "url")
     {
+        Console.WriteLine($"QR PNG request: id={id}, size={size}, contentType={contentType}");
+
         var asset = await db.Assets.FindAsync(id);
         if (asset is null)
+        {
+            Console.WriteLine($"QR PNG: Asset {id} not found");
             return NotFound(ApiResponse<object>.Fail("Asset not found"));
+        }
+
+        Console.WriteLine($"QR PNG: Found asset {asset.Id} with tag '{asset.AssetTag}'");
 
         try
         {
             size = Math.Clamp(size, 5, 20);
             var content = contentType == "tag" ? asset.AssetTag : qrCodeService.GenerateAssetUrl(asset.AssetTag);
+            Console.WriteLine($"QR PNG: Generating for content '{content}'");
+
             var pngBytes = qrCodeService.GeneratePng(content, size);
+            Console.WriteLine($"QR PNG: Generated {pngBytes.Length} bytes");
 
             return File(pngBytes, "image/png", $"qr-{asset.AssetTag}.png");
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"QR PNG: Generation failed - {ex}");
             return StatusCode(500, ApiResponse<object>.Fail($"QR code generation failed: {ex.Message}"));
         }
     }
