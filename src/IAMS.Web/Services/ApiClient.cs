@@ -339,8 +339,13 @@ public class ApiClient(HttpClient http, AuthService authService)
     {
         var client = await GetAuthenticatedClient();
 
+        // Buffer the stream to handle mobile browser stream issues
+        using var memoryStream = new MemoryStream();
+        await fileStream.CopyToAsync(memoryStream);
+        memoryStream.Position = 0;
+
         using var content = new MultipartFormDataContent();
-        using var fileContent = new StreamContent(fileStream);
+        using var fileContent = new StreamContent(memoryStream);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
 
         content.Add(fileContent, "file", fileName);
@@ -352,8 +357,34 @@ public class ApiClient(HttpClient http, AuthService authService)
 
         if (!response.IsSuccessStatusCode)
         {
-            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
-            return (false, null, error?.Message ?? "Failed to upload attachment");
+            // Read as string first to handle HTML error pages (common on mobile)
+            var errorContent = await response.Content.ReadAsStringAsync();
+
+            // Check if the response is JSON (starts with {)
+            if (!string.IsNullOrEmpty(errorContent) && errorContent.TrimStart().StartsWith('{'))
+            {
+                try
+                {
+                    var error = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<object>>(errorContent);
+                    return (false, null, error?.Message ?? "Failed to upload attachment");
+                }
+                catch
+                {
+                    // JSON parsing failed, fall through to status code handling
+                }
+            }
+
+            // Return meaningful error based on status code
+            var statusError = response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.RequestEntityTooLarge => "File size exceeds the server limit",
+                System.Net.HttpStatusCode.Unauthorized => "Session expired. Please log in again",
+                System.Net.HttpStatusCode.Forbidden => "You don't have permission to upload files",
+                System.Net.HttpStatusCode.NotFound => "Asset not found",
+                System.Net.HttpStatusCode.BadRequest => "Invalid file or request",
+                _ => $"Upload failed (Error {(int)response.StatusCode})"
+            };
+            return (false, null, statusError);
         }
 
         var result = await response.Content.ReadFromJsonAsync<ApiResponse<AttachmentDto>>();
