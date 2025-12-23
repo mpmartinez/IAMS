@@ -45,14 +45,26 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                 </div>
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Camera Error</h2>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">@(_error?.Contains("QR code") == true ? "Scan Failed" : "Camera Error")</h2>
                 <p class="text-slate-500 dark:text-slate-400 mb-6">@_error</p>
-                <button @onclick="RetryScanner" class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Try Again
-                </button>
+                <div class="flex flex-col gap-3">
+                    <button @onclick="RetryScanner" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Try Camera Again
+                    </button>
+                    <button @onclick="TriggerFileUploadFromError" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Upload QR Image
+                    </button>
+                    <button @onclick="ShowManualEntry" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 font-medium transition-colors">
+                        Enter asset tag manually
+                    </button>
+                </div>
+                <InputFile id="qr-file-input-error" OnChange="OnFileSelected" accept="image/*" class="hidden" />
             </div>
         }
         else if (_scanSuccess)
@@ -80,6 +92,17 @@
                     </div>
                 }
                 <p class="text-sm text-slate-400 dark:text-slate-500 mt-4">Redirecting...</p>
+            </div>
+        }
+        else if (_isProcessingFile)
+        {
+            <!-- Processing Image State -->
+            <div class="text-center px-6 animate-fade-in">
+                <div class="w-20 h-20 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mx-auto mb-4">
+                    <div class="w-10 h-10 rounded-full border-4 border-primary-200 border-t-primary-600 animate-spin"></div>
+                </div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Scanning Image...</h2>
+                <p class="text-slate-500 dark:text-slate-400">Looking for QR code in the uploaded image</p>
             </div>
         }
         else if (_assetNotFound)
@@ -157,11 +180,24 @@
                     </p>
                 </div>
 
-                <!-- Manual Entry Link -->
-                <div class="mt-8 text-center">
-                    <button @onclick="ShowManualEntry" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium transition-colors">
-                        Enter asset tag manually
-                    </button>
+                <!-- Alternative Options -->
+                <div class="mt-8 text-center space-y-3">
+                    <!-- Upload QR Image -->
+                    <div>
+                        <button @onclick="TriggerFileUpload" class="inline-flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium transition-colors">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Upload QR code image
+                        </button>
+                        <InputFile id="qr-file-input" OnChange="OnFileSelected" accept="image/*" class="hidden" />
+                    </div>
+                    <!-- Manual Entry -->
+                    <div>
+                        <button @onclick="ShowManualEntry" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 font-medium transition-colors">
+                            Enter asset tag manually
+                        </button>
+                    </div>
                 </div>
             </div>
         }
@@ -241,6 +277,7 @@
     private string _manualTag = "";
     private bool _isOnline = true;
     private bool _isFromCache;
+    private bool _isProcessingFile;
 
     protected override async Task OnInitializedAsync()
     {
@@ -368,6 +405,66 @@
         StateHasChanged();
 
         await JS.InvokeVoidAsync("QrScanner.resume");
+    }
+
+    private async Task TriggerFileUpload()
+    {
+        await JS.InvokeVoidAsync("eval", "document.getElementById('qr-file-input').click()");
+    }
+
+    private async Task TriggerFileUploadFromError()
+    {
+        _error = null;
+        StateHasChanged();
+        await Task.Delay(50); // Let UI update
+        await JS.InvokeVoidAsync("eval", "document.getElementById('qr-file-input-error').click()");
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        if (_isProcessingFile) return;
+
+        var file = e.File;
+        if (file is null) return;
+
+        _isProcessingFile = true;
+        _isScanning = false;
+        StateHasChanged();
+
+        try
+        {
+            // Stop the camera scanner
+            await JS.InvokeVoidAsync("QrScanner.stop");
+
+            // Read file as base64 and send to JS for scanning
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10MB max
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+
+            // Create a blob URL and scan using Html5Qrcode
+            var assetTag = await JS.InvokeAsync<string?>("QrScanner.scanFileFromBytes", bytes, file.ContentType);
+
+            if (!string.IsNullOrEmpty(assetTag))
+            {
+                await OnScanSuccess(assetTag);
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("QrScanner.triggerErrorHaptic");
+                _error = "No QR code found in the image. Please try another image.";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to process image: {ex.Message}";
+            StateHasChanged();
+        }
+        finally
+        {
+            _isProcessingFile = false;
+        }
     }
 
     private void ShowManualEntry()
