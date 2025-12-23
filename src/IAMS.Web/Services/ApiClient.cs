@@ -305,11 +305,28 @@ public class ApiClient(HttpClient http, AuthService authService)
         try
         {
             var contentType = tagOnly ? "tag" : "url";
-            var bytes = await client.GetByteArrayAsync($"api/assets/{assetId}/qr.png?size={size}&contentType={contentType}");
+            var response = await client.GetAsync($"api/assets/{assetId}/qr.png?size={size}&contentType={contentType}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"QR Code API error: {response.StatusCode}");
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"QR Code error details: {errorContent}");
+                return null;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            if (bytes.Length == 0)
+            {
+                Console.WriteLine("QR Code API returned empty bytes");
+                return null;
+            }
+
             return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"QR Code generation exception: {ex.Message}");
             return null;
         }
     }

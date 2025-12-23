@@ -283,11 +283,18 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
         if (asset is null)
             return NotFound(ApiResponse<object>.Fail("Asset not found"));
 
-        size = Math.Clamp(size, 5, 20);
-        var content = contentType == "tag" ? asset.AssetTag : qrCodeService.GenerateAssetUrl(asset.AssetTag);
-        var pngBytes = qrCodeService.GeneratePng(content, size);
+        try
+        {
+            size = Math.Clamp(size, 5, 20);
+            var content = contentType == "tag" ? asset.AssetTag : qrCodeService.GenerateAssetUrl(asset.AssetTag);
+            var pngBytes = qrCodeService.GeneratePng(content, size);
 
-        return File(pngBytes, "image/png", $"qr-{asset.AssetTag}.png");
+            return File(pngBytes, "image/png", $"qr-{asset.AssetTag}.png");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<object>.Fail($"QR code generation failed: {ex.Message}"));
+        }
     }
 
     /// <summary>
@@ -305,11 +312,18 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
         if (asset is null)
             return NotFound(ApiResponse<object>.Fail("Asset not found"));
 
-        size = Math.Clamp(size, 5, 20);
-        var content = contentType == "tag" ? asset.AssetTag : qrCodeService.GenerateAssetUrl(asset.AssetTag);
-        var svg = qrCodeService.GenerateSvg(content, size);
+        try
+        {
+            size = Math.Clamp(size, 5, 20);
+            var content = contentType == "tag" ? asset.AssetTag : qrCodeService.GenerateAssetUrl(asset.AssetTag);
+            var svg = qrCodeService.GenerateSvg(content, size);
 
-        return Content(svg, "image/svg+xml");
+            return Content(svg, "image/svg+xml");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<object>.Fail($"QR code generation failed: {ex.Message}"));
+        }
     }
 
     /// <summary>
@@ -324,11 +338,18 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
         if (asset is null)
             return NotFound(ApiResponse<object>.Fail("Asset not found"));
 
-        size = Math.Clamp(size, 5, 20);
-        var content = contentType == "tag" ? asset.AssetTag : qrCodeService.GenerateAssetUrl(asset.AssetTag);
-        var pngBytes = qrCodeService.GeneratePng(content, size);
+        try
+        {
+            size = Math.Clamp(size, 5, 20);
+            var content = contentType == "tag" ? asset.AssetTag : qrCodeService.GenerateAssetUrl(asset.AssetTag);
+            var pngBytes = qrCodeService.GeneratePng(content, size);
 
-        return File(pngBytes, "image/png", $"qr-{asset.AssetTag}.png");
+            return File(pngBytes, "image/png", $"qr-{asset.AssetTag}.png");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ApiResponse<object>.Fail($"QR code generation failed: {ex.Message}"));
+        }
     }
 
     /// <summary>
