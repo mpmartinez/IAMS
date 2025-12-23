@@ -358,12 +358,17 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
     [HttpGet("scan/{assetTag}")]
     public async Task<ActionResult<ApiResponse<AssetDto>>> GetAssetByTag(string assetTag)
     {
+        // Normalize asset tag - trim whitespace and compare case-insensitively
+        var normalizedTag = assetTag?.Trim();
+        if (string.IsNullOrEmpty(normalizedTag))
+            return BadRequest(ApiResponse<AssetDto>.Fail("Asset tag is required"));
+
         var asset = await db.Assets
             .Include(a => a.AssignedToUser)
-            .FirstOrDefaultAsync(a => a.AssetTag == assetTag);
+            .FirstOrDefaultAsync(a => a.AssetTag.ToUpper() == normalizedTag.ToUpper());
 
         return asset is null
-            ? NotFound(ApiResponse<AssetDto>.Fail("Asset not found"))
+            ? NotFound(ApiResponse<AssetDto>.Fail($"Asset not found: {normalizedTag}"))
             : Ok(ApiResponse<AssetDto>.Ok(MapToDto(asset)));
     }
 

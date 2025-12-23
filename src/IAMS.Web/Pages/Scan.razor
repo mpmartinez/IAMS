@@ -291,6 +291,7 @@
     [JSInvokable]
     public async Task OnScanSuccess(string assetTag)
     {
+        Console.WriteLine($"QR Scan received: '{assetTag}' (length: {assetTag?.Length ?? 0})");
         _scannedTag = assetTag;
         _isScanning = false;
         _isFromCache = false;
@@ -303,10 +304,13 @@
         {
             try
             {
+                Console.WriteLine($"Looking up asset online: '{assetTag}'");
                 asset = await Api.GetAssetByTagAsync(assetTag);
+                Console.WriteLine($"API lookup result: {(asset != null ? $"Found - {asset.DisplayName}" : "Not found")}");
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"API lookup failed: {ex.Message}");
                 // API call failed, try offline cache
             }
         }

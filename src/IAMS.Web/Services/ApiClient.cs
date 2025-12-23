@@ -44,11 +44,24 @@ public class ApiClient(HttpClient http, AuthService authService)
         var client = await GetAuthenticatedClient();
         try
         {
-            var response = await client.GetFromJsonAsync<ApiResponse<AssetDto>>($"api/assets/scan/{Uri.EscapeDataString(assetTag)}");
+            Console.WriteLine($"Looking up asset by tag: '{assetTag}'");
+            var httpResponse = await client.GetAsync($"api/assets/scan/{Uri.EscapeDataString(assetTag)}");
+
+            Console.WriteLine($"Scan API response status: {httpResponse.StatusCode}");
+
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                var errorContent = await httpResponse.Content.ReadAsStringAsync();
+                Console.WriteLine($"Scan API error: {errorContent}");
+                return null;
+            }
+
+            var response = await httpResponse.Content.ReadFromJsonAsync<ApiResponse<AssetDto>>();
             return response?.Data;
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"GetAssetByTagAsync exception: {ex.Message}");
             return null;
         }
     }
