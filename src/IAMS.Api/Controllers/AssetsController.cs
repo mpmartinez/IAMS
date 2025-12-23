@@ -358,18 +358,42 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
     [HttpGet("scan/{assetTag}")]
     public async Task<ActionResult<ApiResponse<AssetDto>>> GetAssetByTag(string assetTag)
     {
-        // Normalize asset tag - trim whitespace and compare case-insensitively
+        // Normalize asset tag - trim whitespace
         var normalizedTag = assetTag?.Trim();
         if (string.IsNullOrEmpty(normalizedTag))
             return BadRequest(ApiResponse<AssetDto>.Fail("Asset tag is required"));
 
+        // SQLite COLLATE NOCASE for case-insensitive comparison
         var asset = await db.Assets
             .Include(a => a.AssignedToUser)
-            .FirstOrDefaultAsync(a => a.AssetTag.ToUpper() == normalizedTag.ToUpper());
+            .FirstOrDefaultAsync(a => EF.Functions.Collate(a.AssetTag, "NOCASE") == normalizedTag);
+
+        // If not found, try exact match (in case collate doesn't work)
+        asset ??= await db.Assets
+            .Include(a => a.AssignedToUser)
+            .FirstOrDefaultAsync(a => a.AssetTag == normalizedTag);
+
+        if (asset is null)
+        {
+            // Log all existing tags for debugging
+            var allTags = await db.Assets.Select(a => a.AssetTag).ToListAsync();
+            Console.WriteLine($"Scan failed for tag: '{normalizedTag}'");
+            Console.WriteLine($"Existing tags in DB: {string.Join(", ", allTags)}");
+        }
 
         return asset is null
             ? NotFound(ApiResponse<AssetDto>.Fail($"Asset not found: {normalizedTag}"))
             : Ok(ApiResponse<AssetDto>.Ok(MapToDto(asset)));
+    }
+
+    /// <summary>
+    /// Debug endpoint - list all asset tags
+    /// </summary>
+    [HttpGet("debug/tags")]
+    public async Task<ActionResult<List<string>>> GetAllTags()
+    {
+        var tags = await db.Assets.Select(a => a.AssetTag).OrderBy(t => t).ToListAsync();
+        return Ok(tags);
     }
 
     private async Task<string> GenerateAssetTagAsync(string deviceType)
