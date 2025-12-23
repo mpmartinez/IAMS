@@ -1,76 +1,76 @@
 name: Build and Deploy
 
-  on:
-    push:
-      branches: [main]
-    workflow_dispatch:
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
-  env:
-    REGISTRY: ghcr.io
-    API_IMAGE: ghcr.io/${{ github.repository_owner }}/iams-api
-    WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/iams-web
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/${{ github.repository_owner }}/iams-api
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/iams-web
 
-  jobs:
-    build:
-      runs-on: ubuntu-latest
-      permissions:
-        contents: read
-        packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-        - name: Set up Docker Buildx
-          uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-        - name: Log in to GitHub Container Registry
-          uses: docker/login-action@v3
-          with:
-            registry: ${{ env.REGISTRY }}
-            username: ${{ github.actor }}
-            password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-        - name: Build and push API image
-          uses: docker/build-push-action@v5
-          with:
-            context: .
-            file: ./Dockerfile
-            target: api
-            push: true
-            tags: |
-              ${{ env.API_IMAGE }}:latest
-              ${{ env.API_IMAGE }}:${{ github.sha }}
-            cache-from: type=gha
-            cache-to: type=gha,mode=max
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: api
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:latest
+            ${{ env.API_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-        - name: Build and push Web image
-          uses: docker/build-push-action@v5
-          with:
-            context: .
-            file: ./Dockerfile
-            target: web
-            push: true
-            tags: |
-              ${{ env.WEB_IMAGE }}:latest
-              ${{ env.WEB_IMAGE }}:${{ github.sha }}
-            cache-from: type=gha
-            cache-to: type=gha,mode=max
+      - name: Build and push Web image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: web
+          push: true
+          tags: |
+            ${{ env.WEB_IMAGE }}:latest
+            ${{ env.WEB_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-    deploy:
-      needs: build
-      runs-on: ubuntu-latest
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
 
-      steps:
-        - name: Setup SSH key
-          run: |
-            mkdir -p ~/.ssh
-            echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
-            chmod 600 ~/.ssh/deploy_key
-            ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
-          env:
-            SSH_KEY_B64: ${{ secrets.DO_SSH_KEY_B64 }}
+    steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
+        env:
+          SSH_KEY_B64: ${{ secrets.DO_SSH_KEY_B64 }}
 
-        - name: Deploy to server
-          run: |
-            ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ secrets.GHCR_USER }} --password-stdin && docker pull ghcr.io/${{ secrets.GHCR_USER }}/iams-api:latest && docker pull ghcr.io/${{ secrets.GHCR_USER }}/iams-web:latest && docker-compose -f docker-compose.prod.yml down && docker-compose -f docker-compose.prod.yml up -d && docker image prune -f"
+      - name: Deploy to server
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ secrets.GHCR_USER }} --password-stdin && docker pull ghcr.io/${{ secrets.GHCR_USER }}/iams-api:latest && docker pull ghcr.io/${{ secrets.GHCR_USER }}/iams-web:latest && docker-compose -f docker-compose.prod.yml down && docker-compose -f docker-compose.prod.yml up -d && docker image prune -f"
