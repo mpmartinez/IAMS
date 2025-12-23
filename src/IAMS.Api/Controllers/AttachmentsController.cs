@@ -72,7 +72,7 @@ public class AttachmentsController(
     /// </summary>
     [HttpPost]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin,Staff")]
-    [RequestSizeLimit(MaxFileSizeBytes + 1024)] // Add margin for form data
+    [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB to account for multipart overhead
     [Consumes("multipart/form-data")]
     public async Task<ActionResult<ApiResponse<AttachmentDto>>> UploadAttachment(
         int assetId,

@@ -93,6 +93,13 @@ builder.Services.AddHostedService<WarrantyCheckService>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>();
 
+// Configure form options for file uploads (needed for larger files on mobile)
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10 MB for multipart body
+    options.ValueLengthLimit = 10 * 1024 * 1024; // 10 MB for individual values
+});
+
 // Controllers
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
