@@ -200,16 +200,50 @@ window.QrScanner = {
         }
     },
 
-    // Scan QR code from byte array (called from Blazor)
-    scanFileFromBytes: async function (bytes, contentType) {
-        if (!bytes || bytes.length === 0) return null;
+    // Set up file input listeners for QR upload
+    setupFileInputs: function () {
+        const self = this;
+        const fileInputIds = ['qr-file-input', 'qr-file-input-error'];
+
+        fileInputIds.forEach(id => {
+            const input = document.getElementById(id);
+            if (input && !input._qrListenerAttached) {
+                input._qrListenerAttached = true;
+                input.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+
+                    // Reset the input so the same file can be selected again
+                    e.target.value = '';
+
+                    // Notify Blazor we're processing
+                    if (self.dotNetRef) {
+                        await self.dotNetRef.invokeMethodAsync('OnFileProcessingStart');
+                    }
+
+                    try {
+                        const assetTag = await self.scanFileNative(file);
+                        if (assetTag && self.dotNetRef) {
+                            await self.dotNetRef.invokeMethodAsync('OnScanSuccess', assetTag);
+                        } else if (self.dotNetRef) {
+                            await self.dotNetRef.invokeMethodAsync('OnFileScanFailed', 'No QR code found in the image');
+                        }
+                    } catch (error) {
+                        console.error('File scan error:', error);
+                        if (self.dotNetRef) {
+                            await self.dotNetRef.invokeMethodAsync('OnFileScanFailed', error.message || 'Failed to scan image');
+                        }
+                    }
+                });
+            }
+        });
+    },
+
+    // Scan QR code from native File object
+    scanFileNative: async function (file) {
+        if (!file) return null;
 
         try {
-            // Convert byte array to Blob
-            const uint8Array = new Uint8Array(bytes);
-            const blob = new Blob([uint8Array], { type: contentType || 'image/png' });
-            const file = new File([blob], "qr-upload.png", { type: contentType || 'image/png' });
-
             // Create temporary element for scanner
             let tempDiv = document.getElementById('qr-file-scanner-temp');
             if (!tempDiv) {
@@ -241,7 +275,7 @@ window.QrScanner = {
             return assetTag;
         } catch (error) {
             console.error('QR file scan error:', error);
-            return null;
+            throw error;
         }
     },
 
