@@ -71,6 +71,18 @@ jobs:
         env:
           SSH_KEY_B64: ${{ secrets.DO_SSH_KEY_B64 }}
 
+      - name: Create .env file on server
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && cat > .env << 'EOF'
+          SMTP_HOST=${{ secrets.SMTP_HOST }}
+          SMTP_PORT=${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }}
+          SMTP_FROM_NAME=${{ secrets.SMTP_FROM_NAME }}
+          APP_WEB_URL=${{ secrets.APP_WEB_URL }}
+          EOF"
+
       - name: Deploy to server
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ secrets.GHCR_USER }} --password-stdin && docker pull ghcr.io/${{ secrets.GHCR_USER }}/iams-api:latest && docker pull ghcr.io/${{ secrets.GHCR_USER }}/iams-web:latest && docker-compose -f docker-compose.prod.yml down && docker-compose -f docker-compose.prod.yml up -d && docker image prune -f"
