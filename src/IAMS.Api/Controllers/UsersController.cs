@@ -1,4 +1,6 @@
+using IAMS.Api.Data;
 using IAMS.Api.Entities;
+using IAMS.Api.Services;
 using IAMS.Shared.DTOs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -11,7 +13,11 @@ namespace IAMS.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-public class UsersController(UserManager<ApplicationUser> userManager) : ControllerBase
+public class UsersController(
+    UserManager<ApplicationUser> userManager,
+    ITenantProvider tenantProvider,
+    ISubscriptionService subscriptionService,
+    AppDbContext db) : ControllerBase
 {
     [HttpGet]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
@@ -20,7 +26,16 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        var tenantId = tenantProvider.GetCurrentTenantId();
+        var isSuperAdmin = tenantProvider.IsSuperAdmin();
+
         var query = userManager.Users.AsQueryable();
+
+        // Apply tenant filter unless super admin
+        if (!isSuperAdmin && tenantId.HasValue)
+        {
+            query = query.Where(u => u.TenantId == tenantId.Value);
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -32,6 +47,7 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
 
         var totalCount = await query.CountAsync();
         var users = await query
+            .Include(u => u.Tenant)
             .OrderBy(u => u.FullName)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -57,6 +73,12 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<UserDto>>> CreateUser(CreateUserDto dto)
     {
+        var tenantId = tenantProvider.GetRequiredTenantId();
+
+        // Check subscription limits
+        if (!await subscriptionService.CanCreateUserAsync(tenantId))
+            return BadRequest(ApiResponse<UserDto>.Fail("User limit reached for your subscription. Please upgrade."));
+
         var existingUser = await userManager.FindByEmailAsync(dto.Email);
         if (existingUser is not null)
             return BadRequest(ApiResponse<UserDto>.Fail("Email already exists"));
@@ -68,7 +90,8 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
             FullName = dto.FullName,
             Department = dto.Department,
             IsActive = true,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            TenantId = tenantId
         };
 
         var result = await userManager.CreateAsync(user, dto.Password);
@@ -81,6 +104,12 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
         var role = dto.Role ?? "Staff";
         await userManager.AddToRoleAsync(user, role);
 
+        // Update tenant user count
+        await subscriptionService.UpdateUserCountAsync(tenantId);
+
+        // Reload user with tenant
+        user = await userManager.Users.Include(u => u.Tenant).FirstAsync(u => u.Id == user.Id);
+
         return Ok(ApiResponse<UserDto>.Ok(MapToDto(user, role)));
     }
 
@@ -88,8 +117,15 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetUser(string id)
     {
-        var user = await userManager.FindByIdAsync(id);
+        var user = await userManager.Users
+            .Include(u => u.Tenant)
+            .FirstOrDefaultAsync(u => u.Id == id);
         if (user is null)
+            return NotFound();
+
+        // Verify tenant access
+        var tenantId = tenantProvider.GetCurrentTenantId();
+        if (!tenantProvider.IsSuperAdmin() && tenantId.HasValue && user.TenantId != tenantId.Value)
             return NotFound();
 
         var roles = await userManager.GetRolesAsync(user);
@@ -100,8 +136,15 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<ActionResult<ApiResponse<UserDto>>> UpdateUser(string id, UpdateUserDto dto)
     {
-        var user = await userManager.FindByIdAsync(id);
+        var user = await userManager.Users
+            .Include(u => u.Tenant)
+            .FirstOrDefaultAsync(u => u.Id == id);
         if (user is null)
+            return NotFound();
+
+        // Verify tenant access
+        var tenantId = tenantProvider.GetCurrentTenantId();
+        if (!tenantProvider.IsSuperAdmin() && tenantId.HasValue && user.TenantId != tenantId.Value)
             return NotFound();
 
         if (dto.Email is not null && dto.Email != user.Email)
@@ -150,6 +193,11 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
         if (user is null)
             return NotFound();
 
+        // Verify tenant access
+        var tenantId = tenantProvider.GetCurrentTenantId();
+        if (!tenantProvider.IsSuperAdmin() && tenantId.HasValue && user.TenantId != tenantId.Value)
+            return NotFound();
+
         // Soft delete
         user.IsActive = false;
         user.UpdatedAt = DateTime.UtcNow;
@@ -163,8 +211,18 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewUsersList")]
     public async Task<ActionResult> GetUserList()
     {
-        var users = await userManager.Users
-            .Where(u => u.IsActive)
+        var tenantId = tenantProvider.GetCurrentTenantId();
+        var isSuperAdmin = tenantProvider.IsSuperAdmin();
+
+        var query = userManager.Users.Where(u => u.IsActive);
+
+        // Apply tenant filter unless super admin
+        if (!isSuperAdmin && tenantId.HasValue)
+        {
+            query = query.Where(u => u.TenantId == tenantId.Value);
+        }
+
+        var users = await query
             .OrderBy(u => u.FullName)
             .Select(u => new { u.Id, u.FullName, u.Department })
             .ToListAsync();
@@ -180,6 +238,10 @@ public class UsersController(UserManager<ApplicationUser> userManager) : Control
         Department = user.Department,
         Role = role,
         IsActive = user.IsActive,
-        CreatedAt = user.CreatedAt
+        CreatedAt = user.CreatedAt,
+        TenantId = user.TenantId,
+        TenantName = user.Tenant?.Name,
+        IsTenantAdmin = user.IsTenantAdmin,
+        IsSuperAdmin = user.IsSuperAdmin
     };
 }

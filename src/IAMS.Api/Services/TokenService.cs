@@ -32,12 +32,21 @@ public class TokenService(
             new(ClaimTypes.NameIdentifier, user.Id),
             new(ClaimTypes.Email, user.Email!),
             new(ClaimTypes.Name, user.FullName),
-            new("department", user.Department ?? "")
+            new("department", user.Department ?? ""),
+            new("tenant_id", user.TenantId.ToString()),
+            new("is_tenant_admin", user.IsTenantAdmin.ToString().ToLower()),
+            new("is_super_admin", user.IsSuperAdmin.ToString().ToLower())
         };
 
         foreach (var role in roles)
         {
             claims.Add(new Claim(ClaimTypes.Role, role));
+        }
+
+        // Add SuperAdmin role if user is super admin
+        if (user.IsSuperAdmin && !roles.Contains("SuperAdmin"))
+        {
+            claims.Add(new Claim(ClaimTypes.Role, "SuperAdmin"));
         }
 
         var expireMinutes = int.Parse(configuration["Jwt:ExpireMinutes"] ?? "30");

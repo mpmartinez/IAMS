@@ -21,8 +21,18 @@ public class AuthStateProvider(ILocalStorageService localStorage) : Authenticati
             new(ClaimTypes.Email, user.Email),
             new(ClaimTypes.Name, user.FullName),
             new(ClaimTypes.Role, user.Role),
-            new("department", user.Department ?? "")
+            new("department", user.Department ?? ""),
+            new("tenant_id", user.TenantId.ToString()),
+            new("tenant_name", user.TenantName ?? ""),
+            new("is_tenant_admin", user.IsTenantAdmin.ToString().ToLower()),
+            new("is_super_admin", user.IsSuperAdmin.ToString().ToLower())
         };
+
+        // Add SuperAdmin role if applicable
+        if (user.IsSuperAdmin)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, "SuperAdmin"));
+        }
 
         var identity = new ClaimsIdentity(claims, "jwt");
         return new AuthenticationState(new ClaimsPrincipal(identity));

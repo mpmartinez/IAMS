@@ -9,6 +9,12 @@ public record UserDto
     public required string Role { get; init; }
     public bool IsActive { get; init; }
     public DateTime CreatedAt { get; init; }
+
+    // Multi-tenancy
+    public Guid TenantId { get; init; }
+    public string? TenantName { get; init; }
+    public bool IsTenantAdmin { get; init; }
+    public bool IsSuperAdmin { get; init; }
 }
 
 public record CreateUserDto

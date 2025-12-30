@@ -6,18 +6,69 @@ namespace IAMS.Api.Data;
 
 public static class SeedData
 {
+    // Well-known default tenant ID for migration purposes
+    public static readonly Guid DefaultTenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+
     public static async Task Initialize(
         AppDbContext db,
         UserManager<ApplicationUser> userManager,
         RoleManager<IdentityRole> roleManager)
     {
-        // Create roles
-        string[] roles = ["Admin", "Staff", "Auditor"];
+        // Create roles including SuperAdmin
+        string[] roles = ["SuperAdmin", "Admin", "Staff", "Auditor"];
         foreach (var role in roles)
         {
             if (!await roleManager.RoleExistsAsync(role))
             {
                 await roleManager.CreateAsync(new IdentityRole(role));
+            }
+        }
+
+        // Create default tenant if not exists (check by ID or Slug to avoid unique constraint violation)
+        var defaultTenant = await db.Tenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == DefaultTenantId || t.Slug == "default");
+
+        if (defaultTenant is null)
+        {
+            var (maxAssets, maxUsers, maxStorageBytes) = SubscriptionTiers.GetLimits(SubscriptionTiers.Enterprise);
+
+            defaultTenant = new Tenant
+            {
+                Id = DefaultTenantId,
+                Name = "Default Organization",
+                Slug = "default",
+                SubscriptionTier = SubscriptionTiers.Enterprise,
+                MaxAssets = maxAssets,
+                MaxUsers = maxUsers,
+                MaxStorageBytes = maxStorageBytes,
+                IsActive = true
+            };
+
+            db.Tenants.Add(defaultTenant);
+            await db.SaveChangesAsync();
+        }
+
+        // Create super admin user
+        if (await userManager.FindByEmailAsync("superadmin@iams.local") is null)
+        {
+            var superAdmin = new ApplicationUser
+            {
+                UserName = "superadmin@iams.local",
+                Email = "superadmin@iams.local",
+                FullName = "Super Administrator",
+                Department = "Platform",
+                EmailConfirmed = true,
+                TenantId = defaultTenant.Id,
+                IsSuperAdmin = true,
+                IsTenantAdmin = true
+            };
+
+            var result = await userManager.CreateAsync(superAdmin, "SuperAdmin123!");
+            if (result.Succeeded)
+            {
+                await userManager.AddToRoleAsync(superAdmin, "SuperAdmin");
+                await userManager.AddToRoleAsync(superAdmin, "Admin");
             }
         }
 
@@ -30,7 +81,9 @@ public static class SeedData
                 Email = "admin@company.com",
                 FullName = "System Administrator",
                 Department = "IT",
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                TenantId = defaultTenant.Id,
+                IsTenantAdmin = true
             };
 
             var result = await userManager.CreateAsync(admin, "Admin123!");
@@ -49,7 +102,8 @@ public static class SeedData
                 Email = "staff@company.com",
                 FullName = "John Smith",
                 Department = "Engineering",
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                TenantId = defaultTenant.Id
             };
 
             var result = await userManager.CreateAsync(staff, "Staff123!");
@@ -68,7 +122,8 @@ public static class SeedData
                 Email = "auditor@company.com",
                 FullName = "Jane Auditor",
                 Department = "Compliance",
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                TenantId = defaultTenant.Id
             };
 
             var result = await userManager.CreateAsync(auditor, "Auditor123!");
@@ -78,8 +133,15 @@ public static class SeedData
             }
         }
 
+        // Update tenant user count
+        var userCount = await db.Users
+            .IgnoreQueryFilters()
+            .CountAsync(u => u.TenantId == defaultTenant.Id);
+        defaultTenant.CurrentUserCount = userCount;
+        await db.SaveChangesAsync();
+
         // Seed assets if none exist
-        if (!await db.Assets.AnyAsync())
+        if (!await db.Assets.IgnoreQueryFilters().AnyAsync())
         {
             var staffUser = await userManager.FindByEmailAsync("staff@company.com");
 
@@ -87,6 +149,7 @@ public static class SeedData
             {
                 new Asset
                 {
+                    TenantId = defaultTenant.Id,
                     AssetTag = "LAP-20251218-0001",
                     Manufacturer = "Apple",
                     Model = "MacBook Pro 16\"",
@@ -105,6 +168,7 @@ public static class SeedData
                 },
                 new Asset
                 {
+                    TenantId = defaultTenant.Id,
                     AssetTag = "MON-20251218-0001",
                     Manufacturer = "Dell",
                     Model = "UltraSharp 27\"",
@@ -120,6 +184,7 @@ public static class SeedData
                 },
                 new Asset
                 {
+                    TenantId = defaultTenant.Id,
                     AssetTag = "PHN-20251218-0001",
                     Manufacturer = "Apple",
                     Model = "iPhone 15 Pro",
@@ -137,6 +202,7 @@ public static class SeedData
                 },
                 new Asset
                 {
+                    TenantId = defaultTenant.Id,
                     AssetTag = "PRN-20251218-0001",
                     Manufacturer = "HP",
                     Model = "LaserJet Pro M404dn",
@@ -151,6 +217,7 @@ public static class SeedData
                 },
                 new Asset
                 {
+                    TenantId = defaultTenant.Id,
                     AssetTag = "NET-20251218-0001",
                     Manufacturer = "Cisco",
                     Model = "Catalyst 2960X-24",
@@ -168,6 +235,7 @@ public static class SeedData
                 },
                 new Asset
                 {
+                    TenantId = defaultTenant.Id,
                     AssetTag = "DSK-20251218-0001",
                     Manufacturer = "Lenovo",
                     Model = "ThinkCentre M90q",
@@ -186,6 +254,10 @@ public static class SeedData
             };
 
             db.Assets.AddRange(assets);
+            await db.SaveChangesAsync();
+
+            // Update tenant asset count
+            defaultTenant.CurrentAssetCount = assets.Length;
             await db.SaveChangesAsync();
         }
     }

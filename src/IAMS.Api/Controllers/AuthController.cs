@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Api.Services;
 using IAMS.Shared.DTOs;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace IAMS.Api.Controllers;
 
@@ -14,7 +16,8 @@ namespace IAMS.Api.Controllers;
 public class AuthController(
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
-    TokenService tokenService) : ControllerBase
+    TokenService tokenService,
+    AppDbContext db) : ControllerBase
 {
     [HttpPost("login")]
     public async Task<ActionResult<ApiResponse<LoginResponseDto>>> Login(LoginDto dto)
@@ -37,13 +40,19 @@ public class AuthController(
         var refreshToken = await tokenService.GenerateRefreshTokenAsync(user.Id, ipAddress);
         var roles = await userManager.GetRolesAsync(user);
 
+        // Get tenant info
+        var tenant = await db.Tenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == user.TenantId);
+
         var response = new LoginResponseDto
         {
             Token = accessToken,
             RefreshToken = refreshToken.Token,
             ExpiresAt = tokenService.GetTokenExpiry(),
             RefreshTokenExpiresAt = refreshToken.ExpiresAt,
-            User = MapToDto(user, roles.FirstOrDefault() ?? "Staff")
+            User = MapToDto(user, roles.FirstOrDefault() ?? "Staff", tenant?.Name),
+            Tenant = tenant != null ? MapToTenantSummary(tenant) : null
         };
 
         return Ok(ApiResponse<LoginResponseDto>.Ok(response));
@@ -59,8 +68,12 @@ public class AuthController(
         if (user is null)
             return NotFound();
 
+        var tenant = await db.Tenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == user.TenantId);
+
         var roles = await userManager.GetRolesAsync(user);
-        return Ok(ApiResponse<UserDto>.Ok(MapToDto(user, roles.FirstOrDefault() ?? "Staff")));
+        return Ok(ApiResponse<UserDto>.Ok(MapToDto(user, roles.FirstOrDefault() ?? "Staff", tenant?.Name)));
     }
 
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
@@ -114,13 +127,19 @@ public class AuthController(
         var accessToken = await tokenService.GenerateTokenAsync(user);
         var roles = await userManager.GetRolesAsync(user);
 
+        // Get tenant info
+        var tenant = await db.Tenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == user.TenantId);
+
         var response = new LoginResponseDto
         {
             Token = accessToken,
             RefreshToken = newRefreshToken.Token,
             ExpiresAt = tokenService.GetTokenExpiry(),
             RefreshTokenExpiresAt = newRefreshToken.ExpiresAt,
-            User = MapToDto(user, roles.FirstOrDefault() ?? "Staff")
+            User = MapToDto(user, roles.FirstOrDefault() ?? "Staff", tenant?.Name),
+            Tenant = tenant != null ? MapToTenantSummary(tenant) : null
         };
 
         return Ok(ApiResponse<LoginResponseDto>.Ok(response));
@@ -222,7 +241,7 @@ public class AuthController(
         return HttpContext.Connection.RemoteIpAddress?.MapToIPv4().ToString();
     }
 
-    private static UserDto MapToDto(ApplicationUser user, string role) => new()
+    private static UserDto MapToDto(ApplicationUser user, string role, string? tenantName = null) => new()
     {
         Id = user.Id,
         Email = user.Email!,
@@ -230,6 +249,21 @@ public class AuthController(
         Department = user.Department,
         Role = role,
         IsActive = user.IsActive,
-        CreatedAt = user.CreatedAt
+        CreatedAt = user.CreatedAt,
+        TenantId = user.TenantId,
+        TenantName = tenantName,
+        IsTenantAdmin = user.IsTenantAdmin,
+        IsSuperAdmin = user.IsSuperAdmin
+    };
+
+    private static TenantSummaryDto MapToTenantSummary(Tenant tenant) => new()
+    {
+        Id = tenant.Id,
+        Name = tenant.Name,
+        Slug = tenant.Slug,
+        LogoUrl = tenant.LogoUrl,
+        PrimaryColor = tenant.PrimaryColor,
+        SubscriptionTier = tenant.SubscriptionTier,
+        IsActive = tenant.IsActive
     };
 }

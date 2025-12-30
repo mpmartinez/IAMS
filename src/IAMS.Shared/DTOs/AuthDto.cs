@@ -13,6 +13,7 @@ public record LoginResponseDto
     public required UserDto User { get; init; }
     public DateTime ExpiresAt { get; init; }
     public DateTime RefreshTokenExpiresAt { get; init; }
+    public TenantSummaryDto? Tenant { get; init; }
 }
 
 public record RefreshTokenRequestDto
