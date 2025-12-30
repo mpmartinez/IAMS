@@ -49,6 +49,9 @@ builder.Services.AddScoped<NotificationService>();
 // Global snackbar service
 builder.Services.AddSingleton<SnackbarService>();
 
+// Theme service for dark mode
+builder.Services.AddScoped<ThemeService>();
+
 // Configure logging
 builder.Logging.SetMinimumLevel(LogLevel.Information);
 

@@ -5,7 +5,9 @@
 @inject NetworkStatusService NetworkStatus
 @inject SyncService Sync
 @inject NotificationService Notifications
+@inject ThemeService Theme
 @inject IJSRuntime JS
+@using IAMS.Web.Components
 @implements IAsyncDisposable
 
 <div class="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-900">
@@ -39,7 +41,7 @@
                 <NavItem Href="/notifications" Icon="bell" Label="Notifications" BadgeCount="@Notifications.UnreadCount" OnNavigation="CloseMobileMenu" />
                 <NavItem Href="/categories" Icon="tag" Label="Categories" OnNavigation="CloseMobileMenu" />
 
-                <AuthorizeView Roles="Admin">
+                <AuthorizeView Roles="Admin,SuperAdmin">
                     <div class="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
                         <p class="px-3 mb-2 text-xs font-medium text-slate-400 uppercase tracking-wider">Admin</p>
                         <NavItem Href="/users" Icon="users" Label="Users" OnNavigation="CloseMobileMenu" />
@@ -169,6 +171,9 @@
                     }
                 </button>
             }
+
+            <!-- Theme toggle -->
+            <ThemeToggle />
 
             <!-- Quick actions -->
             <div class="relative">
@@ -460,6 +465,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Initialize theme service
+        await Theme.InitializeAsync();
+
         // Subscribe to authentication failure events
         Api.OnAuthenticationFailed += OnAuthenticationFailedAsync;
 

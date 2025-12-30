@@ -17,7 +17,9 @@ public class AuthController(
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
     TokenService tokenService,
-    AppDbContext db) : ControllerBase
+    AppDbContext db,
+    IEmailService emailService,
+    IConfiguration config) : ControllerBase
 {
     [HttpPost("login")]
     public async Task<ActionResult<ApiResponse<LoginResponseDto>>> Login(LoginDto dto)
@@ -193,10 +195,18 @@ public class AuthController(
 
         var token = await userManager.GeneratePasswordResetTokenAsync(user);
 
-        // In a real application, you would send an email here with the reset link
-        // For now, we'll log it to the console (development only)
-        var resetUrl = $"https://localhost:5002/reset-password?email={Uri.EscapeDataString(user.Email!)}&token={Uri.EscapeDataString(token)}";
-        Console.WriteLine($"[Password Reset] User: {user.Email}, Reset URL: {resetUrl}");
+        // Build reset URL using configured base URL or request origin
+        var baseUrl = config["App:WebUrl"] ?? $"{Request.Scheme}://{Request.Host}";
+        var resetUrl = $"{baseUrl}/reset-password?email={Uri.EscapeDataString(user.Email!)}&token={Uri.EscapeDataString(token)}";
+
+        // Send password reset email
+        var emailSent = await emailService.SendPasswordResetEmailAsync(user.Email!, resetUrl);
+
+        if (!emailSent)
+        {
+            // Log for debugging but still return success to prevent enumeration
+            Console.WriteLine($"[Password Reset] Failed to send email to {user.Email}. Reset URL: {resetUrl}");
+        }
 
         return Ok(ApiResponse<object>.Ok(new { }, "If an account exists, a reset link will be sent"));
     }
