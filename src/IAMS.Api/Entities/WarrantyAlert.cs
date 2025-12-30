@@ -3,9 +3,14 @@ namespace IAMS.Api.Entities;
 /// <summary>
 /// Tracks warranty expiration alerts for assets
 /// </summary>
-public class WarrantyAlert
+public class WarrantyAlert : ITenantEntity
 {
     public int Id { get; set; }
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+    public Tenant? Tenant { get; set; }
+
     public int AssetId { get; set; }
     public Asset Asset { get; set; } = null!;
 

@@ -3,9 +3,13 @@ namespace IAMS.Api.Entities;
 /// <summary>
 /// Tracks the assignment history of assets to users (audit trail)
 /// </summary>
-public class AssetAssignment
+public class AssetAssignment : ITenantEntity
 {
     public int Id { get; set; }
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+    public Tenant? Tenant { get; set; }
 
     // Asset being assigned
     public int AssetId { get; set; }

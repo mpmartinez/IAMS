@@ -1,8 +1,13 @@
 namespace IAMS.Api.Entities;
 
-public class Asset
+public class Asset : ITenantEntity
 {
     public int Id { get; set; }
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+    public Tenant? Tenant { get; set; }
+
     public required string AssetTag { get; set; } // Auto-generated
     public string? Manufacturer { get; set; }
     public string? Model { get; set; }

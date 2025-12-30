@@ -3,9 +3,13 @@ namespace IAMS.Api.Entities;
 /// <summary>
 /// Represents a file attachment associated with an asset
 /// </summary>
-public class Attachment
+public class Attachment : ITenantEntity
 {
     public int Id { get; set; }
+
+    // Multi-tenancy
+    public Guid TenantId { get; set; }
+    public Tenant? Tenant { get; set; }
 
     // Asset relationship
     public int AssetId { get; set; }
