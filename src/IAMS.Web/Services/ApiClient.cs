@@ -543,6 +543,78 @@ public class ApiClient(HttpClient http, AuthService authService)
         var response = await client.DeleteAsync($"api/users/{id}");
         return response.IsSuccessStatusCode;
     }
+
+    // Tenant Management APIs (SuperAdmin only)
+    public async Task<PagedResponse<TenantDto>?> GetTenantsAsync(
+        string? search = null,
+        bool? isActive = null,
+        int page = 1,
+        int pageSize = 20)
+    {
+        var client = await GetAuthenticatedClient();
+        var query = $"api/tenants?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(search)) query += $"&search={Uri.EscapeDataString(search)}";
+        if (isActive.HasValue) query += $"&isActive={isActive.Value}";
+
+        var response = await client.GetFromJsonAsync<ApiResponse<PagedResponse<TenantDto>>>(query);
+        return response?.Data;
+    }
+
+    public async Task<TenantDto?> GetTenantAsync(Guid id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<TenantDto>>($"api/tenants/{id}");
+        return response?.Data;
+    }
+
+    public async Task<TenantUsageDto?> GetTenantUsageAsync(Guid id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<TenantUsageDto>>($"api/tenants/{id}/usage");
+        return response?.Data;
+    }
+
+    public async Task<(bool Success, TenantDto? Tenant, string? Error)> CreateTenantAsync(CreateTenantDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync("api/tenants", dto);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, null, error?.Message ?? "Failed to create tenant");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<ApiResponse<TenantDto>>();
+        return (true, result?.Data, null);
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateTenantAsync(Guid id, UpdateTenantDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PutAsJsonAsync($"api/tenants/{id}", dto);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to update tenant");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<bool> DeactivateTenantAsync(Guid id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.DeleteAsync($"api/tenants/{id}");
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<SubscriptionTierInfo[]?> GetSubscriptionTiersAsync()
+    {
+        var response = await http.GetFromJsonAsync<ApiResponse<SubscriptionTierInfo[]>>("api/tenants/subscription-tiers");
+        return response?.Data;
+    }
 }
 
 public record UserListItem(string Id, string FullName, string? Department);
@@ -555,4 +627,13 @@ public record OffboardingSummaryItem
     public int UnreturnedCount { get; init; }
     public decimal TotalValue { get; init; }
     public DateTime OldestAssignment { get; init; }
+}
+
+public record SubscriptionTierInfo
+{
+    public string Name { get; init; } = "";
+    public int MaxAssets { get; init; }
+    public int MaxUsers { get; init; }
+    public long MaxStorageBytes { get; init; }
+    public string MaxStorageDisplay { get; init; } = "";
 }

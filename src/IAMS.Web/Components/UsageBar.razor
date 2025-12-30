@@ -1,0 +1,36 @@
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public long Current { get; set; }
+    [Parameter] public long Max { get; set; }
+    [Parameter] public bool IsBytes { get; set; }
+
+    private double Percentage => Max > 0 ? Math.Min(100, (double)Current / Max * 100) : 0;
+
+    private string BarColor => Percentage switch
+    {
+        >= 90 => "bg-red-500",
+        >= 75 => "bg-amber-500",
+        _ => "bg-primary-500"
+    };
+
+    private string FormatValue(long value)
+    {
+        if (!IsBytes) return value.ToString("N0");
+
+        return value switch
+        {
+            >= 1024L * 1024 * 1024 => $"{value / (1024.0 * 1024 * 1024):F1} GB",
+            >= 1024L * 1024 => $"{value / (1024.0 * 1024):F1} MB",
+            >= 1024L => $"{value / 1024.0:F1} KB",
+            _ => $"{value} B"
+        };
+    }
+}
+
+<div class="flex items-center gap-2">
+    <span class="text-xs text-slate-500 dark:text-slate-400 w-14">@Label</span>
+    <div class="flex-1 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+        <div class="h-full @BarColor rounded-full transition-all duration-300" style="width: @Percentage%"></div>
+    </div>
+    <span class="text-xs text-slate-600 dark:text-slate-300 w-20 text-right">@FormatValue(Current) / @FormatValue(Max)</span>
+</div>
