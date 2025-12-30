@@ -460,6 +460,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Subscribe to authentication failure events
+        Api.OnAuthenticationFailed += OnAuthenticationFailedAsync;
+
         await LoadAlertCount();
 
         // Initialize sync services
@@ -484,6 +487,12 @@
         {
             // Silently fail if not authenticated
         }
+    }
+
+    private async Task OnAuthenticationFailedAsync()
+    {
+        // Redirect to login when authentication fails
+        await InvokeAsync(() => Navigation.NavigateTo("/login", forceLoad: true));
     }
 
     private async Task OnSyncStatusChangedAsync(SyncStatus status)
@@ -731,6 +740,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        Api.OnAuthenticationFailed -= OnAuthenticationFailedAsync;
         Sync.OnSyncStatusChanged -= OnSyncStatusChangedAsync;
         Notifications.OnNotificationsChanged -= OnNotificationsChangedAsync;
         _searchCts?.Cancel();

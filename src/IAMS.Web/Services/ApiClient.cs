@@ -6,12 +6,42 @@ namespace IAMS.Web.Services;
 
 public class ApiClient(HttpClient http, AuthService authService)
 {
+    public event Func<Task>? OnAuthenticationFailed;
+
     private async Task<HttpClient> GetAuthenticatedClient()
     {
         var token = await authService.GetTokenAsync();
         if (!string.IsNullOrEmpty(token))
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return http;
+    }
+
+    private async Task<T?> SafeGetAsync<T>(string url)
+    {
+        try
+        {
+            var client = await GetAuthenticatedClient();
+            var response = await client.GetAsync(url);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                Console.WriteLine($"401 Unauthorized for {url}");
+                OnAuthenticationFailed?.Invoke();
+                return default;
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<T>();
+            }
+
+            return default;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"API error for {url}: {ex.Message}");
+            return default;
+        }
     }
 
     public async Task<PagedResponse<AssetDto>?> GetAssetsAsync(
@@ -222,8 +252,7 @@ public class ApiClient(HttpClient http, AuthService authService)
 
     public async Task<int> GetUnacknowledgedWarrantyAlertCountAsync()
     {
-        var client = await GetAuthenticatedClient();
-        return await client.GetFromJsonAsync<int>("api/warrantyalerts/count");
+        return await SafeGetAsync<int>("api/warrantyalerts/count");
     }
 
     public async Task<bool> AcknowledgeWarrantyAlertAsync(int alertId)
