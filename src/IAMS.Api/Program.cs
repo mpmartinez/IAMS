@@ -78,9 +78,21 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("CanDeleteAssets", policy => policy.RequireRole("Admin"))
     .AddPolicy("CanAssignAssets", policy => policy.RequireRole("Admin", "Staff"))
     .AddPolicy("CanReturnAssets", policy => policy.RequireRole("Admin", "Staff"))
-    .AddPolicy("CanViewAssignments", policy => policy.RequireRole("Admin", "Staff", "Auditor"));
+    .AddPolicy("CanViewAssignments", policy => policy.RequireRole("Admin", "Staff", "Auditor"))
+    // Multi-tenant policies
+    .AddPolicy("SuperAdmin", policy => policy.RequireRole("SuperAdmin"))
+    .AddPolicy("TenantAdmin", policy => policy.RequireAssertion(context =>
+        context.User.IsInRole("SuperAdmin") ||
+        context.User.HasClaim(c => c.Type == "is_tenant_admin" && c.Value == "true")))
+    .AddPolicy("CanManageTenants", policy => policy.RequireRole("SuperAdmin"))
+    .AddPolicy("CanManageOrgSettings", policy => policy.RequireAssertion(context =>
+        context.User.IsInRole("SuperAdmin") ||
+        context.User.HasClaim(c => c.Type == "is_tenant_admin" && c.Value == "true")));
 
 // Services
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ITenantProvider, TenantProvider>();
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
