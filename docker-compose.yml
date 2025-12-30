@@ -16,6 +16,13 @@ services:
       - Jwt__Issuer=${JWT_ISSUER:-IAMS}
       - Jwt__Audience=${JWT_AUDIENCE:-IAMS}
       - Cors__AllowedOrigins__0=${CORS_ORIGIN:-https://m2netsolutions.com:5022}
+      - Smtp__Host=${SMTP_HOST}
+      - Smtp__Port=${SMTP_PORT:-465}
+      - Smtp__Username=${SMTP_USERNAME}
+      - Smtp__Password=${SMTP_PASSWORD}
+      - Smtp__FromEmail=${SMTP_FROM_EMAIL}
+      - Smtp__FromName=${SMTP_FROM_NAME:-IAMS}
+      - App__WebUrl=${APP_WEB_URL:-https://m2netsolutions.com:5022}
     volumes:
       - iams-data:/app/data
       - iams-uploads:/app/Uploads
