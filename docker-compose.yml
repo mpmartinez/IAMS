@@ -17,7 +17,7 @@ services:
       - Jwt__Audience=${JWT_AUDIENCE:-IAMS}
       - Cors__AllowedOrigins__0=${CORS_ORIGIN:-https://m2netsolutions.com:5022}
       - Smtp__Host=${SMTP_HOST}
-      - Smtp__Port=${SMTP_PORT:-465}
+      - Smtp__Port=${SMTP_PORT:-2525}
       - Smtp__Username=${SMTP_USERNAME}
       - Smtp__Password=${SMTP_PASSWORD}
       - Smtp__FromEmail=${SMTP_FROM_EMAIL}
