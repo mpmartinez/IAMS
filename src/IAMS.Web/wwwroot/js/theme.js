@@ -27,3 +27,46 @@ window.themeManager = {
 
 // Initialize theme on page load (before Blazor renders to prevent flash)
 window.themeManager.initTheme();
+
+// Auth guard - checks if user is logged out and redirects
+window.authGuard = {
+    isAuthenticated: function() {
+        return localStorage.getItem('authToken') !== null;
+    },
+
+    checkAuthOnVisibility: function() {
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                if (!window.authGuard.isAuthenticated()) {
+                    // User is not authenticated, redirect to login
+                    if (!window.location.pathname.includes('/login') &&
+                        !window.location.pathname.includes('/forgot-password') &&
+                        !window.location.pathname.includes('/reset-password')) {
+                        window.location.href = '/login';
+                    }
+                }
+            }
+        });
+    },
+
+    // Called on popstate (back/forward button)
+    checkAuthOnNavigation: function() {
+        window.addEventListener('popstate', function() {
+            if (!window.authGuard.isAuthenticated()) {
+                if (!window.location.pathname.includes('/login') &&
+                    !window.location.pathname.includes('/forgot-password') &&
+                    !window.location.pathname.includes('/reset-password')) {
+                    window.location.href = '/login';
+                }
+            }
+        });
+    },
+
+    init: function() {
+        this.checkAuthOnVisibility();
+        this.checkAuthOnNavigation();
+    }
+};
+
+// Initialize auth guard
+window.authGuard.init();
