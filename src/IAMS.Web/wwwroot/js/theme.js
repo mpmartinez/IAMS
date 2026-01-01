@@ -70,3 +70,37 @@ window.authGuard = {
 
 // Initialize auth guard
 window.authGuard.init();
+
+// Focus management - prevent autofocus on first interactive element
+window.focusManager = {
+    preventAutoFocus: function() {
+        // Remove focus from any auto-focused element on page load
+        if (document.activeElement && document.activeElement !== document.body) {
+            document.activeElement.blur();
+        }
+    },
+
+    init: function() {
+        // Run after Blazor renders
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                window.focusManager.preventAutoFocus();
+            }, 100);
+        });
+
+        // Also handle Blazor navigation
+        const observer = new MutationObserver(function() {
+            setTimeout(function() {
+                window.focusManager.preventAutoFocus();
+            }, 50);
+        });
+
+        // Start observing once DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    }
+};
+
+// Initialize focus manager
+window.focusManager.init();
