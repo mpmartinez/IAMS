@@ -22,7 +22,7 @@ services:
       - App__WebUrl=${APP_WEB_URL:-https://m2netsolutions.com:5022}
     volumes:
       - iams-data:/app/data
-      - iams-uploads:/app/Uploads
+      - ./data/uploads:/app/Uploads
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
@@ -45,6 +45,4 @@ services:
 
 volumes:
   iams-data:
-    driver: local
-  iams-uploads:
     driver: local
