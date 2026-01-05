@@ -13,14 +13,6 @@
             <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Welcome back, @_userName</p>
         </div>
-        <AuthorizeView Roles="Admin,Staff">
-            <a href="/assets/new" class="sm:hidden inline-flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                </svg>
-                Add New Asset
-            </a>
-        </AuthorizeView>
     </div>
 
     @if (_loading)
