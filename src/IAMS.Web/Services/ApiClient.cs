@@ -484,6 +484,220 @@ public class ApiClient(HttpClient http, AuthService authService)
         return await http.GetFromJsonAsync<string[]>("api/attachments/categories");
     }
 
+    // Maintenance APIs
+    public async Task<PagedResponse<MaintenanceDto>?> GetMaintenanceAsync(
+        string? search = null,
+        string? status = null,
+        int? assetId = null,
+        int page = 1,
+        int pageSize = 20)
+    {
+        var client = await GetAuthenticatedClient();
+        var query = $"api/maintenance?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(search)) query += $"&search={Uri.EscapeDataString(search)}";
+        if (!string.IsNullOrEmpty(status)) query += $"&status={Uri.EscapeDataString(status)}";
+        if (assetId.HasValue) query += $"&assetId={assetId.Value}";
+        return await client.GetFromJsonAsync<PagedResponse<MaintenanceDto>>(query);
+    }
+
+    public async Task<MaintenanceDto?> GetMaintenanceByIdAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<MaintenanceDto>>($"api/maintenance/{id}");
+        return response?.Data;
+    }
+
+    public async Task<List<MaintenanceDto>?> GetAssetMaintenanceAsync(int assetId)
+    {
+        var client = await GetAuthenticatedClient();
+        return await client.GetFromJsonAsync<List<MaintenanceDto>>($"api/assets/{assetId}/maintenance");
+    }
+
+    public async Task<MaintenanceSummaryDto?> GetMaintenanceSummaryAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<MaintenanceSummaryDto>>("api/maintenance/summary");
+        return response?.Data;
+    }
+
+    public async Task<(bool Success, MaintenanceDto? Maintenance, string? Error)> CreateMaintenanceAsync(CreateMaintenanceDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync("api/maintenance", dto);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, null, error?.Message ?? "Failed to create maintenance record");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<ApiResponse<MaintenanceDto>>();
+        return (true, result?.Data, null);
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateMaintenanceAsync(int id, UpdateMaintenanceDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PutAsJsonAsync($"api/maintenance/{id}", dto);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to update maintenance record");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> StartMaintenanceAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsync($"api/maintenance/{id}/start", null);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to start maintenance");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> CompleteMaintenanceAsync(int id, string? notes = null)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync($"api/maintenance/{id}/complete", notes);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to complete maintenance");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> CancelMaintenanceAsync(int id, string? notes = null)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync($"api/maintenance/{id}/cancel", notes);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to cancel maintenance");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<bool> DeleteMaintenanceAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.DeleteAsync($"api/maintenance/{id}");
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<string[]?> GetMaintenanceStatusesAsync()
+    {
+        return await http.GetFromJsonAsync<string[]>("api/maintenance/statuses");
+    }
+
+    // Maintenance Attachment APIs
+    public async Task<List<MaintenanceAttachmentDto>?> GetMaintenanceAttachmentsAsync(int maintenanceId)
+    {
+        var client = await GetAuthenticatedClient();
+        return await client.GetFromJsonAsync<List<MaintenanceAttachmentDto>>($"api/maintenance/{maintenanceId}/attachments");
+    }
+
+    public async Task<(bool Success, MaintenanceAttachmentDto? Attachment, string? Error)> UploadMaintenanceAttachmentAsync(
+        int maintenanceId,
+        Stream fileStream,
+        string fileName,
+        string contentType,
+        string category,
+        string? description = null)
+    {
+        var client = await GetAuthenticatedClient();
+
+        using var memoryStream = new MemoryStream();
+        await fileStream.CopyToAsync(memoryStream);
+        memoryStream.Position = 0;
+
+        using var content = new MultipartFormDataContent();
+        using var fileContent = new StreamContent(memoryStream);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+
+        content.Add(fileContent, "file", fileName);
+        content.Add(new StringContent(category), "category");
+        if (!string.IsNullOrEmpty(description))
+            content.Add(new StringContent(description), "description");
+
+        var response = await client.PostAsync($"api/maintenance/{maintenanceId}/attachments", content);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            if (!string.IsNullOrEmpty(errorContent) && errorContent.TrimStart().StartsWith('{'))
+            {
+                try
+                {
+                    var error = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<object>>(errorContent);
+                    return (false, null, error?.Message ?? "Failed to upload attachment");
+                }
+                catch { }
+            }
+
+            var statusError = response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.RequestEntityTooLarge => "File size exceeds the server limit",
+                System.Net.HttpStatusCode.Unauthorized => "Session expired. Please log in again",
+                System.Net.HttpStatusCode.Forbidden => "You don't have permission to upload files",
+                System.Net.HttpStatusCode.NotFound => "Maintenance record not found",
+                System.Net.HttpStatusCode.BadRequest => "Invalid file or request",
+                _ => $"Upload failed (Error {(int)response.StatusCode})"
+            };
+            return (false, null, statusError);
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<ApiResponse<MaintenanceAttachmentDto>>();
+        return (true, result?.Data, null);
+    }
+
+    public async Task<bool> DeleteMaintenanceAttachmentAsync(int maintenanceId, int attachmentId)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.DeleteAsync($"api/maintenance/{maintenanceId}/attachments/{attachmentId}");
+        return response.IsSuccessStatusCode;
+    }
+
+    public string GetMaintenanceAttachmentDownloadUrl(int maintenanceId, int attachmentId)
+    {
+        return $"{http.BaseAddress}api/maintenance/{maintenanceId}/attachments/{attachmentId}/download";
+    }
+
+    public async Task<string?> GetMaintenanceAttachmentBase64Async(int maintenanceId, int attachmentId, string contentType)
+    {
+        try
+        {
+            var client = await GetAuthenticatedClient();
+            var response = await client.GetAsync($"api/maintenance/{maintenanceId}/attachments/{attachmentId}/download");
+            if (!response.IsSuccessStatusCode) return null;
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            return $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<string[]?> GetMaintenanceAttachmentCategoriesAsync()
+    {
+        return await http.GetFromJsonAsync<string[]>("api/maintenance/attachment-categories");
+    }
+
     // Notification APIs
     public async Task<List<NotificationDto>?> GetNotificationsAsync(int take = 20)
     {

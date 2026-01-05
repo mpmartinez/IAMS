@@ -209,6 +209,98 @@ else
                     </ChildContent>
                 </Card>
 
+                <!-- Maintenance History -->
+                <Card Title="Maintenance History">
+                    <HeaderContent>
+                        <AuthorizeView Roles="Admin,Staff">
+                            <button @onclick="ShowCreateMaintenanceModal" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
+                                + New
+                            </button>
+                        </AuthorizeView>
+                    </HeaderContent>
+                    <ChildContent>
+                        @if (_maintenanceHistory is null)
+                        {
+                            <div class="space-y-3">
+                                @for (int i = 0; i < 2; i++)
+                                {
+                                    <div class="flex items-center gap-3 p-3">
+                                        <div class="w-8 h-8 rounded-full skeleton"></div>
+                                        <div class="flex-1 space-y-1">
+                                            <div class="h-3 w-1/2 rounded skeleton"></div>
+                                            <div class="h-2 w-1/3 rounded skeleton"></div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else if (_maintenanceHistory.Count == 0)
+                        {
+                            <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No maintenance history</p>
+                        }
+                        else
+                        {
+                            <div class="space-y-0 -mx-6 -my-6 divide-y divide-slate-100 dark:divide-slate-700">
+                                @foreach (var maintenance in _maintenanceHistory.Take(5))
+                                {
+                                    <a href="/maintenance?id=@maintenance.Id" class="block px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                        <div class="flex items-start gap-3">
+                                            <div class="w-8 h-8 rounded-full @GetMaintenanceStatusBgClass(maintenance.Status) flex items-center justify-center shrink-0">
+                                                @if (maintenance.Status == "Pending")
+                                                {
+                                                    <svg class="w-4 h-4 @GetMaintenanceStatusIconClass(maintenance.Status)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                }
+                                                else if (maintenance.Status == "InProgress")
+                                                {
+                                                    <svg class="w-4 h-4 @GetMaintenanceStatusIconClass(maintenance.Status)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    </svg>
+                                                }
+                                                else if (maintenance.Status == "Completed")
+                                                {
+                                                    <svg class="w-4 h-4 @GetMaintenanceStatusIconClass(maintenance.Status)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                }
+                                                else
+                                                {
+                                                    <svg class="w-4 h-4 @GetMaintenanceStatusIconClass(maintenance.Status)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                }
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="flex items-center gap-2">
+                                                    <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@maintenance.Title</p>
+                                                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded @GetMaintenanceStatusBadgeClass(maintenance.Status)">@maintenance.Status</span>
+                                                </div>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                                    @maintenance.CreatedAt.ToString("MMM dd, yyyy")
+                                                    @if (maintenance.PerformedByUserName is not null)
+                                                    {
+                                                        <span> &bull; @maintenance.PerformedByUserName</span>
+                                                    }
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </a>
+                                }
+                            </div>
+                            @if (_maintenanceHistory.Count > 5)
+                            {
+                                <div class="pt-3 mt-3 border-t border-slate-100 dark:border-slate-700">
+                                    <a href="/maintenance?assetId=@Id" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium">
+                                        View all @_maintenanceHistory.Count records →
+                                    </a>
+                                </div>
+                            }
+                        }
+                    </ChildContent>
+                </Card>
+
                 <!-- Purchase & Warranty -->
                 <Card Title="Purchase & Warranty">
                     <HeaderContent>
@@ -329,6 +421,13 @@ else
                 <Card Title="Quick Actions">
                     <div class="space-y-2">
                         <AuthorizeView Roles="Admin,Staff">
+                            <button @onclick="ShowCreateMaintenanceModal" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm">
+                                <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                Request Maintenance
+                            </button>
                             <button @onclick="ShowTransferModal" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm">
                                 <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
@@ -695,6 +794,36 @@ else
             </Button>
         </FooterContent>
     </Modal>
+
+    <!-- Create Maintenance Modal -->
+    <Modal IsOpen="@_showCreateMaintenanceModal" Title="Request Maintenance" OnClose="HideCreateMaintenanceModal">
+        <ChildContent>
+            <EditForm Model="_newMaintenance" OnValidSubmit="CreateMaintenance">
+                <DataAnnotationsValidator />
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Title</label>
+                        <InputText @bind-Value="_newMaintenance.Title" placeholder="e.g., Screen replacement, Battery issue..."
+                                   class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 text-sm" />
+                        <ValidationMessage For="@(() => _newMaintenance.Title)" class="text-sm text-red-600 dark:text-red-400 mt-1" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Description (Optional)</label>
+                        <InputTextArea @bind-Value="_newMaintenance.Description" rows="3" placeholder="Describe the issue or maintenance needed..."
+                                       class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm" />
+                    </div>
+                    @if (!string.IsNullOrEmpty(_createMaintenanceError))
+                    {
+                        <p class="text-sm text-red-600 dark:text-red-400">@_createMaintenanceError</p>
+                    }
+                </div>
+            </EditForm>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="HideCreateMaintenanceModal">Cancel</Button>
+            <Button OnClick="CreateMaintenance" Loading="@_creatingMaintenance" Disabled="@string.IsNullOrWhiteSpace(_newMaintenance.Title)">Create</Button>
+        </FooterContent>
+    </Modal>
 }
 
 @code {
@@ -741,14 +870,22 @@ else
     private AttachmentDto? _viewingAttachment;
     private string? _viewingAttachmentUrl;
 
+    // Maintenance state
+    private List<MaintenanceDto>? _maintenanceHistory;
+    private bool _showCreateMaintenanceModal;
+    private bool _creatingMaintenance;
+    private CreateMaintenanceDto _newMaintenance = new();
+    private string _createMaintenanceError = "";
+
     protected override async Task OnInitializedAsync()
     {
         _asset = await Api.GetAssetAsync(Id);
         _loading = false;
 
-        // Load assignment history and attachments in background
+        // Load assignment history, attachments, and maintenance in background
         _ = LoadAssignmentHistory();
         _ = LoadAttachments();
+        _ = LoadMaintenanceHistory();
     }
 
     private async Task LoadAssignmentHistory()
@@ -1022,4 +1159,76 @@ else
     {
         await JS.InvokeVoidAsync("printElement", "asset-label");
     }
+
+    // Maintenance functionality
+    private async Task LoadMaintenanceHistory()
+    {
+        _maintenanceHistory = await Api.GetAssetMaintenanceAsync(Id);
+        StateHasChanged();
+    }
+
+    private void ShowCreateMaintenanceModal()
+    {
+        _newMaintenance = new CreateMaintenanceDto { AssetId = Id };
+        _createMaintenanceError = "";
+        _showCreateMaintenanceModal = true;
+    }
+
+    private void HideCreateMaintenanceModal()
+    {
+        _showCreateMaintenanceModal = false;
+    }
+
+    private async Task CreateMaintenance()
+    {
+        if (string.IsNullOrWhiteSpace(_newMaintenance.Title)) return;
+
+        _creatingMaintenance = true;
+        _createMaintenanceError = "";
+
+        var (success, _, error) = await Api.CreateMaintenanceAsync(_newMaintenance);
+
+        if (success)
+        {
+            _showCreateMaintenanceModal = false;
+            Snackbar.Success("Maintenance request created");
+            // Reload asset and maintenance history
+            _asset = await Api.GetAssetAsync(Id);
+            await LoadMaintenanceHistory();
+        }
+        else
+        {
+            _createMaintenanceError = error ?? "Failed to create maintenance request";
+            Snackbar.Error(_createMaintenanceError);
+        }
+
+        _creatingMaintenance = false;
+    }
+
+    private static string GetMaintenanceStatusBgClass(string status) => status switch
+    {
+        "Pending" => "bg-amber-100 dark:bg-amber-900/30",
+        "InProgress" => "bg-blue-100 dark:bg-blue-900/30",
+        "Completed" => "bg-emerald-100 dark:bg-emerald-900/30",
+        "Cancelled" => "bg-slate-100 dark:bg-slate-700",
+        _ => "bg-slate-100 dark:bg-slate-700"
+    };
+
+    private static string GetMaintenanceStatusIconClass(string status) => status switch
+    {
+        "Pending" => "text-amber-600 dark:text-amber-400",
+        "InProgress" => "text-blue-600 dark:text-blue-400",
+        "Completed" => "text-emerald-600 dark:text-emerald-400",
+        "Cancelled" => "text-slate-400",
+        _ => "text-slate-400"
+    };
+
+    private static string GetMaintenanceStatusBadgeClass(string status) => status switch
+    {
+        "Pending" => "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+        "InProgress" => "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+        "Completed" => "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+        "Cancelled" => "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400",
+        _ => "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400"
+    };
 }

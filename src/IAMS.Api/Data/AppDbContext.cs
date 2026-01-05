@@ -27,6 +27,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Maintenance> Maintenances => Set<Maintenance>();
+    public DbSet<MaintenanceAttachment> MaintenanceAttachments => Set<MaintenanceAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -297,6 +299,90 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure Maintenance with tenant
+        modelBuilder.Entity<Maintenance>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(2000);
+            entity.Property(e => e.Status).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Notes).HasMaxLength(2000);
+
+            // Index for common queries
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.AssetId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => new { e.AssetId, e.Status });
+
+            // Tenant relationship
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Asset)
+                .WithMany()
+                .HasForeignKey(e => e.AssetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.PerformedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.PerformedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Global query filter
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure MaintenanceAttachment with tenant
+        modelBuilder.Entity<MaintenanceAttachment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.FileName).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.StoredFileName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ContentType).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Category).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(500);
+
+            // Index for common queries
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.MaintenanceId);
+            entity.HasIndex(e => e.Category);
+            entity.HasIndex(e => new { e.MaintenanceId, e.Category });
+
+            // Tenant relationship
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Maintenance)
+                .WithMany(m => m.Attachments)
+                .HasForeignKey(e => e.MaintenanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.UploadedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.UploadedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Global query filter
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
         });
     }
 

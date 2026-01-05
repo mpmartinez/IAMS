@@ -79,6 +79,7 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("CanAssignAssets", policy => policy.RequireRole("Admin", "Staff"))
     .AddPolicy("CanReturnAssets", policy => policy.RequireRole("Admin", "Staff"))
     .AddPolicy("CanViewAssignments", policy => policy.RequireRole("Admin", "Staff", "Auditor"))
+    .AddPolicy("CanManageMaintenance", policy => policy.RequireRole("Admin", "Staff"))
     // Multi-tenant policies
     .AddPolicy("SuperAdmin", policy => policy.RequireRole("SuperAdmin"))
     .AddPolicy("TenantAdmin", policy => policy.RequireAssertion(context =>

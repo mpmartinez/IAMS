@@ -36,6 +36,9 @@
             <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
                 <NavItem Href="/" Icon="home" Label="Dashboard" OnNavigation="CloseMobileMenu" />
                 <NavItem Href="/assets" Icon="cube" Label="Assets" OnNavigation="CloseMobileMenu" />
+                <AuthorizeView Roles="Admin,Staff">
+                    <NavItem Href="/maintenance" Icon="wrench" Label="Maintenance" OnNavigation="CloseMobileMenu" />
+                </AuthorizeView>
                 <NavItem Href="/scan" Icon="qr-scan" Label="Scan QR" OnNavigation="CloseMobileMenu" />
                 <NavItem Href="/warranty-alerts" Icon="shield-exclamation" Label="Warranty Alerts" BadgeCount="@_alertCount" OnNavigation="CloseMobileMenu" />
                 <NavItem Href="/notifications" Icon="bell" Label="Notifications" BadgeCount="@Notifications.UnreadCount" OnNavigation="CloseMobileMenu" />
