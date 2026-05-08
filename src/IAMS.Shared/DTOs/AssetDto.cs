@@ -172,6 +172,27 @@ public record UpdateAssetDto
 }
 
 /// <summary>
+/// Result of a bulk asset import.
+/// </summary>
+public record ImportAssetsResultDto
+{
+    public int TotalRows { get; init; }
+    public int CreatedCount { get; init; }
+    public int FailedCount { get; init; }
+    public List<ImportRowError> Errors { get; init; } = new();
+    public List<AssetDto> CreatedAssets { get; init; } = new();
+}
+
+/// <summary>
+/// Per-row error for a bulk import.
+/// </summary>
+public record ImportRowError
+{
+    public int RowNumber { get; init; }
+    public required string Message { get; init; }
+}
+
+/// <summary>
 /// Alert types for warranty tracking
 /// </summary>
 public enum WarrantyAlertType

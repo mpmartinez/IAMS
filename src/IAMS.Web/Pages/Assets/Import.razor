@@ -1,0 +1,265 @@
+@page "/assets/import"
+@attribute [Authorize(Roles = "Admin,Staff")]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+@inject SnackbarService Snackbar
+
+<PageTitle>Import Assets - IAMS</PageTitle>
+
+<div class="max-w-3xl mx-auto space-y-4 sm:space-y-6">
+    <!-- Header -->
+    <div class="flex items-center gap-3 sm:gap-4">
+        <a href="/assets"
+           class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </a>
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Import Assets</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Bulk-add assets from an Excel file</p>
+        </div>
+    </div>
+
+    <!-- Step 1: download template -->
+    <Card>
+        <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shrink-0">
+                <span class="text-primary-600 dark:text-primary-400 font-bold">1</span>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h2 class="font-semibold text-slate-900 dark:text-white">Download the template</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-3">
+                    Use the template to format your data correctly. Required columns are highlighted in red.
+                </p>
+                <a href="templates/Asset_Upload_Template.xlsx"
+                   download
+                   class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                    </svg>
+                    Download template (.xlsx)
+                </a>
+            </div>
+        </div>
+    </Card>
+
+    <!-- Step 2: upload -->
+    <Card>
+        <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shrink-0">
+                <span class="text-primary-600 dark:text-primary-400 font-bold">2</span>
+            </div>
+            <div class="flex-1 min-w-0 space-y-4">
+                <div>
+                    <h2 class="font-semibold text-slate-900 dark:text-white">Upload the filled template</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        AssetTags are auto-generated. Each row creates one new asset.
+                    </p>
+                </div>
+
+                <FileUpload @ref="_fileUpload"
+                            Accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            HelpText="Excel (.xlsx) up to 10MB"
+                            MaxFileSize="10 * 1024 * 1024"
+                            OnFileChanged="HandleFileChanged"
+                            Error="@_validationError" />
+
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button type="button"
+                            @onclick="UploadAsync"
+                            disabled="@(_selectedFile is null || _uploading)"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base">
+                        @if (_uploading)
+                        {
+                            <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Uploading...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M17 8l-5-5-5 5M12 3v12" />
+                            </svg>
+                            <span>Upload &amp; Import</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </Card>
+
+    <!-- Result -->
+    @if (_result is not null)
+    {
+        <Card>
+            <div class="space-y-4">
+                <div class="flex items-center gap-3">
+                    @if (_result.FailedCount == 0 && _result.CreatedCount > 0)
+                    {
+                        <div class="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
+                            <svg class="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                            <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                    }
+                    <div>
+                        <h2 class="font-semibold text-slate-900 dark:text-white">Import Results</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">
+                            @_result.CreatedCount of @_result.TotalRows row(s) imported successfully.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total</p>
+                        <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">@_result.TotalRows</p>
+                    </div>
+                    <div class="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-4">
+                        <p class="text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Created</p>
+                        <p class="text-2xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">@_result.CreatedCount</p>
+                    </div>
+                    <div class="rounded-xl bg-rose-50 dark:bg-rose-900/20 p-4">
+                        <p class="text-xs text-rose-600 dark:text-rose-400 uppercase tracking-wider">Failed</p>
+                        <p class="text-2xl font-bold text-rose-700 dark:text-rose-300 mt-1">@_result.FailedCount</p>
+                    </div>
+                </div>
+
+                @if (_result.Errors.Any())
+                {
+                    <div class="rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-900/10 overflow-hidden">
+                        <div class="px-4 py-3 border-b border-rose-200 dark:border-rose-900/40">
+                            <h3 class="text-sm font-semibold text-rose-700 dark:text-rose-300">
+                                Errors (@_result.Errors.Count)
+                            </h3>
+                        </div>
+                        <ul class="divide-y divide-rose-200 dark:divide-rose-900/40 max-h-72 overflow-y-auto">
+                            @foreach (var err in _result.Errors)
+                            {
+                                <li class="px-4 py-2.5 text-sm text-rose-700 dark:text-rose-300 flex gap-3">
+                                    <span class="font-mono text-rose-500 dark:text-rose-400 shrink-0">
+                                        Row @err.RowNumber
+                                    </span>
+                                    <span>@err.Message</span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                    <a href="/assets"
+                       class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 text-sm sm:text-base">
+                        View Assets
+                    </a>
+                    <button type="button"
+                            @onclick="Reset"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm sm:text-base">
+                        Import Another File
+                    </button>
+                </div>
+            </div>
+        </Card>
+    }
+</div>
+
+@code {
+    private FileUpload? _fileUpload;
+    private IBrowserFile? _selectedFile;
+    private bool _uploading;
+    private string _validationError = "";
+    private ImportAssetsResultDto? _result;
+
+    private const long MaxFileSize = 10 * 1024 * 1024;
+
+    private void HandleFileChanged(IBrowserFile? file)
+    {
+        _validationError = "";
+        _result = null;
+
+        if (file is null)
+        {
+            _selectedFile = null;
+            return;
+        }
+
+        if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            _validationError = "File must be an .xlsx workbook.";
+            _selectedFile = null;
+            return;
+        }
+
+        if (file.Size > MaxFileSize)
+        {
+            _validationError = "File exceeds the 10MB limit.";
+            _selectedFile = null;
+            return;
+        }
+
+        _selectedFile = file;
+    }
+
+    private async Task UploadAsync()
+    {
+        if (_selectedFile is null || _uploading) return;
+
+        _uploading = true;
+        _validationError = "";
+        _result = null;
+        StateHasChanged();
+
+        try
+        {
+            await using var stream = _selectedFile.OpenReadStream(MaxFileSize);
+            var (result, error) = await Api.ImportAssetsAsync(stream, _selectedFile.Name);
+            _result = result;
+
+            if (error is not null && result is null)
+            {
+                Snackbar.Error(error);
+            }
+            else if (result is not null)
+            {
+                if (result.FailedCount == 0 && result.CreatedCount > 0)
+                    Snackbar.Success($"Imported {result.CreatedCount} asset(s).");
+                else if (result.CreatedCount > 0)
+                    Snackbar.Warning($"Imported {result.CreatedCount} of {result.TotalRows} row(s).");
+                else
+                    Snackbar.Error("No assets were imported. Review the errors below.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Error($"Upload failed: {ex.Message}");
+        }
+        finally
+        {
+            _uploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Reset()
+    {
+        _result = null;
+        _selectedFile = null;
+        _validationError = "";
+        _fileUpload?.Reset();
+    }
+}

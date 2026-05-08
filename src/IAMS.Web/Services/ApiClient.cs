@@ -131,6 +131,28 @@ public class ApiClient(HttpClient http, AuthService authService)
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<(ImportAssetsResultDto? Result, string? Error)> ImportAssetsAsync(Stream fileStream, string fileName)
+    {
+        var client = await GetAuthenticatedClient();
+
+        using var memoryStream = new MemoryStream();
+        await fileStream.CopyToAsync(memoryStream);
+        memoryStream.Position = 0;
+
+        using var content = new MultipartFormDataContent();
+        using var fileContent = new StreamContent(memoryStream);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        content.Add(fileContent, "file", fileName);
+
+        var response = await client.PostAsync("api/assets/import", content);
+        var payload = await response.Content.ReadFromJsonAsync<ApiResponse<ImportAssetsResultDto>>();
+
+        if (!response.IsSuccessStatusCode)
+            return (payload?.Data, payload?.Message ?? $"Import failed (Error {(int)response.StatusCode})");
+
+        return (payload?.Data, null);
+    }
+
     public async Task<string[]?> GetDeviceTypesAsync()
     {
         return await http.GetFromJsonAsync<string[]>("api/assets/device-types");

@@ -12,7 +12,7 @@ namespace IAMS.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : ControllerBase
+public class AssetsController(AppDbContext db, IQrCodeService qrCodeService, IAssetImportService importService) : ControllerBase
 {
     // All authenticated users can view assets
     [HttpGet]
@@ -226,6 +226,37 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService) : C
         await db.SaveChangesAsync();
 
         return Ok(ApiResponse<object>.Ok(null, "Asset deleted successfully"));
+    }
+
+    /// <summary>
+    /// Bulk-import assets from an .xlsx file generated from the IAMS upload template.
+    /// </summary>
+    [HttpPost("import")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanCreateAssets")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<ApiResponse<ImportAssetsResultDto>>> ImportAssets(IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(ApiResponse<ImportAssetsResultDto>.Fail("No file provided."));
+
+        var ext = Path.GetExtension(file.FileName);
+        if (!string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(ApiResponse<ImportAssetsResultDto>.Fail("File must be an .xlsx workbook."));
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var result = await importService.ImportAsync(stream, ct);
+            var message = result.FailedCount == 0
+                ? $"Imported {result.CreatedCount} asset(s)."
+                : $"Imported {result.CreatedCount} of {result.TotalRows} row(s); {result.FailedCount} failed.";
+            return Ok(ApiResponse<ImportAssetsResultDto>.Ok(result, message));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ApiResponse<ImportAssetsResultDto>.Fail($"Could not read workbook: {ex.Message}"));
+        }
     }
 
     [HttpGet("device-types")]

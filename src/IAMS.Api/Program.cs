@@ -97,6 +97,7 @@ builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
+builder.Services.AddScoped<IAssetImportService, AssetImportService>();
 builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
