@@ -66,3 +66,29 @@ window.notificationService = {
         return this.eventSource !== null && this.eventSource.readyState === EventSource.OPEN;
     }
 };
+
+// Web App Badging API — sets a numeric badge on the installed-PWA taskbar/dock icon.
+// Supported in Chromium-based browsers (Chrome, Edge) on Windows/macOS/Android.
+// No-ops silently on browsers without support (Firefox, Safari).
+window.appBadge = {
+    set: function (count) {
+        try {
+            if (!('setAppBadge' in navigator)) return false;
+            const n = Math.max(0, Math.floor(Number(count) || 0));
+            if (n === 0) {
+                navigator.clearAppBadge();
+            } else {
+                navigator.setAppBadge(n);
+            }
+            return true;
+        } catch (e) {
+            console.warn('App badge update failed:', e);
+            return false;
+        }
+    },
+    clear: function () {
+        try {
+            if ('clearAppBadge' in navigator) navigator.clearAppBadge();
+        } catch { /* ignore */ }
+    }
+};

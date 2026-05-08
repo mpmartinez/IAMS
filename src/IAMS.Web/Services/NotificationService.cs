@@ -78,6 +78,7 @@ public class NotificationService : IAsyncDisposable
         try
         {
             await _js.InvokeVoidAsync("notificationService.stop");
+            await _js.InvokeVoidAsync("appBadge.clear");
         }
         catch
         {
@@ -161,8 +162,22 @@ public class NotificationService : IAsyncDisposable
 
     private async Task NotifyChanged()
     {
+        await UpdateAppBadgeAsync();
+
         if (OnNotificationsChanged is not null)
             await OnNotificationsChanged();
+    }
+
+    private async Task UpdateAppBadgeAsync()
+    {
+        try
+        {
+            await _js.InvokeVoidAsync("appBadge.set", _unreadCount);
+        }
+        catch
+        {
+            // Badging API unsupported or JS unavailable — ignore silently.
+        }
     }
 
     public async ValueTask DisposeAsync()
