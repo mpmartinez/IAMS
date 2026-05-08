@@ -54,19 +54,25 @@
                         </select>
                     </div>
 
-                    <div class="mt-4 flex gap-3">
-                        <button @onclick="ViewInventoryReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                    <div class="mt-4 grid grid-cols-3 gap-2">
+                        <button @onclick="ViewInventoryReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
                             Preview
                         </button>
-                        <button @onclick="ExportInventoryReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors text-sm">
+                        <button @onclick="ExportInventoryReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors text-sm">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
-                            Download
+                            CSV
+                        </button>
+                        <button @onclick="ExportInventoryPdf" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            PDF
                         </button>
                     </div>
                 </div>
@@ -99,19 +105,25 @@
                         </select>
                     </div>
 
-                    <div class="mt-4 flex gap-3">
-                        <button @onclick="ViewAssignedByUserReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                    <div class="mt-4 grid grid-cols-3 gap-2">
+                        <button @onclick="ViewAssignedByUserReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
                             Preview
                         </button>
-                        <button @onclick="ExportAssignedByUserReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm">
+                        <button @onclick="ExportAssignedByUserReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
-                            Download
+                            CSV
+                        </button>
+                        <button @onclick="ExportAssignedByUserPdf" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            PDF
                         </button>
                     </div>
                 </div>
@@ -146,19 +158,25 @@
                         </select>
                     </div>
 
-                    <div class="mt-4 flex gap-3">
-                        <button @onclick="ViewWarrantyExpiryReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                    <div class="mt-4 grid grid-cols-3 gap-2">
+                        <button @onclick="ViewWarrantyExpiryReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
                             Preview
                         </button>
-                        <button @onclick="ExportWarrantyExpiryReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors text-sm">
+                        <button @onclick="ExportWarrantyExpiryReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors text-sm">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
-                            Download
+                            CSV
+                        </button>
+                        <button @onclick="ExportWarrantyExpiryPdf" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            PDF
                         </button>
                     </div>
                 </div>
@@ -189,19 +207,25 @@
                         </div>
                     }
 
-                    <div class="mt-4 flex gap-3">
-                        <button @onclick="ViewAssetValueReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                    <div class="mt-4 grid grid-cols-3 gap-2">
+                        <button @onclick="ViewAssetValueReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
                             Preview
                         </button>
-                        <button @onclick="ExportAssetValueReport" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors text-sm">
+                        <button @onclick="ExportAssetValueReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors text-sm">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
-                            Download
+                            CSV
+                        </button>
+                        <button @onclick="ExportAssetValuePdf" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-colors text-sm">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            PDF
                         </button>
                     </div>
                 </div>
@@ -318,10 +342,20 @@
 
     private async Task ExportInventoryReport()
     {
+        await DownloadReport("inventory", BuildInventoryFilters(), pdf: false);
+    }
+
+    private async Task ExportInventoryPdf()
+    {
+        await DownloadReport("inventory", BuildInventoryFilters(), pdf: true);
+    }
+
+    private Dictionary<string, string> BuildInventoryFilters()
+    {
         var filters = new Dictionary<string, string>();
         if (!string.IsNullOrEmpty(_inventoryDeviceType)) filters["deviceType"] = _inventoryDeviceType;
         if (!string.IsNullOrEmpty(_inventoryStatus)) filters["status"] = _inventoryStatus;
-        await DownloadReport("inventory", filters);
+        return filters;
     }
 
     private async Task ViewAssignedByUserReport()
@@ -346,9 +380,19 @@
 
     private async Task ExportAssignedByUserReport()
     {
+        await DownloadReport("assigned-by-user", BuildAssignedByUserFilters(), pdf: false);
+    }
+
+    private async Task ExportAssignedByUserPdf()
+    {
+        await DownloadReport("assigned-by-user", BuildAssignedByUserFilters(), pdf: true);
+    }
+
+    private Dictionary<string, string> BuildAssignedByUserFilters()
+    {
         var filters = new Dictionary<string, string>();
         if (!string.IsNullOrEmpty(_assignedUserId)) filters["userId"] = _assignedUserId;
-        await DownloadReport("assigned-by-user", filters);
+        return filters;
     }
 
     private async Task ViewWarrantyExpiryReport()
@@ -374,10 +418,20 @@
 
     private async Task ExportWarrantyExpiryReport()
     {
+        await DownloadReport("warranty-expiry", BuildWarrantyFilters(), pdf: false);
+    }
+
+    private async Task ExportWarrantyExpiryPdf()
+    {
+        await DownloadReport("warranty-expiry", BuildWarrantyFilters(), pdf: true);
+    }
+
+    private Dictionary<string, string> BuildWarrantyFilters()
+    {
         var filters = new Dictionary<string, string>();
         if (!string.IsNullOrEmpty(_warrantyStatus)) filters["warrantyStatus"] = _warrantyStatus;
         if (!string.IsNullOrEmpty(_warrantyDaysThreshold)) filters["daysThreshold"] = _warrantyDaysThreshold;
-        await DownloadReport("warranty-expiry", filters);
+        return filters;
     }
 
     private async Task ViewAssetValueReport()
@@ -441,7 +495,12 @@
 
     private async Task ExportAssetValueReport()
     {
-        await DownloadReport("asset-value", null);
+        await DownloadReport("asset-value", null, pdf: false);
+    }
+
+    private async Task ExportAssetValuePdf()
+    {
+        await DownloadReport("asset-value", null, pdf: true);
     }
 
     private RenderFragment BuildTablePreview<T>(List<T> data, string[] headers, Func<T, object[]> rowMapper) => @<div>
@@ -482,9 +541,11 @@
         _previewContent = null;
     }
 
-    private async Task DownloadReport(string reportType, Dictionary<string, string>? filters)
+    private async Task DownloadReport(string reportType, Dictionary<string, string>? filters, bool pdf)
     {
-        var url = Api.GetReportExportUrl(reportType, filters);
+        var url = pdf
+            ? Api.GetReportPdfUrl(reportType, filters)
+            : Api.GetReportExportUrl(reportType, filters);
         var token = await AuthService.GetTokenAsync();
         var baseUrl = (Configuration["ApiBaseUrl"] ?? "https://localhost:5021").TrimEnd('/');
         await JS.InvokeVoidAsync("downloadWithAuth", $"{baseUrl}/{url}", token);

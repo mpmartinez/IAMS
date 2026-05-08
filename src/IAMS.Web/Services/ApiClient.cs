@@ -352,14 +352,20 @@ public class ApiClient(HttpClient http, AuthService authService)
     }
 
     public string GetReportExportUrl(string reportType, Dictionary<string, string>? filters = null)
+        => BuildReportUrl(reportType, "export", filters);
+
+    public string GetReportPdfUrl(string reportType, Dictionary<string, string>? filters = null)
+        => BuildReportUrl(reportType, "pdf", filters);
+
+    private static string BuildReportUrl(string reportType, string segment, Dictionary<string, string>? filters)
     {
-        var baseUrl = $"api/reports/{reportType}/export";
+        var url = $"api/reports/{reportType}/{segment}";
         if (filters != null && filters.Count > 0)
         {
             var queryParams = filters.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}");
-            baseUrl += "?" + string.Join("&", queryParams);
+            url += "?" + string.Join("&", queryParams);
         }
-        return baseUrl;
+        return url;
     }
 
     // QR Code API

@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
+using IAMS.Api.Services;
 using IAMS.Shared.DTOs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -14,7 +15,7 @@ namespace IAMS.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewReports")]
-public class ReportsController(AppDbContext db) : ControllerBase
+public class ReportsController(AppDbContext db, IPdfReportService pdf) : ControllerBase
 {
     private string CurrentUserName => User.FindFirstValue(ClaimTypes.Name) ?? "Unknown";
 
@@ -407,6 +408,216 @@ public class ReportsController(AppDbContext db) : ControllerBase
         var fileName = $"Asset Value {DateTime.UtcNow:yyyy-MM-dd}.csv";
 
         return File(Encoding.UTF8.GetBytes(csv), "text/csv", fileName);
+    }
+
+    /// <summary>
+    /// Export asset inventory report as PDF
+    /// </summary>
+    [HttpGet("inventory/pdf")]
+    public async Task<IActionResult> ExportInventoryPdf(
+        [FromQuery] string? deviceType = null,
+        [FromQuery] string? status = null)
+    {
+        var query = db.Assets
+            .Include(a => a.AssignedToUser)
+            .AsQueryable();
+
+        if (!string.IsNullOrEmpty(deviceType))
+            query = query.Where(a => a.DeviceType == deviceType);
+
+        if (!string.IsNullOrEmpty(status))
+            query = query.Where(a => a.Status.ToString() == status);
+
+        var data = await query
+            .OrderBy(a => a.AssetTag)
+            .Select(a => new AssetInventoryReportRow
+            {
+                AssetTag = a.AssetTag,
+                DeviceType = a.DeviceType,
+                Manufacturer = a.Manufacturer,
+                Model = a.Model,
+                SerialNumber = a.SerialNumber,
+                Status = a.Status.ToString(),
+                AssignedTo = a.AssignedToUser != null ? a.AssignedToUser.FullName : null,
+                Location = a.Location,
+                PurchasePrice = a.PurchasePrice,
+                Currency = a.Currency,
+                PurchaseDate = a.PurchaseDate,
+                WarrantyEndDate = a.WarrantyEndDate,
+                CreatedAt = a.CreatedAt
+            })
+            .ToListAsync();
+
+        var bytes = pdf.BuildInventoryPdf(data, deviceType, status);
+        var fileName = $"Asset Inventory {DateTime.UtcNow:yyyy-MM-dd}.pdf";
+        return File(bytes, "application/pdf", fileName);
+    }
+
+    /// <summary>
+    /// Export assigned assets by user report as PDF
+    /// </summary>
+    [HttpGet("assigned-by-user/pdf")]
+    public async Task<IActionResult> ExportAssignedByUserPdf(
+        [FromQuery] string? userId = null)
+    {
+        var query = db.Assets
+            .Include(a => a.AssignedToUser)
+            .Where(a => a.AssignedToUserId != null);
+
+        if (!string.IsNullOrEmpty(userId))
+            query = query.Where(a => a.AssignedToUserId == userId);
+
+        var data = await query
+            .OrderBy(a => a.AssignedToUser!.FullName)
+            .ThenBy(a => a.AssetTag)
+            .Select(a => new AssignedAssetsByUserReportRow
+            {
+                UserName = a.AssignedToUser!.FullName,
+                Department = a.AssignedToUser.Department,
+                AssetTag = a.AssetTag,
+                DeviceType = a.DeviceType,
+                Manufacturer = a.Manufacturer,
+                Model = a.Model,
+                SerialNumber = a.SerialNumber,
+                AssignedDate = a.UpdatedAt,
+                PurchasePrice = a.PurchasePrice,
+                Currency = a.Currency
+            })
+            .ToListAsync();
+
+        var userName = !string.IsNullOrEmpty(userId) ? data.FirstOrDefault()?.UserName : null;
+        var bytes = pdf.BuildAssignedByUserPdf(data, userName);
+        var fileName = $"Assigned Assets by User {DateTime.UtcNow:yyyy-MM-dd}.pdf";
+        return File(bytes, "application/pdf", fileName);
+    }
+
+    /// <summary>
+    /// Export warranty expiry report as PDF
+    /// </summary>
+    [HttpGet("warranty-expiry/pdf")]
+    public async Task<IActionResult> ExportWarrantyExpiryPdf(
+        [FromQuery] string? warrantyStatus = null,
+        [FromQuery] int? daysThreshold = null)
+    {
+        var today = DateTime.UtcNow.Date;
+
+        var query = db.Assets
+            .Include(a => a.AssignedToUser)
+            .Where(a => a.WarrantyEndDate.HasValue);
+
+        if (!string.IsNullOrEmpty(warrantyStatus))
+        {
+            query = warrantyStatus.ToLower() switch
+            {
+                "expired" => query.Where(a => a.WarrantyEndDate!.Value < today),
+                "expiring" => query.Where(a => a.WarrantyEndDate!.Value >= today && a.WarrantyEndDate!.Value <= today.AddDays(90)),
+                "active" => query.Where(a => a.WarrantyEndDate!.Value > today.AddDays(90)),
+                _ => query
+            };
+        }
+
+        if (daysThreshold.HasValue)
+        {
+            var thresholdDate = today.AddDays(daysThreshold.Value);
+            query = query.Where(a => a.WarrantyEndDate!.Value <= thresholdDate);
+        }
+
+        var assets = await query
+            .OrderBy(a => a.WarrantyEndDate)
+            .ToListAsync();
+
+        var data = assets.Select(a =>
+        {
+            var daysRemaining = (int)(a.WarrantyEndDate!.Value.Date - today).TotalDays;
+            var rowStatus = daysRemaining < 0 ? "Expired" :
+                            daysRemaining <= 90 ? "Expiring" : "Active";
+
+            return new WarrantyExpiryReportRow
+            {
+                AssetTag = a.AssetTag,
+                DeviceType = a.DeviceType,
+                Manufacturer = a.Manufacturer,
+                Model = a.Model,
+                WarrantyProvider = a.WarrantyProvider,
+                WarrantyStartDate = a.WarrantyStartDate,
+                WarrantyEndDate = a.WarrantyEndDate!.Value,
+                DaysRemaining = daysRemaining,
+                WarrantyStatus = rowStatus,
+                AssignedTo = a.AssignedToUser?.FullName,
+                Location = a.Location
+            };
+        }).ToList();
+
+        var bytes = pdf.BuildWarrantyExpiryPdf(data, warrantyStatus, daysThreshold);
+        var fileName = $"Warranty Expiry {DateTime.UtcNow:yyyy-MM-dd}.pdf";
+        return File(bytes, "application/pdf", fileName);
+    }
+
+    /// <summary>
+    /// Export asset value report as PDF
+    /// </summary>
+    [HttpGet("asset-value/pdf")]
+    public async Task<IActionResult> ExportAssetValuePdf()
+    {
+        var assets = await db.Assets
+            .Where(a => a.Status != AssetStatus.Retired && a.Status != AssetStatus.Lost)
+            .Select(a => new
+            {
+                a.DeviceType,
+                a.Status,
+                a.PurchasePrice,
+                a.Currency
+            })
+            .ToListAsync();
+
+        var totalValue = assets.Sum(a => a.PurchasePrice ?? 0);
+        var totalCount = assets.Count;
+        var avgValue = totalCount > 0 ? totalValue / totalCount : 0;
+
+        var primaryCurrency = assets
+            .Where(a => !string.IsNullOrEmpty(a.Currency))
+            .GroupBy(a => a.Currency)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .FirstOrDefault() ?? "USD";
+
+        var byDeviceType = assets
+            .GroupBy(a => a.DeviceType)
+            .Select(g => new AssetValueReportRow
+            {
+                DeviceType = g.Key,
+                AssetCount = g.Count(),
+                TotalValue = g.Sum(a => a.PurchasePrice ?? 0),
+                AverageValue = g.Count() > 0 ? g.Sum(a => a.PurchasePrice ?? 0) / g.Count() : 0,
+                Currency = primaryCurrency
+            })
+            .OrderByDescending(x => x.TotalValue)
+            .ToList();
+
+        var byStatus = assets
+            .GroupBy(a => a.Status.ToString())
+            .Select(g => new AssetValueByStatusDto
+            {
+                Status = g.Key,
+                AssetCount = g.Count(),
+                TotalValue = g.Sum(a => a.PurchasePrice ?? 0)
+            })
+            .OrderByDescending(x => x.TotalValue)
+            .ToList();
+
+        var summary = new AssetValueSummaryDto
+        {
+            GrandTotalValue = totalValue,
+            TotalAssetCount = totalCount,
+            AverageAssetValue = avgValue,
+            PrimaryCurrency = primaryCurrency,
+            ByDeviceType = byDeviceType,
+            ByStatus = byStatus
+        };
+
+        var bytes = pdf.BuildAssetValuePdf(summary);
+        var fileName = $"Asset Value {DateTime.UtcNow:yyyy-MM-dd}.pdf";
+        return File(bytes, "application/pdf", fileName);
     }
 
     // CSV Generation Methods
