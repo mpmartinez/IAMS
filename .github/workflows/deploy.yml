@@ -60,6 +60,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Setup SSH key
@@ -76,5 +79,9 @@ jobs:
           ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && printf 'SMTP_HOST=${{ secrets.SMTP_HOST }}\nSMTP_PORT=${{ secrets.SMTP_PORT }}\nSMTP_USERNAME=${{ secrets.SMTP_USERNAME }}\nSMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}\nSMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }}\nSMTP_FROM_NAME=${{ secrets.SMTP_FROM_NAME }}\nAPP_WEB_URL=${{ secrets.APP_WEB_URL }}\n' > .env"
 
       - name: Deploy to server
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_OWNER: ${{ github.repository_owner }}
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ secrets.GHCR_USER }} --password-stdin && docker pull ghcr.io/${{ secrets.GHCR_USER }}/iams-api:latest && docker pull ghcr.io/${{ secrets.GHCR_USER }}/iams-web:latest && docker compose -f docker-compose.prod.yml down && docker compose -f docker-compose.prod.yml up -d && docker image prune -f"
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && echo $GHCR_TOKEN | docker login ghcr.io -u $GHCR_USER --password-stdin && docker pull ghcr.io/$GHCR_OWNER/iams-api:latest && docker pull ghcr.io/$GHCR_OWNER/iams-web:latest && docker compose -f docker-compose.prod.yml down && docker compose -f docker-compose.prod.yml up -d && docker image prune -f"
