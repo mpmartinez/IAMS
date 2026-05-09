@@ -1,4 +1,5 @@
 @inject NavigationManager Navigation
+@implements IDisposable
 
 <a href="@Href" class="@LinkClasses" @onclick="OnClick">
     @switch (Icon)
@@ -71,8 +72,37 @@
     [Parameter] public int BadgeCount { get; set; }
     [Parameter] public EventCallback OnNavigation { get; set; }
 
-    private bool IsActive => Navigation.Uri.EndsWith(Href) ||
-        (Href != "/" && Navigation.Uri.Contains(Href));
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    private bool IsActive
+    {
+        get
+        {
+            // Path is "" for root, "assets", "assets/5", "admin/tenants", etc. (no leading slash)
+            var currentPath = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).TrimEnd('/');
+            var target = Href.TrimEnd('/');
+            if (target.Length == 0) target = "/";
+
+            if (target == "/")
+                return currentPath == "/";
+
+            return currentPath == target ||
+                   currentPath.StartsWith(target + "/", StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     private string LinkClasses => IsActive
         ? "flex items-center gap-3 px-3 py-2.5 rounded-xl text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 font-medium transition-all duration-200"
