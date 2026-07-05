@@ -40,6 +40,12 @@ services:
     volumes:
       - iams-data:/app/data
       - iams-uploads:/app/Uploads
+    # The image's built-in HEALTHCHECK runs `curl -f /health`, but curl isn't in the
+    # aspnet runtime image, so the check always fails and the container is marked
+    # "unhealthy" — and Dokploy's Traefik then won't route to it. The app is fine;
+    # disable the broken check (Traefik does its own liveness routing).
+    healthcheck:
+      disable: true
     networks:
       - dokploy-network
     labels:
