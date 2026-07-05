@@ -189,6 +189,10 @@ window.iamsOffline = {
         return actions.length;
     },
 
+    updatePendingAction: async function(action) {
+        return await putInStore(STORES.pendingActions, action);
+    },
+
     markActionSynced: async function(id) {
         const action = await getFromStore(STORES.pendingActions, id);
         if (action) {
