@@ -93,6 +93,12 @@ public class OfflineStorageService : IAsyncDisposable
         return await _js.InvokeAsync<int>("iamsOffline.getPendingActionCount");
     }
 
+    public async Task UpdatePendingActionAsync(PendingAction action)
+    {
+        await InitializeAsync();
+        await _js.InvokeVoidAsync("iamsOffline.updatePendingAction", action);
+    }
+
     public async Task MarkActionSyncedAsync(int id)
     {
         await InitializeAsync();

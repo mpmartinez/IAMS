@@ -182,6 +182,11 @@ public class SyncService : IAsyncDisposable
                         action.ErrorMessage = "Max retries exceeded";
                         await _offlineStorage.MarkActionSyncedAsync(action.Id); // Mark as synced to stop retrying
                     }
+                    else
+                    {
+                        // Persist the incremented retry count so the cap is reached on future syncs
+                        await _offlineStorage.UpdatePendingActionAsync(action);
+                    }
                 }
 
                 if (OnPendingCountChanged != null)
@@ -195,6 +200,16 @@ public class SyncService : IAsyncDisposable
                 _logger.LogError(ex, "Failed to sync action {ActionId}", action.Id);
                 action.ErrorMessage = ex.Message;
                 action.RetryCount++;
+
+                // Persist so a permanently-failing action reaches the retry cap and stops requeuing
+                if (action.RetryCount >= 3)
+                {
+                    await _offlineStorage.MarkActionSyncedAsync(action.Id);
+                }
+                else
+                {
+                    await _offlineStorage.UpdatePendingActionAsync(action);
+                }
             }
         }
     }
