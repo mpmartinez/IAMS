@@ -1,0 +1,87 @@
+# IAMS (Integrated Asset Management System) — Dokploy stack for the Hetzner box.
+#
+# ─── Setup in Dokploy ─────────────────────────────────────────────────────────
+#  1. Create a "Compose" service pointing at this file (docker-compose.dokploy.yml).
+#  2. In the Environment tab set: JWT_KEY, SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD,
+#     SMTP_FROM_EMAIL (copy from your current DO .env / secrets).
+#  3. Deploy. Then copy the existing SQLite db + uploads from the DO droplet into
+#     this stack's volumes (iams-data, iams-uploads) — see the migration runbook.
+#  4. Point iams.m2netsolutions.com DNS at the Hetzner box → Traefik issues the cert.
+#
+# ─── Routing ──────────────────────────────────────────────────────────────────
+#  Traefik terminates TLS for iams.m2netsolutions.com and splits by path:
+#    /api + /health  -> api  (port 5000, higher priority)
+#    everything else -> web  (nginx serving the Blazor WASM on plain HTTP)
+#
+# ─── Data ─────────────────────────────────────────────────────────────────────
+#  The app's data is a SQLite file at /app/data/iams.db (volume iams-data) plus
+#  uploads at /app/Uploads (volume iams-uploads). These MUST be seeded from the
+#  DO droplet's copies or the app starts empty.
+services:
+  iams-api:
+    image: ghcr.io/mpmartinez/iams-api:latest
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5000
+      ConnectionStrings__DefaultConnection: Data Source=/app/data/iams.db
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: IAMS
+      Jwt__Audience: IAMS
+      Cors__AllowedOrigins__0: https://iams.m2netsolutions.com
+      Smtp__Host: ${SMTP_HOST}
+      Smtp__Port: ${SMTP_PORT:-2525}
+      Smtp__Username: ${SMTP_USERNAME}
+      Smtp__Password: ${SMTP_PASSWORD}
+      Smtp__FromEmail: ${SMTP_FROM_EMAIL}
+      Smtp__FromName: ${SMTP_FROM_NAME:-IAMS}
+      App__WebUrl: https://iams.m2netsolutions.com
+    volumes:
+      - iams-data:/app/data
+      - iams-uploads:/app/Uploads
+    networks:
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dokploy-network"
+      - "traefik.http.routers.iams-api.rule=Host(`iams.m2netsolutions.com`) && (PathPrefix(`/api`) || PathPrefix(`/health`))"
+      - "traefik.http.routers.iams-api.entrypoints=websecure"
+      - "traefik.http.routers.iams-api.tls=true"
+      - "traefik.http.routers.iams-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.iams-api.priority=100"
+      - "traefik.http.services.iams-api.loadbalancer.server.port=5000"
+
+  iams-web:
+    image: ghcr.io/mpmartinez/iams-web:latest
+    pull_policy: always
+    restart: unless-stopped
+    volumes:
+      - ./nginx.dokploy.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - iams-api
+    networks:
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dokploy-network"
+      - "traefik.http.middlewares.iams-compress.compress=true"
+      - "traefik.http.routers.iams-web.rule=Host(`iams.m2netsolutions.com`)"
+      - "traefik.http.routers.iams-web.entrypoints=websecure"
+      - "traefik.http.routers.iams-web.tls=true"
+      - "traefik.http.routers.iams-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.iams-web.priority=10"
+      - "traefik.http.routers.iams-web.middlewares=iams-compress"
+      - "traefik.http.services.iams-web.loadbalancer.server.port=80"
+      - "traefik.http.routers.iams-web-http.rule=Host(`iams.m2netsolutions.com`)"
+      - "traefik.http.routers.iams-web-http.entrypoints=web"
+      - "traefik.http.routers.iams-web-http.middlewares=iams-redirect"
+      - "traefik.http.middlewares.iams-redirect.redirectscheme.scheme=https"
+
+volumes:
+  iams-data:
+  iams-uploads:
+
+networks:
+  dokploy-network:
+    external: true
