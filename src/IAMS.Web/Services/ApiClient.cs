@@ -492,6 +492,65 @@ public class ApiClient(HttpClient http, AuthService authService)
         return (true, result?.Data, null);
     }
 
+    public async Task<(bool Success, TicketAttachmentDto? Attachment, string? Error)> UploadTicketAttachmentAsync(
+        int ticketId,
+        Stream fileStream,
+        string fileName,
+        string contentType,
+        string category,
+        string? description = null)
+    {
+        var client = await GetAuthenticatedClient();
+
+        // Buffer the stream to handle mobile browser stream issues
+        using var memoryStream = new MemoryStream();
+        await fileStream.CopyToAsync(memoryStream);
+        memoryStream.Position = 0;
+
+        using var content = new MultipartFormDataContent();
+        using var fileContent = new StreamContent(memoryStream);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+
+        content.Add(fileContent, "file", fileName);
+        content.Add(new StringContent(category), "category");
+        if (!string.IsNullOrEmpty(description))
+            content.Add(new StringContent(description), "description");
+
+        var response = await client.PostAsync($"api/tickets/{ticketId}/attachments", content);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+
+            if (!string.IsNullOrEmpty(errorContent) && errorContent.TrimStart().StartsWith('{'))
+            {
+                try
+                {
+                    var error = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<object>>(errorContent);
+                    return (false, null, error?.Message ?? "Failed to upload attachment");
+                }
+                catch
+                {
+                    // JSON parsing failed, fall through to status code handling
+                }
+            }
+
+            var statusError = response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.RequestEntityTooLarge => "File size exceeds the server limit",
+                System.Net.HttpStatusCode.Unauthorized => "Session expired. Please log in again",
+                System.Net.HttpStatusCode.Forbidden => "You don't have permission to upload files",
+                System.Net.HttpStatusCode.NotFound => "Ticket not found",
+                System.Net.HttpStatusCode.BadRequest => "Invalid file or request",
+                _ => $"Upload failed (Error {(int)response.StatusCode})"
+            };
+            return (false, null, statusError);
+        }
+
+        var uploadResult = await response.Content.ReadFromJsonAsync<ApiResponse<TicketAttachmentDto>>();
+        return (true, uploadResult?.Data, null);
+    }
+
     // QR Code API
     public async Task<string?> GetAssetQrCodeBase64Async(int assetId, int size = 15, bool tagOnly = true)
     {
