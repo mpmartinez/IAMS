@@ -1,4 +1,5 @@
 @page "/tickets/{Id:int}"
+@using IAMS.Web.Components.UI
 @attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Navigation
@@ -25,13 +26,13 @@
 }
 else if (_ticket is null)
 {
-    <Card>
+    <IAMS.Web.Components.UI.Card Class="p-6">
         <EmptyState Title="Ticket not found" Description="The ticket you're looking for doesn't exist or you don't have access to it.">
             <a href="@BackHref" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
                 @BackLabel
             </a>
         </EmptyState>
-    </Card>
+    </IAMS.Web.Components.UI.Card>
 }
 else
 {
@@ -47,9 +48,9 @@ else
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-3 flex-wrap">
                         <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white truncate">@_ticket.Title</h1>
-                        <Badge Text="@GetTypeLabel(_ticket.Type)" Variant="@_ticket.Type" />
-                        <Badge Text="@_ticket.Priority" Variant="@_ticket.Priority" />
-                        <Badge Text="@GetStatusLabel(_ticket.Status)" Variant="@_ticket.Status" />
+                        <IAMS.Web.Components.UI.Badge Variant="@_ticket.Type">@GetTypeLabel(_ticket.Type)</IAMS.Web.Components.UI.Badge>
+                        <IAMS.Web.Components.UI.Badge Variant="@_ticket.Priority">@_ticket.Priority</IAMS.Web.Components.UI.Badge>
+                        <IAMS.Web.Components.UI.Badge Variant="@_ticket.Status">@GetStatusLabel(_ticket.Status)</IAMS.Web.Components.UI.Badge>
                     </div>
                     <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 font-mono">@_ticket.Reference</p>
                 </div>
@@ -60,7 +61,11 @@ else
             <!-- Main Column -->
             <div class="lg:col-span-2 space-y-4 sm:space-y-6">
                 <!-- Description -->
-                <Card Title="Description">
+                <IAMS.Web.Components.UI.Card>
+                    <CardHeader>
+                        <CardTitle>Description</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                     @if (!string.IsNullOrWhiteSpace(_ticket.Description))
                     {
                         <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-sm">@_ticket.Description</p>
@@ -69,11 +74,15 @@ else
                     {
                         <p class="text-sm text-slate-400 dark:text-slate-500">No description provided.</p>
                     }
-                </Card>
+                    </CardContent>
+                </IAMS.Web.Components.UI.Card>
 
                 <!-- Activity -->
-                <Card Title="Activity">
-                    <ChildContent>
+                <IAMS.Web.Components.UI.Card>
+                    <CardHeader>
+                        <CardTitle>Activity</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                         <div class="space-y-4">
                             @if (_ticket.Comments.Count == 0)
                             {
@@ -106,24 +115,28 @@ else
                                       class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
                             <div class="flex flex-col sm:flex-row gap-2 sm:justify-end">
                                 <AuthorizeView Roles="Admin,Staff">
-                                    <Button Variant="outline" OnClick="() => SubmitComment(true)" Loading="@_submittingInternal" Disabled="@(string.IsNullOrWhiteSpace(_commentBody) || _submittingReply)">
+                                    <IAMS.Web.Components.UI.Button Variant="outline" OnClick="() => SubmitComment(true)" Loading="@_submittingInternal" Disabled="@(string.IsNullOrWhiteSpace(_commentBody) || _submittingReply)">
                                         Add Internal Note
-                                    </Button>
+                                    </IAMS.Web.Components.UI.Button>
                                 </AuthorizeView>
-                                <Button Variant="primary" OnClick="() => SubmitComment(false)" Loading="@_submittingReply" Disabled="@(string.IsNullOrWhiteSpace(_commentBody) || _submittingInternal)">
+                                <IAMS.Web.Components.UI.Button Variant="primary" OnClick="() => SubmitComment(false)" Loading="@_submittingReply" Disabled="@(string.IsNullOrWhiteSpace(_commentBody) || _submittingInternal)">
                                     @(_isStaff ? "Reply to Requester" : "Send Reply")
-                                </Button>
+                                </IAMS.Web.Components.UI.Button>
                             </div>
                         </div>
-                    </ChildContent>
-                </Card>
+                    </CardContent>
+                </IAMS.Web.Components.UI.Card>
             </div>
 
             <!-- Sidebar -->
             <div class="space-y-4 sm:space-y-6">
                 @if (_ticket.AssetId.HasValue)
                 {
-                    <Card Title="Linked Asset">
+                    <IAMS.Web.Components.UI.Card>
+                        <CardHeader>
+                            <CardTitle>Linked Asset</CardTitle>
+                        </CardHeader>
+                        <CardContent>
                         <div class="space-y-4">
                             <DetailItem Label="Asset Tag" Value="@(_ticket.AssetTag ?? "-")" />
                             <DetailItem Label="Device" Value="@(_ticket.AssetName ?? "-")" />
@@ -136,11 +149,16 @@ else
                                 </svg>
                             </a>
                         </div>
-                    </Card>
+                        </CardContent>
+                    </IAMS.Web.Components.UI.Card>
                 }
 
                 <AuthorizeView Roles="Admin,Staff">
-                    <Card Title="Actions">
+                    <IAMS.Web.Components.UI.Card>
+                        <CardHeader>
+                            <CardTitle>Actions</CardTitle>
+                        </CardHeader>
+                        <CardContent>
                         <div class="space-y-2">
                             @if (CanAssignToMe)
                             {
@@ -184,10 +202,15 @@ else
                                 <p class="text-sm text-slate-400 dark:text-slate-500 text-center py-2">No actions available</p>
                             }
                         </div>
-                    </Card>
+                        </CardContent>
+                    </IAMS.Web.Components.UI.Card>
                 </AuthorizeView>
 
-                <Card Title="Details">
+                <IAMS.Web.Components.UI.Card>
+                    <CardHeader>
+                        <CardTitle>Details</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                     <div class="space-y-3 text-sm">
                         <div class="flex justify-between gap-2">
                             <span class="text-slate-500 dark:text-slate-400">Requester</span>
@@ -223,13 +246,19 @@ else
                             </div>
                         }
                     </div>
-                </Card>
+                    </CardContent>
+                </IAMS.Web.Components.UI.Card>
 
                 @if (!string.IsNullOrWhiteSpace(_ticket.Resolution))
                 {
-                    <Card Title="Resolution">
-                        <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-sm">@_ticket.Resolution</p>
-                    </Card>
+                    <IAMS.Web.Components.UI.Card>
+                        <CardHeader>
+                            <CardTitle>Resolution</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-sm">@_ticket.Resolution</p>
+                        </CardContent>
+                    </IAMS.Web.Components.UI.Card>
                 }
             </div>
         </div>
@@ -251,8 +280,8 @@ else
             </div>
         </ChildContent>
         <FooterContent>
-            <Button Variant="ghost" OnClick="HideResolveModal">Cancel</Button>
-            <Button OnClick="ConfirmResolve" Loading="@_resolving" Disabled="@string.IsNullOrWhiteSpace(_resolutionText)">Resolve</Button>
+            <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="HideResolveModal">Cancel</IAMS.Web.Components.UI.Button>
+            <IAMS.Web.Components.UI.Button OnClick="ConfirmResolve" Loading="@_resolving" Disabled="@string.IsNullOrWhiteSpace(_resolutionText)">Resolve</IAMS.Web.Components.UI.Button>
         </FooterContent>
     </Modal>
 }
