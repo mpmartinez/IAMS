@@ -57,45 +57,37 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Dokploy owns the deployment. It clones this repo into
+  # /etc/dokploy/compose/iams-iams-qjvalq/code/ and runs docker-compose.dokploy.yml,
+  # whose services pull ghcr.io/<owner>/iams-{api,web}:latest with pull_policy: always.
+  # So all this job has to do is tell Dokploy that fresh images exist.
+  #
+  # This replaces an SSH-based deploy left over from DigitalOcean, which cd'd into a
+  # directory and ran `docker compose -f docker-compose.prod.yml up -d` by hand. On a
+  # Dokploy box that starts containers Dokploy does not manage and writes a .env it may
+  # overwrite - two deploy systems fighting over the same directory. It also needed five
+  # secrets (DO_SSH_KEY_B64, DO_HOST, DO_USERNAME, DO_PROJECT_PATH and the app config),
+  # none of which are required any more and all of which can be deleted.
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
 
     steps:
-      - name: Setup SSH key
+      - name: Trigger Dokploy redeploy
+        env:
+          WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
         run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
-
-          # Diagnostics. A fingerprint is not a secret - it is the public identity of the
-          # key, which is exactly what the server checks against authorized_keys. If the
-          # line below does not match `ssh-keygen -lf ~/.ssh/github_actions.pub` on your
-          # machine, the DO_SSH_KEY_B64 secret holds the wrong key.
-          echo "--- decoded key ---"
-          if ssh-keygen -y -f ~/.ssh/deploy_key > /tmp/derived.pub 2>/dev/null; then
-            ssh-keygen -lf /tmp/derived.pub
-          else
-            echo "FAILED TO PARSE: the decoded file is not a valid OpenSSH private key."
-            echo "First line of what was decoded:"
-            head -c 40 ~/.ssh/deploy_key; echo
+          if [ -z "$WEBHOOK" ]; then
+            echo "::error::DOKPLOY_DEPLOY_WEBHOOK is not set."
+            echo "Get it from the Dokploy UI: open the IAMS compose service, then"
+            echo "Deployments -> Webhook URL, and save it as a repository secret."
+            echo "The images for this commit are already in GHCR, so until then you can"
+            echo "deploy by clicking Redeploy in Dokploy."
+            exit 1
           fi
-        env:
-          SSH_KEY_B64: ${{ secrets.DO_SSH_KEY_B64 }}
 
-      - name: Create .env file on server
-        run: |
-          ssh -v -o IdentitiesOnly=yes -o PasswordAuthentication=no \
-            -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && printf 'DATABASE_CONNECTION=${{ secrets.DATABASE_CONNECTION }}\nJWT_KEY=${{ secrets.JWT_KEY }}\nSMTP_HOST=${{ secrets.SMTP_HOST }}\nSMTP_PORT=${{ secrets.SMTP_PORT }}\nSMTP_USERNAME=${{ secrets.SMTP_USERNAME }}\nSMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}\nSMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }}\nSMTP_FROM_NAME=${{ secrets.SMTP_FROM_NAME }}\nAPP_WEB_URL=${{ secrets.APP_WEB_URL }}\n' > .env"
-
-      - name: Deploy to server
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GHCR_USER: ${{ github.actor }}
-          GHCR_OWNER: ${{ github.repository_owner }}
-        run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && echo $GHCR_TOKEN | docker login ghcr.io -u $GHCR_USER --password-stdin && docker pull ghcr.io/$GHCR_OWNER/iams-api:latest && docker pull ghcr.io/$GHCR_OWNER/iams-web:latest && docker compose -f docker-compose.prod.yml down && docker compose -f docker-compose.prod.yml up -d && docker image prune -f"
+          # --fail so an HTTP error is a failed job rather than a silent success.
+          curl --fail --silent --show-error --location --request POST "$WEBHOOK"
+          echo
+          echo "Redeploy triggered. Dokploy pulls :latest, so watch the API container's"
+          echo "logs there - the database migration runs on startup."
