@@ -1071,21 +1071,35 @@ cd src/IAMS.Api && dotnet ef migrations script --idempotent --output ../../artif
 Run: `grep -iE "DROP TABLE|ALTER TABLE .Maintenances. RENAME" artifacts/tickets-migration.sql`
 Expected: an `ALTER TABLE "Maintenances" RENAME TO "Tickets"` line and **no** `DROP TABLE "Maintenances"`. If a drop appears, the `Up` body was not fully replaced.
 
-- [ ] **Step 4: Apply it to a scratch database and confirm data survives**
+- [ ] **Step 4: Verify the model round-trips, without touching any database**
 
-Point `ConnectionStrings:DefaultConnection` at a scratch Postgres database that already has maintenance rows, then:
+**Do not run `dotnet ef database update`.** `ConnectionStrings:DefaultConnection` resolves
+from user secrets to the live Neon database; applying a table-rename migration to it is a
+destructive, hard-to-reverse action and is the repository owner's call, not this task's.
+Generating a migration and scripting it are both offline operations and safe — `migrations
+add` and `migrations script` only read the model.
+
+Verify by inspection instead:
+
+1. The generated `Up` renames and never drops (the grep in Step 3).
+2. `dotnet build` succeeds, so the migration compiles against the model.
+3. The migration and the model agree — after adding the migration, run:
 
 ```bash
-cd src/IAMS.Api && dotnet ef database update
+cd src/IAMS.Api && dotnet ef migrations add VerifyNoPendingChanges --dry-run
 ```
 
-Expected: completes without error. Then confirm no ticket lost its number:
+If EF reports further pending model changes, the migration is incomplete: something in
+`OnModelCreating` is not represented. Fix the migration and re-check. If `--dry-run` is
+unavailable on this EF version, add a throwaway migration, confirm its `Up` body is empty,
+then remove it with `dotnet ef migrations remove`.
 
-```bash
-psql "$SCRATCH_CONNECTION" -c 'SELECT count(*) FROM "Tickets" WHERE "TicketNumber" = 0;'
-```
+4. Read the emitted SQL in `artifacts/tickets-migration.sql` and confirm by eye: the two
+   `ALTER TABLE ... RENAME TO` statements, the four column renames (including `CreatedAt`
+   to `UploadedAt`), the status remap `UPDATE`s, and the `TicketNumber` backfill.
 
-Expected: `0`.
+Applying the migration to a real database is a separate, human-run step after this plan's
+work is reviewed.
 
 - [ ] **Step 5: Commit**
 
