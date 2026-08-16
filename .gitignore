@@ -417,3 +417,18 @@ FodyWeavers.xsd
 *.msm
 *.msp
 .superpowers/
+
+# Local dev leftovers, not build output
+# SQLite database from before the PostgreSQL move. Nothing references it any more;
+# the API is Postgres-only and the test project uses SQLite in-memory.
+iams.db
+*.db-shm
+*.db-wal
+
+# User-uploaded attachment files. In production these live in the iams-uploads volume,
+# never in the repo - and they are unrecoverable if lost, so they need their own backup.
+src/IAMS.Api/Uploads/
+
+# `nul` is a reserved Windows device name; these appear from a stray `> nul` redirect
+# and break `git add -A` because git cannot open them.
+nul
