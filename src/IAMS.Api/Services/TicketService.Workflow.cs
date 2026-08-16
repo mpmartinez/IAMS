@@ -1,0 +1,132 @@
+using IAMS.Api.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace IAMS.Api.Services;
+
+public partial class TicketService
+{
+    public async Task<ServiceResult> AssignAsync(
+        int id, string assigneeUserId, CancellationToken ct = default)
+    {
+        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id, ct);
+        if (ticket is null)
+            return ServiceResult.Fail("Ticket not found.");
+
+        // ApplicationUser has no global tenant query filter (it's the Identity table), so
+        // resolve the assignee through an explicit tenant filter the same way the requester
+        // is resolved in CreateAsync - otherwise another tenant's user id would satisfy the
+        // FK and quietly assign the ticket to a user outside the tenant.
+        var tenantId = _tenants.GetRequiredTenantId();
+        var assigneeExists = await _db.Users
+            .AnyAsync(u => u.Id == assigneeUserId && u.TenantId == tenantId, ct);
+        if (!assigneeExists)
+            return ServiceResult.Fail("That user does not exist.");
+
+        // Reassigning an in-flight ticket keeps its status; only a New ticket advances.
+        if (ticket.Status == TicketStatus.New)
+        {
+            if (!TicketWorkflow.CanTransition(ticket.Status, TicketStatus.Assigned))
+                return ServiceResult.Fail($"A {ticket.Status} ticket cannot be assigned.");
+
+            ticket.Status = TicketStatus.Assigned;
+        }
+        else if (!TicketWorkflow.IsOpen(ticket.Status))
+        {
+            return ServiceResult.Fail($"A {ticket.Status} ticket cannot be reassigned.");
+        }
+
+        ticket.AssignedToUserId = assigneeUserId;
+        ticket.AssignedAt ??= DateTime.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+        return ServiceResult.Ok();
+    }
+
+    public async Task<ServiceResult> ChangeStatusAsync(
+        int id, string status, CancellationToken ct = default)
+    {
+        if (!TicketStatus.IsValid(status))
+            return ServiceResult.Fail($"'{status}' is not a valid status.");
+
+        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id, ct);
+        if (ticket is null)
+            return ServiceResult.Fail("Ticket not found.");
+
+        if (!TicketWorkflow.CanTransition(ticket.Status, status))
+            return ServiceResult.Fail($"A ticket cannot move from {ticket.Status} to {status}.");
+
+        // Resolve has its own method because it requires resolution text.
+        if (status == TicketStatus.Resolved)
+            return ServiceResult.Fail("Use Resolve so a resolution is recorded.");
+
+        ticket.Status = status;
+
+        if (status == TicketStatus.InProgress)
+            ticket.StartedAt ??= DateTime.UtcNow;
+
+        if (status is TicketStatus.Closed or TicketStatus.Cancelled)
+            ticket.ClosedAt ??= DateTime.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+        return ServiceResult.Ok();
+    }
+
+    public async Task<ServiceResult> ResolveAsync(
+        int id, string resolution, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(resolution))
+            return ServiceResult.Fail("A resolution note is required.");
+
+        var ticket = await _db.Tickets
+            .Include(t => t.Asset)
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
+
+        if (ticket is null)
+            return ServiceResult.Fail("Ticket not found.");
+
+        if (!TicketWorkflow.CanTransition(ticket.Status, TicketStatus.Resolved))
+            return ServiceResult.Fail($"A {ticket.Status} ticket cannot be resolved.");
+
+        ticket.Status = TicketStatus.Resolved;
+        ticket.Resolution = resolution.Trim();
+        ticket.ResolvedAt = DateTime.UtcNow;
+
+        // An asset parked in Maintenance for this ticket returns to service.
+        if (ticket.Asset is { Status: AssetStatus.Maintenance } asset)
+        {
+            asset.Status = asset.AssignedToUserId is null
+                ? AssetStatus.Available
+                : AssetStatus.InUse;
+            asset.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return ServiceResult.Ok();
+    }
+
+    public async Task<ServiceResult<TicketComment>> AddCommentAsync(
+        int ticketId, string userId, string body, bool isInternal, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return ServiceResult<TicketComment>.Fail("A comment cannot be empty.");
+
+        var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
+        if (ticket is null)
+            return ServiceResult<TicketComment>.Fail("Ticket not found.");
+
+        var comment = new TicketComment
+        {
+            TenantId = ticket.TenantId,
+            TicketId = ticket.Id,
+            UserId = userId,
+            Body = body.Trim(),
+            IsInternal = isInternal,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.TicketComments.Add(comment);
+        await _db.SaveChangesAsync(ct);
+
+        return ServiceResult<TicketComment>.Ok(comment);
+    }
+}

@@ -39,6 +39,15 @@ public interface ITicketService
     Task<(List<Ticket> Items, int TotalCount)> ListAsync(TicketQuery query, CancellationToken ct = default);
 
     Task<TicketSummary> GetSummaryAsync(CancellationToken ct = default);
+
+    Task<ServiceResult> AssignAsync(int id, string assigneeUserId, CancellationToken ct = default);
+
+    Task<ServiceResult> ChangeStatusAsync(int id, string status, CancellationToken ct = default);
+
+    Task<ServiceResult> ResolveAsync(int id, string resolution, CancellationToken ct = default);
+
+    Task<ServiceResult<TicketComment>> AddCommentAsync(
+        int ticketId, string userId, string body, bool isInternal, CancellationToken ct = default);
 }
 
 public partial class TicketService : ITicketService
