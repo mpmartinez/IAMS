@@ -42,6 +42,7 @@ public class TicketsController : ControllerBase
     [Authorize(Policy = "Staff")]
     public async Task<ActionResult<ApiResponse<PagedResponse<TicketListItemDto>>>> List(
         [FromQuery] string? type,
+        [FromQuery] string? category,
         [FromQuery] string? status,
         [FromQuery] string? priority,
         [FromQuery] string? assignedToUserId,
@@ -54,7 +55,7 @@ public class TicketsController : ControllerBase
         // effectivePage/effectiveSize, not the raw query values: ListAsync clamps both, and
         // reporting the unclamped ones makes the client's TotalCount / PageSize arithmetic wrong.
         var (items, total, effectivePage, effectiveSize) = await _tickets.ListAsync(
-            new TicketQuery(type, status, priority, assignedToUserId, assetId, search, page, pageSize), ct);
+            new TicketQuery(type, category, status, priority, assignedToUserId, assetId, search, page, pageSize), ct);
 
         var payload = new PagedResponse<TicketListItemDto>
         {
@@ -132,7 +133,7 @@ public class TicketsController : ControllerBase
         try
         {
             result = await _tickets.CreateAsync(
-                request.Type, request.Title, request.Description, request.Priority,
+                request.Type, request.Category, request.Title, request.Description, request.Priority,
                 request.AssetId, CurrentUserId, ct);
         }
         catch (DbUpdateException ex)

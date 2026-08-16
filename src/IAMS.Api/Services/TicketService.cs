@@ -20,6 +20,7 @@ public record ServiceResult<T>(bool Success, T? Value, string? Message = null)
 
 public record TicketQuery(
     string? Type,
+    string? Category,
     string? Status,
     string? Priority,
     string? AssignedToUserId,
@@ -33,7 +34,7 @@ public record TicketSummary(int Open, int Unassigned, int InProgress, int Overdu
 public interface ITicketService
 {
     Task<ServiceResult<Ticket>> CreateAsync(
-        string type, string title, string? description, string priority,
+        string type, string category, string title, string? description, string priority,
         int? assetId, string requesterUserId, CancellationToken ct = default);
 
     Task<Ticket?> GetAsync(int id, CancellationToken ct = default);
@@ -101,11 +102,14 @@ public partial class TicketService : ITicketService
         PriorityRank[priority] >= PriorityRank[floor] ? priority : floor;
 
     public async Task<ServiceResult<Ticket>> CreateAsync(
-        string type, string title, string? description, string priority,
+        string type, string category, string title, string? description, string priority,
         int? assetId, string requesterUserId, CancellationToken ct = default)
     {
         if (!TicketTypes.IsValid(type))
             return ServiceResult<Ticket>.Fail($"'{type}' is not a valid ticket type.");
+
+        if (!TicketCategory.IsValid(category))
+            return ServiceResult<Ticket>.Fail($"'{category}' is not a valid ticket category.");
 
         if (string.IsNullOrWhiteSpace(title))
             return ServiceResult<Ticket>.Fail("A ticket needs a title.");
@@ -150,6 +154,7 @@ public partial class TicketService : ITicketService
                 TenantId = tenantId,
                 TicketNumber = await _numbers.NextAsync(tenantId, ct),
                 Type = type,
+                Category = category,
                 Title = trimmedTitle,
                 Description = description,
                 Status = TicketStatus.New,
@@ -206,6 +211,9 @@ public partial class TicketService : ITicketService
 
         if (!string.IsNullOrWhiteSpace(query.Type))
             q = q.Where(t => t.Type == query.Type);
+
+        if (!string.IsNullOrWhiteSpace(query.Category))
+            q = q.Where(t => t.Category == query.Category);
 
         if (!string.IsNullOrWhiteSpace(query.Status))
             q = q.Where(t => t.Status == query.Status);

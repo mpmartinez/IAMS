@@ -21,7 +21,7 @@ public class TicketCommentVisibilityTests
 
             var service = new TicketService(db, new TicketNumberAllocator(db), new FakeTenantProvider(tenantId));
             var created = await service.CreateAsync(
-                TicketTypes.Incident, "Printer jams", null, TicketPriority.High, null, "emp-1", default);
+                TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.High, null, "emp-1", default);
 
             await service.AddCommentAsync(created.Value!.Id, "staff-1", "On it now.", false, default);
             await service.AddCommentAsync(created.Value.Id, "staff-1", "Warranty lapses soon.", true, default);

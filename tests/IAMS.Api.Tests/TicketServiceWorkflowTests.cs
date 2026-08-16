@@ -15,7 +15,7 @@ public class TicketServiceWorkflowTests
 
         var service = new TicketService(db, new TicketNumberAllocator(db), new FakeTenantProvider(tenantId));
         var created = await service.CreateAsync(
-            TicketTypes.Incident, "Printer jams", null, TicketPriority.High, null, "emp-1", default);
+            TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.High, null, "emp-1", default);
 
         return (service, created.Value!);
     }
@@ -39,7 +39,7 @@ public class TicketServiceWorkflowTests
 
         var service = new TicketService(db, new TicketNumberAllocator(db), new FakeTenantProvider(tenantId));
         var created = await service.CreateAsync(
-            TicketTypes.Incident, "Printer jams", null, TicketPriority.High, asset.Id, "emp-1", default);
+            TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.High, asset.Id, "emp-1", default);
 
         return (service, created.Value!, asset);
     }
@@ -373,7 +373,7 @@ public class TicketServiceWorkflowTests
 
             var service = new TicketService(db, new TicketNumberAllocator(db), new FakeTenantProvider(mine));
             var created = await service.CreateAsync(
-                TicketTypes.Incident, "Printer jams", null, TicketPriority.High, null, "emp-1", default);
+                TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.High, null, "emp-1", default);
 
             // The ticket is New (open, assignable), so this exercises the tenant-scoped
             // assignee lookup itself rather than the status gate Fix 3 moved ahead of it.
@@ -403,7 +403,7 @@ public class TicketServiceWorkflowTests
 
             var service = new TicketService(db, new TicketNumberAllocator(db), new FakeTenantProvider(mine));
             var created = await service.CreateAsync(
-                TicketTypes.Incident, "Printer jams", null, TicketPriority.High, null, "emp-1", default);
+                TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.High, null, "emp-1", default);
 
             var result = await service.AddCommentAsync(
                 created.Value!.Id, "foreign-staff", "Looking at it now.", false, default);

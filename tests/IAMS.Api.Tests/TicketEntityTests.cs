@@ -28,6 +28,7 @@ public class TicketEntityTests
             var saved = await db.Tickets.SingleAsync();
 
             Assert.Equal(TicketTypes.Incident, saved.Type);
+            Assert.Equal(TicketCategory.Other, saved.Category);
             Assert.Equal(TicketStatus.New, saved.Status);
             Assert.Equal(TicketPriority.Medium, saved.Priority);
             Assert.Null(saved.AssetId);

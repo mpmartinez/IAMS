@@ -42,6 +42,18 @@ public class TicketMappingTests
     }
 
     [Fact]
+    public void Category_flows_through_to_both_dtos()
+    {
+        var ticket = new Ticket
+        {
+            Id = 5, TicketNumber = 1, Title = "Excel keeps crashing", Category = TicketCategory.Software
+        };
+
+        Assert.Equal(TicketCategory.Software, ticket.ToListItem().Category);
+        Assert.Equal(TicketCategory.Software, ticket.ToDto(includeInternalComments: false).Category);
+    }
+
+    [Fact]
     public void Internal_comments_are_dropped_when_not_permitted()
     {
         var ticket = new Ticket

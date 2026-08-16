@@ -315,6 +315,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.HasKey(e => e.Id);
 
             entity.Property(e => e.Type).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Category).HasMaxLength(50).IsRequired().HasDefaultValue(TicketCategory.Other);
             entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
             entity.Property(e => e.Description).HasMaxLength(2000);
             entity.Property(e => e.Status).HasMaxLength(50).IsRequired();
@@ -325,6 +326,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(e => e.AssetId);
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.Type);
+            entity.HasIndex(e => e.Category);
             entity.HasIndex(e => e.RequesterUserId);
             entity.HasIndex(e => e.AssignedToUserId);
             entity.HasIndex(e => new { e.TenantId, e.Status });

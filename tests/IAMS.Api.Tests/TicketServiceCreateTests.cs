@@ -32,7 +32,7 @@ public class TicketServiceCreateTests
             var service = Build(db, tenantId);
 
             var result = await service.CreateAsync(
-                TicketTypes.Incident, "Printer jams", "Every second page", TicketPriority.High, null, "emp-1", default);
+                TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", "Every second page", TicketPriority.High, null, "emp-1", default);
 
             Assert.True(result.Success);
             Assert.Equal(1, result.Value!.TicketNumber);
@@ -54,7 +54,7 @@ public class TicketServiceCreateTests
             var service = Build(db, tenantId);
 
             var result = await service.CreateAsync(
-                "Escalation", "Bad type", null, TicketPriority.Low, null, "emp-1", default);
+                "Escalation", TicketCategory.Hardware, "Bad type", null, TicketPriority.Low, null, "emp-1", default);
 
             Assert.False(result.Success);
             Assert.Contains("type", result.Message!, StringComparison.OrdinalIgnoreCase);
@@ -78,7 +78,7 @@ public class TicketServiceCreateTests
             var service = Build(db, mine);
 
             var result = await service.CreateAsync(
-                TicketTypes.Incident, "Not mine", null, TicketPriority.Low, foreign.Id, "emp-1", default);
+                TicketTypes.Incident, TicketCategory.Hardware, "Not mine", null, TicketPriority.Low, foreign.Id, "emp-1", default);
 
             Assert.False(result.Success);
             Assert.Equal(0, await db.Tickets.CountAsync());
@@ -98,7 +98,7 @@ public class TicketServiceCreateTests
             var service = Build(db, tenantId);
 
             var result = await service.CreateAsync(
-                TicketTypes.SecurityEvent, "Phishing email", null, TicketPriority.Low, null, "emp-1", default);
+                TicketTypes.SecurityEvent, TicketCategory.Security, "Phishing email", null, TicketPriority.Low, null, "emp-1", default);
 
             Assert.True(result.Success);
             Assert.Equal(TicketPriority.High, result.Value!.Priority);
@@ -120,7 +120,7 @@ public class TicketServiceCreateTests
             var service = Build(db, tenantId);
 
             var result = await service.CreateAsync(
-                TicketTypes.SecurityEvent, "Active breach", null, TicketPriority.Critical, null, "emp-1", default);
+                TicketTypes.SecurityEvent, TicketCategory.Security, "Active breach", null, TicketPriority.Critical, null, "emp-1", default);
 
             Assert.True(result.Success);
             Assert.Equal(TicketPriority.Critical, result.Value!.Priority);
@@ -142,7 +142,7 @@ public class TicketServiceCreateTests
             var longTitle = new string('a', 201);
 
             var result = await service.CreateAsync(
-                TicketTypes.Incident, longTitle, null, TicketPriority.Low, null, "emp-1", default);
+                TicketTypes.Incident, TicketCategory.Hardware, longTitle, null, TicketPriority.Low, null, "emp-1", default);
 
             Assert.False(result.Success);
             Assert.Contains("200", result.Message!);
@@ -165,7 +165,7 @@ public class TicketServiceCreateTests
             var service = Build(db, mine);
 
             var result = await service.CreateAsync(
-                TicketTypes.Incident, "Not my requester", null, TicketPriority.Low, null, "foreign-emp", default);
+                TicketTypes.Incident, TicketCategory.Hardware, "Not my requester", null, TicketPriority.Low, null, "foreign-emp", default);
 
             Assert.False(result.Success);
             Assert.Equal(0, await db.Tickets.CountAsync());
@@ -188,7 +188,7 @@ public class TicketServiceCreateTests
             var service = Build(db, tenantId);
 
             var result = await service.CreateAsync(
-                TicketTypes.Incident, "Broken screen", null, TicketPriority.Low, asset.Id, "emp-1", default);
+                TicketTypes.Incident, TicketCategory.Hardware, "Broken screen", null, TicketPriority.Low, asset.Id, "emp-1", default);
 
             Assert.True(result.Success);
             Assert.Equal(asset.Id, result.Value!.AssetId);
@@ -218,7 +218,7 @@ public class TicketServiceCreateTests
             var service = new TicketService(db, allocator, new FakeTenantProvider(tenantId));
 
             var result = await service.CreateAsync(
-                TicketTypes.Incident, "New ticket", null, TicketPriority.Low, null, "emp-1", default);
+                TicketTypes.Incident, TicketCategory.Hardware, "New ticket", null, TicketPriority.Low, null, "emp-1", default);
 
             Assert.True(result.Success);
             Assert.Equal(2, result.Value!.TicketNumber);
@@ -250,7 +250,7 @@ public class TicketServiceCreateTests
             // forever - CreateAsync's ServiceResult contract covers validation failures,
             // not an allocator that can never produce a free number.
             await Assert.ThrowsAsync<DbUpdateException>(() => service.CreateAsync(
-                TicketTypes.Incident, "New ticket", null, TicketPriority.Low, null, "emp-1", default));
+                TicketTypes.Incident, TicketCategory.Hardware, "New ticket", null, TicketPriority.Low, null, "emp-1", default));
 
             Assert.Equal(1, await db.Tickets.CountAsync());
         }
@@ -268,10 +268,10 @@ public class TicketServiceCreateTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
             var service = Build(db, tenantId);
 
-            await service.CreateAsync(TicketTypes.Incident, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
+            await service.CreateAsync(TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
 
             var (results, total, _, _) = await service.ListAsync(
-                new TicketQuery(null, null, null, null, null, "PRINTER"), default);
+                new TicketQuery(null, null, null, null, null, null, "PRINTER"), default);
 
             Assert.Equal(1, total);
             Assert.Equal("Printer jams", results[0].Title);
@@ -292,11 +292,11 @@ public class TicketServiceCreateTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
             var service = Build(db, tenantId);
 
-            await service.CreateAsync(TicketTypes.Incident, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
-            await service.CreateAsync(TicketTypes.Incident, "50% battery warning", null, TicketPriority.Low, null, "emp-1", default);
+            await service.CreateAsync(TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
+            await service.CreateAsync(TicketTypes.Incident, TicketCategory.Hardware, "50% battery warning", null, TicketPriority.Low, null, "emp-1", default);
 
             var (results, total, _, _) = await service.ListAsync(
-                new TicketQuery(null, null, null, null, null, "%"), default);
+                new TicketQuery(null, null, null, null, null, null, "%"), default);
 
             Assert.Equal(1, total);
             Assert.Equal("50% battery warning", results[0].Title);
@@ -315,17 +315,96 @@ public class TicketServiceCreateTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
             var service = Build(db, tenantId);
 
-            await service.CreateAsync(TicketTypes.Incident, "One", null, TicketPriority.Low, null, "emp-1", default);
-            await service.CreateAsync(TicketTypes.Request, "Two", null, TicketPriority.Low, null, "emp-1", default);
+            await service.CreateAsync(TicketTypes.Incident, TicketCategory.Hardware, "One", null, TicketPriority.Low, null, "emp-1", default);
+            await service.CreateAsync(TicketTypes.Request, TicketCategory.Hardware, "Two", null, TicketPriority.Low, null, "emp-1", default);
 
-            var (all, total, _, _) = await service.ListAsync(new TicketQuery(null, null, null, null, null, null), default);
+            var (all, total, _, _) = await service.ListAsync(new TicketQuery(null, null, null, null, null, null, null), default);
             Assert.Equal(2, total);
             Assert.Equal(2, all.Count);
 
             var (requests, requestTotal, _, _) = await service.ListAsync(
-                new TicketQuery(TicketTypes.Request, null, null, null, null, null), default);
+                new TicketQuery(TicketTypes.Request, null, null, null, null, null, null), default);
             Assert.Equal(1, requestTotal);
             Assert.Equal("Two", requests[0].Title);
+        }
+    }
+
+    [Fact]
+    public async Task Rejects_an_unknown_category()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+            var service = Build(db, tenantId);
+
+            var result = await service.CreateAsync(
+                TicketTypes.Incident, "Furniture", "Bad category", null, TicketPriority.Low, null, "emp-1", default);
+
+            Assert.False(result.Success);
+            Assert.Contains("category", result.Message!, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, await db.Tickets.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Lists_and_filters_by_category()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+            var service = Build(db, tenantId);
+
+            await service.CreateAsync(TicketTypes.Incident, TicketCategory.Hardware, "Laptop won't boot", null, TicketPriority.Low, null, "emp-1", default);
+            await service.CreateAsync(TicketTypes.Incident, TicketCategory.Software, "Excel keeps crashing", null, TicketPriority.Low, null, "emp-1", default);
+            await service.CreateAsync(TicketTypes.Request, TicketCategory.Access, "Need training portal access", null, TicketPriority.Low, null, "emp-1", default);
+
+            var (all, total, _, _) = await service.ListAsync(new TicketQuery(null, null, null, null, null, null, null), default);
+            Assert.Equal(3, total);
+            Assert.Equal(3, all.Count);
+
+            var (software, softwareTotal, _, _) = await service.ListAsync(
+                new TicketQuery(null, TicketCategory.Software, null, null, null, null, null), default);
+            Assert.Equal(1, softwareTotal);
+            Assert.Equal("Excel keeps crashing", software[0].Title);
+
+            var (access, accessTotal, _, _) = await service.ListAsync(
+                new TicketQuery(null, TicketCategory.Access, null, null, null, null, null), default);
+            Assert.Equal(1, accessTotal);
+            Assert.Equal("Need training portal access", access[0].Title);
+        }
+    }
+
+    [Fact]
+    public async Task New_tickets_default_to_the_Other_category_at_the_database_level()
+    {
+        // CreateAsync always passes an explicit, validated category, so this exercises the
+        // column default directly - the safety net for any future write path that doesn't
+        // go through the service (e.g. a raw insert or a future bulk-import job).
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+
+            var ticket = new Ticket
+            {
+                TenantId = tenantId,
+                TicketNumber = 1,
+                Title = "Untyped ticket",
+                RequesterUserId = "emp-1"
+            };
+
+            Assert.Equal(TicketCategory.Other, ticket.Category);
         }
     }
 
@@ -341,8 +420,8 @@ public class TicketServiceCreateTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
             var service = Build(db, tenantId);
 
-            await service.CreateAsync(TicketTypes.Incident, "One", null, TicketPriority.Low, null, "emp-1", default);
-            await service.CreateAsync(TicketTypes.Incident, "Two", null, TicketPriority.Low, null, "emp-1", default);
+            await service.CreateAsync(TicketTypes.Incident, TicketCategory.Hardware, "One", null, TicketPriority.Low, null, "emp-1", default);
+            await service.CreateAsync(TicketTypes.Incident, TicketCategory.Hardware, "Two", null, TicketPriority.Low, null, "emp-1", default);
 
             var summary = await service.GetSummaryAsync(default);
 
@@ -366,13 +445,13 @@ public class TicketServiceCreateTests
             var service = Build(db, tenantId);
 
             await service.CreateAsync(
-                TicketTypes.Incident, "One", null, TicketPriority.Low, null, "emp-1", default);
+                TicketTypes.Incident, TicketCategory.Hardware, "One", null, TicketPriority.Low, null, "emp-1", default);
 
             // A caller asking for page 0 at 5000 per page gets page 1 at 200. The response must
             // say so: a client computing TotalCount / PageSize off the raw values sees one page
             // and silently drops the rest.
             var (_, _, page, size) = await service.ListAsync(
-                new TicketQuery(null, null, null, null, null, null, Page: 0, PageSize: 5000), default);
+                new TicketQuery(null, null, null, null, null, null, null, Page: 0, PageSize: 5000), default);
 
             Assert.Equal(1, page);
             Assert.Equal(200, size);

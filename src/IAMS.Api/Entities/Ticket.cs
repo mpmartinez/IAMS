@@ -16,6 +16,10 @@ public class Ticket : ITenantEntity
     public int TicketNumber { get; set; }
 
     public string Type { get; set; } = TicketTypes.Incident;
+
+    /// <summary>What the ticket is about (Hardware, Software, Access, ...), orthogonal to Type.</summary>
+    public string Category { get; set; } = TicketCategory.Other;
+
     public string Title { get; set; } = "";
     public string? Description { get; set; }
     public string Status { get; set; } = TicketStatus.New;

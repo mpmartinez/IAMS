@@ -5,6 +5,7 @@ public record TicketListItemDto
     public int Id { get; init; }
     public int TicketNumber { get; init; }
     public required string Type { get; init; }
+    public required string Category { get; init; }
     public required string Title { get; init; }
     public required string Status { get; init; }
     public required string Priority { get; init; }
@@ -57,6 +58,7 @@ public record TicketSummaryDto
 public record CreateTicketRequest
 {
     public required string Type { get; init; }
+    public string Category { get; init; } = "Other";
     public required string Title { get; init; }
     public string? Description { get; init; }
     public string Priority { get; init; } = "Medium";

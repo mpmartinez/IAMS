@@ -11,6 +11,26 @@ public static class TicketTypes
     public static bool IsValid(string type) => All.Contains(type);
 }
 
+/// <summary>
+/// What kind of thing the ticket is about, orthogonal to <see cref="TicketTypes"/> (which
+/// captures the workflow shape - incident, request, or security event). A password reset
+/// request and a broken laptop are both Incidents, but one is Access and the other is
+/// Hardware; the service desk routes and reports on this dimension separately.
+/// </summary>
+public static class TicketCategory
+{
+    public const string Hardware = "Hardware";
+    public const string Software = "Software";
+    public const string Access = "Access";
+    public const string Network = "Network";
+    public const string Security = "Security";
+    public const string Other = "Other";
+
+    public static readonly string[] All = [Hardware, Software, Access, Network, Security, Other];
+
+    public static bool IsValid(string category) => All.Contains(category);
+}
+
 public static class TicketStatus
 {
     public const string New = "New";

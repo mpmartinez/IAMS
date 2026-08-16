@@ -292,7 +292,7 @@ public class TicketFulfilmentTests
 
         var service = new TicketService(db, new TicketNumberAllocator(db), new FakeTenantProvider(tenantId));
         var created = await service.CreateAsync(
-            TicketTypes.Request, "Laptop for new documentation officer",
+            TicketTypes.Request, TicketCategory.Hardware, "Laptop for new documentation officer",
             null, TicketPriority.Medium, null, "emp-1", default);
 
         return (service, created.Value!);
@@ -365,7 +365,7 @@ public class TicketFulfilmentTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-1", "A. Reyes");
             var service = new TicketService(db, new TicketNumberAllocator(db), new FakeTenantProvider(tenantId));
             var incident = await service.CreateAsync(
-                TicketTypes.Incident, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
+                TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
             var asset = await TestDb.SeedAssetAsync(db, tenantId, "IAMS-0356");
 
             var result = await service.FulfilAsync(incident.Value!.Id, asset.Id, "n/a", "emp-1", default);

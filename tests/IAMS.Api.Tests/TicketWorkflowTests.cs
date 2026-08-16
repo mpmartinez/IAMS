@@ -59,5 +59,8 @@ public class TicketWorkflowTests
         Assert.False(TicketStatus.IsValid("Paused"));
         Assert.True(TicketPriority.IsValid(TicketPriority.Critical));
         Assert.False(TicketPriority.IsValid("Urgent"));
+        Assert.True(TicketCategory.IsValid(TicketCategory.Software));
+        Assert.True(TicketCategory.IsValid(TicketCategory.Access));
+        Assert.False(TicketCategory.IsValid("Furniture"));
     }
 }

@@ -371,6 +371,7 @@ public class ApiClient(HttpClient http, AuthService authService)
     // Ticket APIs
     public async Task<PagedResponse<TicketListItemDto>?> GetTicketsAsync(
         string? type = null,
+        string? category = null,
         string? status = null,
         string? priority = null,
         string? assignedToUserId = null,
@@ -382,6 +383,7 @@ public class ApiClient(HttpClient http, AuthService authService)
         var client = await GetAuthenticatedClient();
         var query = $"api/tickets?page={page}&pageSize={pageSize}";
         if (!string.IsNullOrEmpty(type)) query += $"&type={Uri.EscapeDataString(type)}";
+        if (!string.IsNullOrEmpty(category)) query += $"&category={Uri.EscapeDataString(category)}";
         if (!string.IsNullOrEmpty(status)) query += $"&status={Uri.EscapeDataString(status)}";
         if (!string.IsNullOrEmpty(priority)) query += $"&priority={Uri.EscapeDataString(priority)}";
         if (!string.IsNullOrEmpty(assignedToUserId)) query += $"&assignedToUserId={Uri.EscapeDataString(assignedToUserId)}";
