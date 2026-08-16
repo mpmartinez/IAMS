@@ -2,6 +2,9 @@ services:
   # API Service (pre-built image from GHCR)
   api:
     image: ghcr.io/${GHCR_USER:-mpmartinez}/iams-api:latest
+    # Without this, `docker compose up -d` reuses the locally cached :latest and
+    # recreates the container from a stale image - new container, old code.
+    pull_policy: always
     container_name: iams-api
     ports:
       - "5000:5000"
@@ -40,6 +43,9 @@ services:
   # Web Service (pre-built image from GHCR)
   web:
     image: ghcr.io/${GHCR_USER:-mpmartinez}/iams-web:latest
+    # Without this, `docker compose up -d` reuses the locally cached :latest and
+    # recreates the container from a stale image - new container, old code.
+    pull_policy: always
     container_name: iams-web
     ports:
       - "5022:443"
