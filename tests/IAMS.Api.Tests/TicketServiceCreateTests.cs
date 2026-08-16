@@ -9,6 +9,16 @@ public class TicketServiceCreateTests
     private static TicketService Build(IAMS.Api.Data.AppDbContext db, Guid tenantId) =>
         new(db, new TicketNumberAllocator(db), new FakeTenantProvider(tenantId));
 
+    // Stub allocator for testing the create-time retry loop without concurrency:
+    // it hands out whatever sequence of ticket numbers the test configures.
+    private class StubTicketNumberAllocator : ITicketNumberAllocator
+    {
+        private readonly Func<int> _next;
+        public StubTicketNumberAllocator(Func<int> next) => _next = next;
+        public Task<int> NextAsync(Guid tenantId, CancellationToken ct = default) =>
+            Task.FromResult(_next());
+    }
+
     [Fact]
     public async Task Creates_a_new_ticket_with_an_allocated_number()
     {
@@ -92,6 +102,204 @@ public class TicketServiceCreateTests
 
             Assert.True(result.Success);
             Assert.Equal(TicketPriority.High, result.Value!.Priority);
+        }
+    }
+
+    [Fact]
+    public async Task Security_events_reported_as_critical_stay_critical()
+    {
+        // High is a floor, not a fixed value: a Critical report must not be silently
+        // downgraded to High.
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+            var service = Build(db, tenantId);
+
+            var result = await service.CreateAsync(
+                TicketTypes.SecurityEvent, "Active breach", null, TicketPriority.Critical, null, "emp-1", default);
+
+            Assert.True(result.Success);
+            Assert.Equal(TicketPriority.Critical, result.Value!.Priority);
+        }
+    }
+
+    [Fact]
+    public async Task Rejects_a_title_over_200_characters()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+            var service = Build(db, tenantId);
+
+            var longTitle = new string('a', 201);
+
+            var result = await service.CreateAsync(
+                TicketTypes.Incident, longTitle, null, TicketPriority.Low, null, "emp-1", default);
+
+            Assert.False(result.Success);
+            Assert.Contains("200", result.Message!);
+            Assert.Equal(0, await db.Tickets.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Rejects_a_requester_from_another_tenant()
+    {
+        var mine = Guid.NewGuid();
+        var theirs = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(mine));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, mine);
+            await TestDb.SeedTenantAsync(db, theirs);
+            await TestDb.SeedUserAsync(db, theirs, "foreign-emp", "Foreign Employee");
+            var service = Build(db, mine);
+
+            var result = await service.CreateAsync(
+                TicketTypes.Incident, "Not my requester", null, TicketPriority.Low, null, "foreign-emp", default);
+
+            Assert.False(result.Success);
+            Assert.Equal(0, await db.Tickets.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Accepts_a_valid_same_tenant_asset()
+    {
+        // Positive control for Rejects_an_asset_from_another_tenant: without this, an
+        // AnyAsync that was unconditionally false would still pass the whole suite.
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+            var asset = await TestDb.SeedAssetAsync(db, tenantId, "MINE-1");
+            var service = Build(db, tenantId);
+
+            var result = await service.CreateAsync(
+                TicketTypes.Incident, "Broken screen", null, TicketPriority.Low, asset.Id, "emp-1", default);
+
+            Assert.True(result.Success);
+            Assert.Equal(asset.Id, result.Value!.AssetId);
+        }
+    }
+
+    [Fact]
+    public async Task Recovers_from_a_ticket_number_collision_and_retries()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+
+            db.Tickets.Add(new Ticket
+            {
+                TenantId = tenantId, TicketNumber = 1, Title = "Existing", RequesterUserId = "emp-1"
+            });
+            await db.SaveChangesAsync();
+
+            var numbers = new Queue<int>(new[] { 1, 2 });
+            var allocator = new StubTicketNumberAllocator(() =>
+                numbers.Count > 0 ? numbers.Dequeue() : throw new InvalidOperationException("Unexpected extra allocation"));
+            var service = new TicketService(db, allocator, new FakeTenantProvider(tenantId));
+
+            var result = await service.CreateAsync(
+                TicketTypes.Incident, "New ticket", null, TicketPriority.Low, null, "emp-1", default);
+
+            Assert.True(result.Success);
+            Assert.Equal(2, result.Value!.TicketNumber);
+        }
+    }
+
+    [Fact]
+    public async Task Gives_up_after_max_retries_when_the_number_keeps_colliding()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+
+            db.Tickets.Add(new Ticket
+            {
+                TenantId = tenantId, TicketNumber = 1, Title = "Existing", RequesterUserId = "emp-1"
+            });
+            await db.SaveChangesAsync();
+
+            var allocator = new StubTicketNumberAllocator(() => 1);
+            var service = new TicketService(db, allocator, new FakeTenantProvider(tenantId));
+
+            // After MaxNumberRetries attempts that all genuinely collide, the method gives
+            // up by letting the underlying DbUpdateException propagate rather than looping
+            // forever - CreateAsync's ServiceResult contract covers validation failures,
+            // not an allocator that can never produce a free number.
+            await Assert.ThrowsAsync<DbUpdateException>(() => service.CreateAsync(
+                TicketTypes.Incident, "New ticket", null, TicketPriority.Low, null, "emp-1", default));
+
+            Assert.Equal(1, await db.Tickets.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Search_is_case_insensitive()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+            var service = Build(db, tenantId);
+
+            await service.CreateAsync(TicketTypes.Incident, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
+
+            var (results, total) = await service.ListAsync(
+                new TicketQuery(null, null, null, null, null, "PRINTER"), default);
+
+            Assert.Equal(1, total);
+            Assert.Equal("Printer jams", results[0].Title);
+        }
+    }
+
+    [Fact]
+    public async Task Search_treats_percent_as_a_literal_character()
+    {
+        // EF.Functions.Like's pattern wraps the raw search term in %...%, so a term that
+        // itself contains % or _ acted as a wildcard instead of a literal character.
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+            var service = Build(db, tenantId);
+
+            await service.CreateAsync(TicketTypes.Incident, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
+            await service.CreateAsync(TicketTypes.Incident, "50% battery warning", null, TicketPriority.Low, null, "emp-1", default);
+
+            var (results, total) = await service.ListAsync(
+                new TicketQuery(null, null, null, null, null, "%"), default);
+
+            Assert.Equal(1, total);
+            Assert.Equal("50% battery warning", results[0].Title);
         }
     }
 

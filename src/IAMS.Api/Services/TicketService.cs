@@ -44,6 +44,16 @@ public interface ITicketService
 public partial class TicketService : ITicketService
 {
     private const int MaxNumberRetries = 3;
+    private const int MaxTitleLength = 200;
+
+    // Lower rank = lower urgency. Keyed by the TicketPriority constants.
+    private static readonly Dictionary<string, int> PriorityRank = new()
+    {
+        [TicketPriority.Low] = 0,
+        [TicketPriority.Medium] = 1,
+        [TicketPriority.High] = 2,
+        [TicketPriority.Critical] = 3
+    };
 
     private readonly AppDbContext _db;
     private readonly ITicketNumberAllocator _numbers;
@@ -56,6 +66,11 @@ public partial class TicketService : ITicketService
         _tenants = tenants;
     }
 
+    // Raises `priority` to `floor` when it ranks lower, but never lowers a priority that
+    // already ranks at or above the floor.
+    private static string RaiseToAtLeast(string priority, string floor) =>
+        PriorityRank[priority] >= PriorityRank[floor] ? priority : floor;
+
     public async Task<ServiceResult<Ticket>> CreateAsync(
         string type, string title, string? description, string priority,
         int? assetId, string requesterUserId, CancellationToken ct = default)
@@ -65,6 +80,10 @@ public partial class TicketService : ITicketService
 
         if (string.IsNullOrWhiteSpace(title))
             return ServiceResult<Ticket>.Fail("A ticket needs a title.");
+
+        var trimmedTitle = title.Trim();
+        if (trimmedTitle.Length > MaxTitleLength)
+            return ServiceResult<Ticket>.Fail($"Title cannot exceed {MaxTitleLength} characters.");
 
         if (!TicketPriority.IsValid(priority))
             return ServiceResult<Ticket>.Fail($"'{priority}' is not a valid priority.");
@@ -80,9 +99,19 @@ public partial class TicketService : ITicketService
                 return ServiceResult<Ticket>.Fail("That asset does not exist.");
         }
 
-        // A security report is never low priority, whatever the form said.
+        // ApplicationUser has no global tenant query filter (it's the Identity table), so
+        // resolve the requester through an explicit tenant filter the same way the asset
+        // is resolved through its query filter - otherwise another tenant's user id would
+        // satisfy the FK and quietly attribute the ticket to a user outside the tenant.
+        var requesterExists = await _db.Users
+            .AnyAsync(u => u.Id == requesterUserId && u.TenantId == tenantId, ct);
+        if (!requesterExists)
+            return ServiceResult<Ticket>.Fail("That requester does not exist.");
+
+        // A security report is never low priority, whatever the form said - but it must
+        // never be *lowered* either, so raise to High as a floor, not a fixed value.
         var effectivePriority = type == TicketTypes.SecurityEvent
-            ? TicketPriority.High
+            ? RaiseToAtLeast(priority, TicketPriority.High)
             : priority;
 
         for (var attempt = 1; ; attempt++)
@@ -92,7 +121,7 @@ public partial class TicketService : ITicketService
                 TenantId = tenantId,
                 TicketNumber = await _numbers.NextAsync(tenantId, ct),
                 Type = type,
-                Title = title.Trim(),
+                Title = trimmedTitle,
                 Description = description,
                 Status = TicketStatus.New,
                 Priority = effectivePriority,
@@ -108,10 +137,24 @@ public partial class TicketService : ITicketService
                 await _db.SaveChangesAsync(ct);
                 return ServiceResult<Ticket>.Ok(ticket);
             }
-            catch (DbUpdateException) when (attempt < MaxNumberRetries)
+            catch (DbUpdateException)
             {
-                // Another request took the number between our MAX read and this insert.
                 _db.Entry(ticket).State = EntityState.Detached;
+
+                // Npgsql (production) and SQLite (tests) word unique-violation errors
+                // completely differently, so we can't reliably tell a ticket-number
+                // collision apart from any other DbUpdateException (an FK violation, a
+                // length violation, etc.) by inspecting the exception. Instead, verify by
+                // querying: if a ticket now holds this (TenantId, TicketNumber), another
+                // request won the race and it is safe to retry with a fresh number. If not,
+                // the failure had some other cause and must propagate instead of being
+                // silently retried three times and then escaping anyway.
+                var collided = await _db.Tickets
+                    .IgnoreQueryFilters()
+                    .AnyAsync(t => t.TenantId == tenantId && t.TicketNumber == ticket.TicketNumber, ct);
+
+                if (!collided || attempt >= MaxNumberRetries)
+                    throw;
             }
         }
     }
@@ -149,10 +192,15 @@ public partial class TicketService : ITicketService
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var term = $"%{query.Search.Trim()}%";
+            // EF.Functions.Like is case-insensitive on SQLite but case-sensitive on
+            // Npgsql (production), and treats the term's own % / _ as wildcards instead
+            // of literal characters. ToLower().Contains(...) matches the idiom used
+            // elsewhere in this codebase (AssetsController, UsersController) and is
+            // consistent across both providers.
+            var term = query.Search.Trim().ToLower();
             q = q.Where(t =>
-                EF.Functions.Like(t.Title, term) ||
-                (t.Description != null && EF.Functions.Like(t.Description, term)));
+                t.Title.ToLower().Contains(term) ||
+                (t.Description != null && t.Description.ToLower().Contains(term)));
         }
 
         var total = await q.CountAsync(ct);
