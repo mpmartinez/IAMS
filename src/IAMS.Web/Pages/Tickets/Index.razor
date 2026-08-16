@@ -3,6 +3,7 @@
 @implements IDisposable
 @inject ApiClient Api
 @inject NavigationManager Navigation
+@inject SnackbarService Snackbar
 
 <PageTitle>Tickets - IAMS</PageTitle>
 
@@ -13,6 +14,12 @@
             <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Tickets</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Service desk queue</p>
         </div>
+        <button @onclick="ShowCreateModal" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press text-sm sm:text-base">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            New Ticket
+        </button>
     </div>
 
     <!-- Summary Cards -->
@@ -245,6 +252,87 @@
     }
 </div>
 
+<!-- New Ticket Modal -->
+<Modal IsOpen="@_showCreateModal" Title="New Ticket" Size="lg" OnClose="HideCreateModal">
+    <ChildContent>
+        <div class="space-y-4">
+            <Select Label="Type" Value="@_newType" ValueChanged="OnNewTypeChanged">
+                <option value="Incident">Incident</option>
+                <option value="Request">Request</option>
+                <option value="SecurityEvent">Security Event</option>
+            </Select>
+
+            <Input Label="Title" Value="@_newTitle" ValueChanged="v => _newTitle = v" Placeholder="Short summary of the issue" />
+
+            <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description <span class="text-slate-400 font-normal">(optional)</span></label>
+                <textarea @bind="_newDescription" rows="3" placeholder="Details for whoever picks this up..."
+                          class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
+            </div>
+
+            <Select Label="Priority" Value="@_newPriority" ValueChanged="v => _newPriority = v">
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+            </Select>
+
+            @if (_newType != "Request")
+            {
+                <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Asset <span class="text-slate-400 font-normal">(optional)</span></label>
+
+                    @if (_newLinkedAsset is not null)
+                    {
+                        <div class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@_newLinkedAsset.DisplayName</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">@_newLinkedAsset.AssetTag</p>
+                            </div>
+                            <button @onclick="ClearNewAsset" class="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline shrink-0">
+                                Change
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <Input Value="@_assetSearch" ValueChanged="OnAssetSearchChanged" Placeholder="Search by tag or name..." />
+
+                        @if (_assetResults.Count > 0)
+                        {
+                            <div class="mt-2 rounded-xl border border-slate-200 dark:border-slate-600 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+                                @foreach (var asset in _assetResults)
+                                {
+                                    <button @key="asset.Id" @onclick="() => PickNewAsset(asset)" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left">
+                                        <div class="min-w-0">
+                                            <p class="text-sm text-slate-900 dark:text-white truncate">@asset.DisplayName</p>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">@asset.AssetTag</p>
+                                        </div>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(_createError))
+            {
+                <div class="flex items-start gap-2 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50">
+                    <svg class="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <p class="text-sm text-red-700 dark:text-red-400">@_createError</p>
+                </div>
+            }
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <Button Variant="ghost" OnClick="HideCreateModal">Cancel</Button>
+        <Button OnClick="SubmitCreate" Loading="@_creating" Disabled="@string.IsNullOrWhiteSpace(_newTitle)">Create Ticket</Button>
+    </FooterContent>
+</Modal>
+
 @code {
     private bool _loading = true;
     private PagedResponse<TicketListItemDto>? _tickets;
@@ -257,6 +345,20 @@
     private System.Timers.Timer? _searchTimer;
 
     private bool _hasFilters => !string.IsNullOrEmpty(_search) || !string.IsNullOrEmpty(_type) || !string.IsNullOrEmpty(_status) || !string.IsNullOrEmpty(_priority);
+
+    // New Ticket modal
+    private bool _showCreateModal;
+    private bool _creating;
+    private string? _createError;
+    private string _newType = "Incident";
+    private string _newTitle = "";
+    private string _newDescription = "";
+    private string _newPriority = "Medium";
+    private int? _newLinkedAssetId;
+    private AssetDto? _newLinkedAsset;
+    private string _assetSearch = "";
+    private List<AssetDto> _assetResults = new();
+    private System.Timers.Timer? _assetSearchTimer;
 
     protected override async Task OnInitializedAsync()
     {
@@ -329,6 +431,107 @@
     public void Dispose()
     {
         _searchTimer?.Dispose();
+        _assetSearchTimer?.Dispose();
+    }
+
+    private void ShowCreateModal()
+    {
+        _newType = "Incident";
+        _newTitle = "";
+        _newDescription = "";
+        _newPriority = "Medium";
+        _createError = null;
+        ClearNewAsset();
+        _showCreateModal = true;
+    }
+
+    private void HideCreateModal() => _showCreateModal = false;
+
+    private void OnNewTypeChanged(string value)
+    {
+        _newType = value;
+        if (_newType == "Request")
+        {
+            ClearNewAsset();
+        }
+    }
+
+    private void ClearNewAsset()
+    {
+        _newLinkedAssetId = null;
+        _newLinkedAsset = null;
+        _assetSearch = "";
+        _assetResults.Clear();
+    }
+
+    private void PickNewAsset(AssetDto asset)
+    {
+        _newLinkedAssetId = asset.Id;
+        _newLinkedAsset = asset;
+        _assetSearch = "";
+        _assetResults.Clear();
+    }
+
+    private void OnAssetSearchChanged(string value)
+    {
+        _assetSearch = value;
+        _assetSearchTimer?.Stop();
+        _assetSearchTimer?.Dispose();
+
+        if (string.IsNullOrWhiteSpace(_assetSearch) || _assetSearch.Length < 2)
+        {
+            _assetResults.Clear();
+            return;
+        }
+
+        _assetSearchTimer = new System.Timers.Timer(300);
+        _assetSearchTimer.Elapsed += async (s, ev) =>
+        {
+            _assetSearchTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                var results = await Api.GetAssetsAsync(search: _assetSearch, page: 1, pageSize: 6);
+                _assetResults = results?.Items.ToList() ?? new();
+                StateHasChanged();
+            });
+        };
+        _assetSearchTimer.Start();
+    }
+
+    private async Task SubmitCreate()
+    {
+        if (string.IsNullOrWhiteSpace(_newTitle)) return;
+
+        _creating = true;
+        _createError = null;
+
+        var request = new CreateTicketRequest
+        {
+            Type = _newType,
+            Title = _newTitle.Trim(),
+            Description = string.IsNullOrWhiteSpace(_newDescription) ? null : _newDescription.Trim(),
+            Priority = _newPriority,
+            AssetId = _newType == "Request" ? null : _newLinkedAssetId
+        };
+
+        // CreateAsync can fail with a 409 after exhausting its own retries against a
+        // ticket-number collision, or a 400 once the tenant's monthly quota is hit;
+        // CreateTicketAsync surfaces either as a readable Error rather than throwing, so
+        // both land here instead of failing silently.
+        var (success, _, error) = await Api.CreateTicketAsync(request);
+
+        if (success)
+        {
+            _showCreateModal = false;
+            Snackbar.Success("Ticket created");
+            await Task.WhenAll(LoadTickets(), LoadSummary());
+        }
+        else
+        {
+            _createError = error ?? "Could not create the ticket. Please try again.";
+        }
+
+        _creating = false;
     }
 
     private void NavigateToTicket(int id)
