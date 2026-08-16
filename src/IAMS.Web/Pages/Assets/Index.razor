@@ -1,4 +1,5 @@
 @page "/assets"
+@using IAMS.Web.Components.UI
 @attribute [Authorize(Roles = "Admin,Staff")]
 @inject ApiClient Api
 @inject NavigationManager Navigation
@@ -183,7 +184,7 @@
                                         <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">@(asset.SerialNumber ?? "-")</span>
                                     </td>
                                     <td class="px-4 py-3">
-                                        <Badge Text="@asset.Status" Variant="@asset.Status" />
+                                        <IAMS.Web.Components.UI.Badge Variant="@asset.Status">@asset.Status</IAMS.Web.Components.UI.Badge>
                                     </td>
                                     <td class="px-4 py-3 hidden md:table-cell">
                                         @if (!string.IsNullOrEmpty(asset.AssignedToUserName))
@@ -203,7 +204,7 @@
                                     <td class="px-4 py-3 hidden lg:table-cell">
                                         @if (asset.WarrantyStatus != WarrantyStatus.None)
                                         {
-                                            <Badge Text="@GetWarrantyBadgeText(asset)" Variant="@GetWarrantyBadgeVariant(asset)" Pulse="@(asset.WarrantyStatus == WarrantyStatus.Expiring)" />
+                                            <IAMS.Web.Components.UI.Badge Variant="@GetWarrantyBadgeVariant(asset)" Pulse="@(asset.WarrantyStatus == WarrantyStatus.Expiring)">@GetWarrantyBadgeText(asset)</IAMS.Web.Components.UI.Badge>
                                         }
                                         else
                                         {
@@ -254,7 +255,7 @@
     }
     else
     {
-        <Card>
+        <IAMS.Web.Components.UI.Card Class="p-6">
             <EmptyState Title="No assets found" Description="@(_hasFilters ? "Try adjusting your filters." : "Add your first asset to get started.")">
                 @if (!_hasFilters)
                 {
@@ -282,7 +283,7 @@
                     </button>
                 }
             </EmptyState>
-        </Card>
+        </IAMS.Web.Components.UI.Card>
     }
 </div>
 
