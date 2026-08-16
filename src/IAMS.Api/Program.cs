@@ -22,7 +22,10 @@ if (string.IsNullOrWhiteSpace(connectionString))
         "ConnectionStrings__DefaultConnection environment variable (or user-secrets in development).");
 }
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
+
+builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
+{
     options.UseNpgsql(connectionString, npgsql =>
     {
         // Neon suspends idle computes, so the first connection after a pause can time out
@@ -31,7 +34,18 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(10),
             errorCodesToAdd: null);
-    }));
+    });
+    // AuditSaveChangesInterceptor holds mutable per-operation state (_pending, _writing).
+    // That is safe only because AddDbContext's optionsLifetime defaults to Scoped, so this
+    // lambda — and this `new` — runs once per request scope. Switching to AddDbContextPool,
+    // or passing optionsLifetime: ServiceLifetime.Singleton, would share one instance across
+    // concurrent requests and let one tenant's pending audit rows flush through another
+    // tenant's context. Do not change the lifetime without making this interceptor stateless.
+    options.AddInterceptors(
+        new AuditSaveChangesInterceptor(
+            serviceProvider.GetRequiredService<ICurrentUserAccessor>(),
+            serviceProvider.GetRequiredService<ILogger<AuditSaveChangesInterceptor>>()));
+});
 
 // Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -106,7 +120,6 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("CanAssignAssets", policy => policy.RequireRole("Admin", "Staff"))
     .AddPolicy("CanReturnAssets", policy => policy.RequireRole("Admin", "Staff"))
     .AddPolicy("CanViewAssignments", policy => policy.RequireRole("Admin", "Staff", "Auditor"))
-    .AddPolicy("CanManageMaintenance", policy => policy.RequireRole("Admin", "Staff"))
     // Multi-tenant policies
     .AddPolicy("SuperAdmin", policy => policy.RequireRole("SuperAdmin"))
     .AddPolicy("TenantAdmin", policy => policy.RequireAssertion(context =>
@@ -128,6 +141,8 @@ builder.Services.AddScoped<IAssetImportService, AssetImportService>();
 builder.Services.AddSingleton<IPdfReportService, PdfReportService>();
 builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+builder.Services.AddScoped<ITicketNumberAllocator, TicketNumberAllocator>();
+builder.Services.AddScoped<ITicketService, TicketService>();
 
 // Background Services
 builder.Services.AddHostedService<WarrantyCheckService>();

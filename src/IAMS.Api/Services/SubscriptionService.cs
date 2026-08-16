@@ -87,7 +87,12 @@ public class SubscriptionService : ISubscriptionService
             .Where(a => a.TenantId == tenantId)
             .SumAsync(a => a.FileSizeBytes);
 
-        return (currentUsage + fileSizeBytes) <= tenant.MaxStorageBytes;
+        var ticketBytes = await db.TicketAttachments
+            .IgnoreQueryFilters()
+            .Where(a => a.TenantId == tenantId)
+            .SumAsync(a => a.FileSizeBytes);
+
+        return (currentUsage + ticketBytes + fileSizeBytes) <= tenant.MaxStorageBytes;
     }
 
     public async Task UpdateAssetCountAsync(Guid tenantId)
@@ -137,10 +142,17 @@ public class SubscriptionService : ISubscriptionService
         var tenant = await db.Tenants.FindAsync(tenantId);
         if (tenant == null) return;
 
-        tenant.CurrentStorageBytes = await db.Attachments
+        var storageBytes = await db.Attachments
             .IgnoreQueryFilters()
             .Where(a => a.TenantId == tenantId)
             .SumAsync(a => a.FileSizeBytes);
+
+        var ticketBytes = await db.TicketAttachments
+            .IgnoreQueryFilters()
+            .Where(a => a.TenantId == tenantId)
+            .SumAsync(a => a.FileSizeBytes);
+
+        tenant.CurrentStorageBytes = storageBytes + ticketBytes;
 
         tenant.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
@@ -173,6 +185,11 @@ public class SubscriptionService : ISubscriptionService
             .Where(a => a.TenantId == tenantId)
             .SumAsync(a => a.FileSizeBytes);
 
+        var ticketBytes = await db.TicketAttachments
+            .IgnoreQueryFilters()
+            .Where(a => a.TenantId == tenantId)
+            .SumAsync(a => a.FileSizeBytes);
+
         return new TenantUsageDto
         {
             TenantId = tenantId,
@@ -181,7 +198,7 @@ public class SubscriptionService : ISubscriptionService
             MaxAssets = tenant.MaxAssets,
             CurrentUserCount = userCount,
             MaxUsers = tenant.MaxUsers,
-            CurrentStorageBytes = storageBytes,
+            CurrentStorageBytes = storageBytes + ticketBytes,
             MaxStorageBytes = tenant.MaxStorageBytes
         };
     }

@@ -28,8 +28,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
-    public DbSet<Maintenance> Maintenances => Set<Maintenance>();
-    public DbSet<MaintenanceAttachment> MaintenanceAttachments => Set<MaintenanceAttachment>();
+    public DbSet<Ticket> Tickets => Set<Ticket>();
+    public DbSet<TicketComment> TicketComments => Set<TicketComment>();
+    public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -101,6 +103,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany(u => u.AssignedAssets)
                 .HasForeignKey(e => e.AssignedToUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.OwnerUser)
+                .WithMany()
+                .HasForeignKey(e => e.OwnerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // Global query filter for tenant isolation
             entity.HasQueryFilter(e =>
@@ -302,52 +309,96 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Configure Maintenance with tenant
-        modelBuilder.Entity<Maintenance>(entity =>
+        // Configure Ticket with tenant
+        modelBuilder.Entity<Ticket>(entity =>
         {
             entity.HasKey(e => e.Id);
 
+            entity.Property(e => e.Type).HasMaxLength(50).IsRequired();
             entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
             entity.Property(e => e.Description).HasMaxLength(2000);
             entity.Property(e => e.Status).HasMaxLength(50).IsRequired();
-            entity.Property(e => e.Notes).HasMaxLength(2000);
+            entity.Property(e => e.Priority).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Resolution).HasMaxLength(2000);
 
-            // Index for common queries
             entity.HasIndex(e => e.TenantId);
             entity.HasIndex(e => e.AssetId);
             entity.HasIndex(e => e.Status);
-            entity.HasIndex(e => new { e.AssetId, e.Status });
+            entity.HasIndex(e => e.Type);
+            entity.HasIndex(e => e.RequesterUserId);
+            entity.HasIndex(e => e.AssignedToUserId);
+            entity.HasIndex(e => new { e.TenantId, e.Status });
 
-            // Tenant relationship
+            // Display number is unique per tenant, not globally.
+            entity.HasIndex(e => new { e.TenantId, e.TicketNumber }).IsUnique();
+
             entity.HasOne(e => e.Tenant)
                 .WithMany()
                 .HasForeignKey(e => e.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // A Request has no asset until it is fulfilled, so this is optional
+            // and must not cascade-delete the ticket history when an asset goes.
             entity.HasOne(e => e.Asset)
                 .WithMany()
                 .HasForeignKey(e => e.AssetId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.SetNull);
 
-            entity.HasOne(e => e.CreatedByUser)
+            entity.HasOne(e => e.RequesterUser)
                 .WithMany()
-                .HasForeignKey(e => e.CreatedByUserId)
+                .HasForeignKey(e => e.RequesterUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            entity.HasOne(e => e.PerformedByUser)
+            entity.HasOne(e => e.AssignedToUser)
                 .WithMany()
-                .HasForeignKey(e => e.PerformedByUserId)
+                .HasForeignKey(e => e.AssignedToUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Global query filter
+            entity.HasOne(e => e.AssetAssignment)
+                .WithMany()
+                .HasForeignKey(e => e.AssetAssignmentId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasQueryFilter(e =>
                 _tenantProvider == null ||
                 _tenantProvider.IsSuperAdmin() ||
                 e.TenantId == _tenantProvider.GetCurrentTenantId());
         });
 
-        // Configure MaintenanceAttachment with tenant
-        modelBuilder.Entity<MaintenanceAttachment>(entity =>
+        // Configure TicketComment with tenant
+        modelBuilder.Entity<TicketComment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Body).HasMaxLength(4000).IsRequired();
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.TicketId);
+            entity.HasIndex(e => new { e.TicketId, e.CreatedAt });
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Ticket)
+                .WithMany(t => t.Comments)
+                .HasForeignKey(e => e.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure TicketAttachment with tenant
+        modelBuilder.Entity<TicketAttachment>(entity =>
         {
             entity.HasKey(e => e.Id);
 
@@ -357,21 +408,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(e => e.Category).HasMaxLength(50).IsRequired();
             entity.Property(e => e.Description).HasMaxLength(500);
 
-            // Index for common queries
             entity.HasIndex(e => e.TenantId);
-            entity.HasIndex(e => e.MaintenanceId);
+            entity.HasIndex(e => e.TicketId);
             entity.HasIndex(e => e.Category);
-            entity.HasIndex(e => new { e.MaintenanceId, e.Category });
+            entity.HasIndex(e => new { e.TicketId, e.Category });
 
-            // Tenant relationship
             entity.HasOne(e => e.Tenant)
                 .WithMany()
                 .HasForeignKey(e => e.TenantId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            entity.HasOne(e => e.Maintenance)
-                .WithMany(m => m.Attachments)
-                .HasForeignKey(e => e.MaintenanceId)
+            entity.HasOne(e => e.Ticket)
+                .WithMany(t => t.Attachments)
+                .HasForeignKey(e => e.TicketId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(e => e.UploadedByUser)
@@ -379,7 +428,33 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .HasForeignKey(e => e.UploadedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Global query filter
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure AuditLog with tenant. Append-only: no update or delete path exists.
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.EntityType).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.EntityId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Action).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.UserId).HasMaxLength(450);
+
+            // Tenant-prefixed: every read passes the tenant query filter, so real
+            // queries are always WHERE TenantId = X AND ... . This table only grows.
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => new { e.TenantId, e.EntityType, e.EntityId });
+            entity.HasIndex(e => new { e.TenantId, e.Timestamp });
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasQueryFilter(e =>
                 _tenantProvider == null ||
                 _tenantProvider.IsSuperAdmin() ||

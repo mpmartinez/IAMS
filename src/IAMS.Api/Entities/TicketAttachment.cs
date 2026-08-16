@@ -1,42 +1,35 @@
 namespace IAMS.Api.Entities;
 
-/// <summary>
-/// Represents a file attachment associated with a maintenance record
-/// </summary>
-public class MaintenanceAttachment : ITenantEntity
+public class TicketAttachment : ITenantEntity
 {
     public int Id { get; set; }
 
-    // Multi-tenancy
     public Guid TenantId { get; set; }
     public Tenant? Tenant { get; set; }
 
-    // Maintenance reference
-    public int MaintenanceId { get; set; }
-    public Maintenance Maintenance { get; set; } = null!;
+    public int TicketId { get; set; }
+    public Ticket Ticket { get; set; } = null!;
 
-    // File information
     public required string FileName { get; set; }
-    public required string StoredFileName { get; set; } // GUID-based name for storage
+    public required string StoredFileName { get; set; }
     public required string ContentType { get; set; }
     public long FileSizeBytes { get; set; }
-
-    // Categorization
-    public required string Category { get; set; } // BeforePhoto, AfterPhoto, Receipt, Document, Other
-
-    // Optional description
+    public required string Category { get; set; }
     public string? Description { get; set; }
 
-    // Audit fields
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    // Required, matching the deleted MaintenanceAttachment: an audit feature must
+    // always record who uploaded a file. Keeping it non-null also spares the
+    // migration an ALTER COLUMN on an existing NOT NULL column.
     public required string UploadedByUserId { get; set; }
-    public ApplicationUser UploadedByUser { get; set; } = null!;
+    public ApplicationUser? UploadedByUser { get; set; }
+    public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>
-/// Predefined maintenance attachment categories
+/// Predefined ticket attachment categories. Mirrors the deleted
+/// MaintenanceAttachmentCategories 1:1 - see TicketAttachmentsController.
 /// </summary>
-public static class MaintenanceAttachmentCategories
+public static class TicketAttachmentCategories
 {
     public const string BeforePhoto = "BeforePhoto";
     public const string AfterPhoto = "AfterPhoto";
