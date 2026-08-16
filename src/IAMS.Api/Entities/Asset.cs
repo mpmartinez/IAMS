@@ -23,6 +23,13 @@ public class Asset : ITenantEntity
     public string? AssignedToUserId { get; set; }
     public ApplicationUser? AssignedToUser { get; set; }
 
+    /// <summary>The person accountable for this asset, as distinct from whoever currently holds it.</summary>
+    public string? OwnerUserId { get; set; }
+    public ApplicationUser? OwnerUser { get; set; }
+
+    /// <summary>Stamped by a QR verification scan. Drives inventory-accuracy reporting.</summary>
+    public DateTime? LastVerifiedAt { get; set; }
+
     // Legacy/additional fields
     public string? Name { get; set; }
     public string? Location { get; set; }
