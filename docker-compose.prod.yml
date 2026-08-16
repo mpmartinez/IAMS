@@ -8,7 +8,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5000
-      # PostgreSQL (Neon). Contains a password, so it is never committed - set
+      # PostgreSQL. Contains a password, so it is never committed - set
       # DATABASE_CONNECTION in the server's .env alongside JWT_KEY.
       - ConnectionStrings__DefaultConnection=${DATABASE_CONNECTION:?DATABASE_CONNECTION must be set in .env}
       # No default: the API refuses to start without a real key rather than silently
@@ -25,7 +25,8 @@ services:
       - Smtp__FromName=${SMTP_FROM_NAME:-IAMS}
       - App__WebUrl=${APP_WEB_URL:-https://m2netsolutions.com:5022}
     volumes:
-      # No iams-data volume: the database lives in Neon now. The uploads bind mount must
+      # No iams-data volume: the database is external, reached via DATABASE_CONNECTION.
+      # The uploads bind mount must
       # stay - attachment files are on disk, only their metadata rows are in the database.
       - ./data/uploads:/app/Uploads
     restart: unless-stopped

@@ -197,8 +197,8 @@ public partial class TicketService
 
                 return ServiceResult.Ok();
             }
-            // Only a durable failure becomes a failure result. A transient one (a Neon compute
-            // waking up, a dropped connection) is precisely what the execution strategy exists
+            // Only a durable failure becomes a failure result. A transient one (a database
+            // restart, a dropped connection) is precisely what the execution strategy exists
             // to replay, so it must fall through to the rethrowing catch below and reach the
             // strategy instead of being reported to the caller as a rejected request.
             catch (DbUpdateException ex) when (!IsTransient(ex))
@@ -233,7 +233,7 @@ public partial class TicketService
     /// Rolls back a transaction without letting a rollback failure replace whatever exception
     /// (or claim rejection) triggered it. By the time any caller here reaches a rollback, the
     /// most likely cause is precisely the kind of failure that also kills the connection - a
-    /// Neon compute suspending, a dropped socket - and on a dead connection RollbackAsync
+    /// database restart, a dropped socket - and on a dead connection RollbackAsync
     /// itself throws. The server-side transaction is already gone in that case, so there is
     /// nothing left to roll back and swallowing the failure loses nothing. Letting it
     /// propagate instead would replace the original exception: a transient failure would stop

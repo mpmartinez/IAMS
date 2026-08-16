@@ -18,7 +18,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 if (string.IsNullOrWhiteSpace(connectionString))
 {
     throw new InvalidOperationException(
-        "ConnectionStrings:DefaultConnection is not set. Supply the Neon connection string via the " +
+        "ConnectionStrings:DefaultConnection is not set. Supply the PostgreSQL connection string via the " +
         "ConnectionStrings__DefaultConnection environment variable (or user-secrets in development).");
 }
 
@@ -28,8 +28,11 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 {
     options.UseNpgsql(connectionString, npgsql =>
     {
-        // Neon suspends idle computes, so the first connection after a pause can time out
-        // or drop. Retry transient failures instead of surfacing them as 500s.
+        // A managed or containerised database can drop connections without warning - a
+        // restart, a failover, an idle timeout, a network blip. Retry transient failures
+        // instead of surfacing them as 500s. Note this also forces any user-initiated
+        // transaction to run through Database.CreateExecutionStrategy() - see
+        // TicketService.Fulfilment.cs, which is the only place that opens one.
         npgsql.EnableRetryOnFailure(
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(10),

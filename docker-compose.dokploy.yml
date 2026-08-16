@@ -2,11 +2,11 @@
 #
 # ─── Setup in Dokploy ─────────────────────────────────────────────────────────
 #  1. Create a "Compose" service pointing at this file (docker-compose.dokploy.yml).
-#  2. In the Environment tab set: DATABASE_CONNECTION (the Neon connection string, in
+#  2. In the Environment tab set: DATABASE_CONNECTION (the PostgreSQL connection string, in
 #     Npgsql key=value form - NOT the postgresql:// URI, Npgsql cannot parse it), JWT_KEY,
 #     SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL.
 #  3. Deploy. Then copy the uploads directory from the old droplet into iams-uploads.
-#     The database no longer needs seeding - it is already in Neon.
+#     The database does not need seeding - it already holds the data.
 #  4. Point iams.m2netsolutions.com DNS at the Hetzner box → Traefik issues the cert.
 #
 # ─── Routing ──────────────────────────────────────────────────────────────────
@@ -15,14 +15,18 @@
 #    everything else -> web  (nginx serving the Blazor WASM on plain HTTP)
 #
 # ─── Data ─────────────────────────────────────────────────────────────────────
-#  The database is PostgreSQL, hosted on Neon (ap-southeast-1, same region as this box).
-#  Nothing about it lives on disk any more, so there is no iams-data volume.
+#  The database is PostgreSQL, reached through the DATABASE_CONNECTION environment
+#  variable. It is NOT part of this stack - there is no postgres service and no
+#  iams-data volume here - so whatever hosts it is managed separately.
 #
 #  Attachment FILES are still local, at /app/Uploads (volume iams-uploads). Only their
 #  metadata rows are in the database - drop that volume and every receipt, photo and
 #  warranty document is gone while the rows still point at them.
 #
-#  Backups are now Neon's job: point-in-time restore per branch, not a file to copy.
+#  BACKUPS ARE NOT HANDLED HERE, and nothing in this stack arranges them. This used to
+#  read "backups are now Neon's job" - that is no longer true, and the database has since
+#  moved. Whoever operates the database must arrange its backups, and the iams-uploads
+#  volume needs its own: an attachment row without its file is unrecoverable.
 services:
   iams-api:
     image: ghcr.io/mpmartinez/iams-api:latest
@@ -44,7 +48,8 @@ services:
       Smtp__FromName: ${SMTP_FROM_NAME:-IAMS}
       App__WebUrl: https://iams.m2netsolutions.com
     volumes:
-      # No iams-data volume: the database lives in Neon now. iams-uploads must stay -
+      # No iams-data volume: the database is external, reached via DATABASE_CONNECTION.
+      # iams-uploads must stay -
       # attachment files are on disk, only their metadata rows are in the database.
       - iams-uploads:/app/Uploads
     # The image's built-in HEALTHCHECK runs `curl -f /health`, but curl isn't in the
