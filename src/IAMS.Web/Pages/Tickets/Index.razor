@@ -372,7 +372,7 @@
 
         try
         {
-            _tickets = await Api.GetTicketsAsync(_type, _status, _priority, null, null, _search, _page);
+            _tickets = await Api.GetTicketsAsync(_type, null, _status, _priority, null, null, _search, _page);
         }
         catch
         {
