@@ -74,7 +74,7 @@ namespace IAMS.Api.Migrations
             migrationBuilder.AddColumn<int>(name: "AssetAssignmentId", table: "Tickets", nullable: true);
 
             // Asset gains an accountable owner and a physical-verification stamp.
-            migrationBuilder.AddColumn<string>(name: "OwnerUserId", table: "Assets", maxLength: 450, nullable: true);
+            migrationBuilder.AddColumn<string>(name: "OwnerUserId", table: "Assets", nullable: true);
             migrationBuilder.AddColumn<DateTime>(name: "LastVerifiedAt", table: "Assets", nullable: true);
 
             // A Request exists before the asset that will fulfil it, so AssetId becomes optional
@@ -95,7 +95,10 @@ namespace IAMS.Api.Migrations
             migrationBuilder.Sql(@"UPDATE ""Tickets"" SET ""Resolution"" = ""Notes"" WHERE ""Notes"" IS NOT NULL;");
 
             // A completed maintenance record was both resolved and closed at the same moment.
-            migrationBuilder.Sql(@"UPDATE ""Tickets"" SET ""ClosedAt"" = ""ResolvedAt"" WHERE ""Status"" IN ('Completed', 'Cancelled');");
+            // A cancelled record rarely carried a completion timestamp, so its creation date
+            // stands in as ClosedAt instead of leaving these rows looking permanently open.
+            // This is deliberate, not a bug for a later reader to "fix".
+            migrationBuilder.Sql(@"UPDATE ""Tickets"" SET ""ClosedAt"" = COALESCE(""ResolvedAt"", ""CreatedAt"") WHERE ""Status"" IN ('Completed', 'Cancelled');");
 
             // Status remap: Pending -> New, Completed -> Closed. InProgress and Cancelled are unchanged.
             migrationBuilder.Sql(@"UPDATE ""Tickets"" SET ""Status"" = 'New' WHERE ""Status"" = 'Pending';");
@@ -111,6 +114,12 @@ namespace IAMS.Api.Migrations
             ");
 
             migrationBuilder.DropColumn(name: "Notes", table: "Tickets");
+
+            // EF adds these defaults so the columns can be added to a populated table.
+            // The model declares none, so clear them once the backfill has run.
+            migrationBuilder.Sql(@"ALTER TABLE ""Tickets"" ALTER COLUMN ""TicketNumber"" DROP DEFAULT;");
+            migrationBuilder.Sql(@"ALTER TABLE ""Tickets"" ALTER COLUMN ""Type"" DROP DEFAULT;");
+            migrationBuilder.Sql(@"ALTER TABLE ""Tickets"" ALTER COLUMN ""Priority"" DROP DEFAULT;");
 
             // --- Indexes and constraints ---
             migrationBuilder.CreateIndex(
