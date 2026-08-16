@@ -1142,17 +1142,52 @@ public class AuditLogTests
             await TestDb.SeedTenantAsync(db, tenantId);
             await TestDb.SeedUserAsync(db, tenantId, "staff-1", "R. Santos");
 
-            db.Tickets.Add(new Ticket
+            var ticket = new Ticket
             {
                 TenantId = tenantId, TicketNumber = 1,
                 Title = "Printer jams", RequesterUserId = "staff-1"
-            });
+            };
+            db.Tickets.Add(ticket);
             await db.SaveChangesAsync();
 
             var entry = await db.AuditLogs.SingleAsync(a => a.EntityType == "Ticket");
             Assert.Equal(AuditActions.Created, entry.Action);
             Assert.Equal("staff-1", entry.UserId);
             Assert.Equal(tenantId, entry.TenantId);
+
+            // The whole point of the two-phase write: a Created entry names its row.
+            Assert.Equal(ticket.Id.ToString(), entry.EntityId);
+            Assert.NotEqual("0", entry.EntityId);
+            Assert.NotEqual("", entry.EntityId);
+        }
+    }
+
+    [Fact]
+    public async Task Deleting_a_ticket_records_a_Deleted_entry_with_its_key()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = CreateAudited();
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "staff-1", "R. Santos");
+
+            var ticket = new Ticket
+            {
+                TenantId = tenantId, TicketNumber = 1,
+                Title = "Printer jams", RequesterUserId = "staff-1"
+            };
+            db.Tickets.Add(ticket);
+            await db.SaveChangesAsync();
+            var id = ticket.Id;
+
+            db.Tickets.Remove(ticket);
+            await db.SaveChangesAsync();
+
+            var entry = await db.AuditLogs.SingleAsync(a => a.Action == AuditActions.Deleted);
+            Assert.Equal("Ticket", entry.EntityType);
+            Assert.Equal(id.ToString(), entry.EntityId);
         }
     }
 
@@ -1278,6 +1313,14 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
 
     private readonly ICurrentUserAccessor _currentUser;
 
+    /// <summary>Audit rows built during SavingChanges, persisted during SavedChanges.</summary>
+    private readonly List<PendingAudit> _pending = [];
+
+    /// <summary>True while writing audit rows, so the second save does not re-enter collection.</summary>
+    private bool _writing;
+
+    private sealed record PendingAudit(AuditLog Log, EntityEntry? InsertedEntry);
+
     public AuditSaveChangesInterceptor(ICurrentUserAccessor currentUser) => _currentUser = currentUser;
 
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
@@ -1285,26 +1328,37 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        if (eventData.Context is not null)
-            WriteAuditEntries(eventData.Context);
-
+        Collect(eventData.Context);
         return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData, InterceptionResult<int> result)
     {
-        if (eventData.Context is not null)
-            WriteAuditEntries(eventData.Context);
-
+        Collect(eventData.Context);
         return base.SavingChanges(eventData, result);
     }
 
-    private void WriteAuditEntries(DbContext context)
+    public override async ValueTask<int> SavedChangesAsync(
+        SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default)
     {
+        await FlushAsync(eventData.Context, cancellationToken);
+        return await base.SavedChangesAsync(eventData, result, cancellationToken);
+    }
+
+    public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
+    {
+        Flush(eventData.Context);
+        return base.SavedChanges(eventData, result);
+    }
+
+    private void Collect(DbContext? context)
+    {
+        if (context is null || _writing) return;
+
+        _pending.Clear();
         var userId = _currentUser.GetUserId();
 
-        // Materialise first: adding audit rows mutates the ChangeTracker.
         var tracked = context.ChangeTracker.Entries()
             .Where(e => AuditedTypes.Contains(e.Metadata.ClrType.Name))
             .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
@@ -1315,11 +1369,14 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
             var tenantId = ReadTenantId(entry);
             if (tenantId is null) continue;
 
+            var isInsert = entry.State == EntityState.Added;
+
             var log = new AuditLog
             {
                 TenantId = tenantId.Value,
                 EntityType = entry.Metadata.ClrType.Name,
-                EntityId = ReadKey(entry),
+                // An inserted row has no identity value yet; resolved in Flush.
+                EntityId = isInsert ? "" : ReadKey(entry),
                 UserId = userId,
                 Timestamp = DateTime.UtcNow,
                 Action = entry.State switch
@@ -1331,8 +1388,48 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
                 Changes = entry.State == EntityState.Modified ? SerialiseChanges(entry) : null
             };
 
-            context.Add(log);
+            _pending.Add(new PendingAudit(log, isInsert ? entry : null));
         }
+    }
+
+    private List<AuditLog>? TakeResolved()
+    {
+        if (_pending.Count == 0 || _writing) return null;
+
+        var batch = _pending.ToList();
+        _pending.Clear();
+
+        foreach (var item in batch)
+        {
+            if (item.InsertedEntry is not null)
+                item.Log.EntityId = ReadKey(item.InsertedEntry);
+        }
+
+        return batch.Select(b => b.Log).ToList();
+    }
+
+    private void Flush(DbContext? context)
+    {
+        if (context is null) return;
+        var logs = TakeResolved();
+        if (logs is null) return;
+
+        context.AddRange(logs);
+        _writing = true;
+        try { context.SaveChanges(); }
+        finally { _writing = false; }
+    }
+
+    private async Task FlushAsync(DbContext? context, CancellationToken ct)
+    {
+        if (context is null) return;
+        var logs = TakeResolved();
+        if (logs is null) return;
+
+        context.AddRange(logs);
+        _writing = true;
+        try { await context.SaveChangesAsync(ct); }
+        finally { _writing = false; }
     }
 
     private static Guid? ReadTenantId(EntityEntry entry)
@@ -1371,7 +1468,7 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
 }
 ```
 
-`ReadKey` returns `"0"` for newly inserted rows because the identity value is not assigned until after the insert. Accept that for now — the `EntityType` plus `Timestamp` plus `Changes` still identify the event, and Created entries carry the full row in the following Updated entries. A follow-up task can resolve inserted keys in `SavedChangesAsync`.
+Note the two-phase design. A row's identity value does not exist until after its INSERT, so audit entries cannot all be written in `SavingChanges`: the interceptor collects them there, then resolves inserted keys and persists them in `SavedChanges`. The `_writing` guard stops that second save from re-entering collection. Without this, every `Created` entry would record `EntityId = "0"` and be useless as evidence — which is the whole reason the table exists.
 
 - [ ] **Step 4: Register the interceptor**
 
@@ -1393,7 +1490,7 @@ Keep whatever `UseNpgsql` arguments the existing call already passes — only th
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter AuditLogTests`
-Expected: `Passed! - Failed: 0, Passed: 4`
+Expected: `Passed! - Failed: 0, Passed: 5`
 
 - [ ] **Step 6: Commit**
 
