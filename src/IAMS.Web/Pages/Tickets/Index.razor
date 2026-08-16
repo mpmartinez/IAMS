@@ -1,0 +1,361 @@
+@page "/tickets"
+@attribute [Authorize(Roles = "Admin,Staff")]
+@implements IDisposable
+@inject ApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Tickets - IAMS</PageTitle>
+
+<div class="space-y-4 sm:space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Tickets</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Service desk queue</p>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    @if (_summary is not null)
+    {
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-amber-200 dark:border-amber-900/50 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">@_summary.Open</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Open</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-slate-900 dark:text-white">@_summary.Unassigned</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Unassigned</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-blue-200 dark:border-blue-900/50 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">@_summary.InProgress</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">In Progress</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 dark:border-red-900/50 p-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-2xl font-bold text-red-600 dark:text-red-400">@_summary.Overdue</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Overdue</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Filters -->
+    <div class="flex flex-col gap-3">
+        <!-- Search -->
+        <div class="relative">
+            <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input type="text"
+                   @bind="_search"
+                   @bind:event="oninput"
+                   @onkeyup="HandleSearch"
+                   placeholder="Search by title, reference, requester..."
+                   class="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 text-sm" />
+        </div>
+        <!-- Filter Dropdowns -->
+        <div class="flex flex-col sm:flex-row gap-3">
+            <select @bind="_type" @bind:after="LoadTickets" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+                <option value="">All Types</option>
+                <option value="Incident">Incident</option>
+                <option value="Request">Request</option>
+                <option value="SecurityEvent">Security Event</option>
+            </select>
+            <select @bind="_status" @bind:after="LoadTickets" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+                <option value="">All Statuses</option>
+                <option value="New">New</option>
+                <option value="Assigned">Assigned</option>
+                <option value="InProgress">In Progress</option>
+                <option value="OnHold">On Hold</option>
+                <option value="Resolved">Resolved</option>
+                <option value="Closed">Closed</option>
+                <option value="Cancelled">Cancelled</option>
+            </select>
+            <select @bind="_priority" @bind:after="LoadTickets" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+                <option value="">All Priorities</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Results Summary -->
+    @if (_tickets is not null && !_loading)
+    {
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="text-sm text-slate-500 dark:text-slate-400">
+                Showing @_tickets.Items.Count of @_tickets.TotalCount tickets
+                @if (_hasFilters)
+                {
+                    <button @onclick="ClearFilters" class="ml-2 text-primary-600 dark:text-primary-400 hover:underline">
+                        Clear filters
+                    </button>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Queue Table -->
+    @if (_loading)
+    {
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+            @for (int i = 0; i < 6; i++)
+            {
+                <div class="flex items-center gap-4">
+                    <div class="flex-1 space-y-2">
+                        <div class="h-4 w-1/3 rounded skeleton"></div>
+                        <div class="h-3 w-1/5 rounded skeleton"></div>
+                    </div>
+                    <div class="h-4 w-16 rounded skeleton hidden sm:block"></div>
+                    <div class="h-4 w-20 rounded skeleton hidden md:block"></div>
+                    <div class="h-4 w-20 rounded skeleton"></div>
+                </div>
+            }
+        </div>
+    }
+    else if (_tickets?.Items.Any() == true)
+    {
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Ticket</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden sm:table-cell">Type</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden lg:table-cell">Asset</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden md:table-cell">Requester</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Priority</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden md:table-cell">Assignee</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden lg:table-cell">Age</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                        @foreach (var ticket in _tickets.Items)
+                        {
+                            <tr @key="ticket.Id" @onclick="() => NavigateToTicket(ticket.Id)"
+                                class="hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors duration-150">
+                                <td class="px-4 py-3">
+                                    <div class="min-w-0">
+                                        <div class="font-medium text-slate-900 dark:text-white truncate text-sm">@ticket.Title</div>
+                                        <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">@ticket.Reference</div>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 hidden sm:table-cell">
+                                    <Badge Text="@GetTypeLabel(ticket.Type)" Variant="@ticket.Type" />
+                                </td>
+                                <td class="px-4 py-3 hidden lg:table-cell">
+                                    <span class="text-sm text-slate-600 dark:text-slate-300 font-mono">@(ticket.AssetTag ?? "-")</span>
+                                </td>
+                                <td class="px-4 py-3 hidden md:table-cell">
+                                    <span class="text-sm text-slate-600 dark:text-slate-300">@(ticket.RequesterName ?? "-")</span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <Badge Text="@ticket.Priority" Variant="@ticket.Priority" />
+                                </td>
+                                <td class="px-4 py-3">
+                                    <Badge Text="@GetStatusLabel(ticket.Status)" Variant="@ticket.Status" />
+                                </td>
+                                <td class="px-4 py-3 hidden md:table-cell">
+                                    <span class="text-sm text-slate-600 dark:text-slate-300">@(ticket.AssignedToName ?? "Unassigned")</span>
+                                </td>
+                                <td class="px-4 py-3 hidden lg:table-cell">
+                                    <span class="text-sm text-slate-500 dark:text-slate-400">@GetAge(ticket.CreatedAt)</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        @if (_tickets.TotalPages > 1)
+        {
+            <div class="flex items-center justify-center gap-2 pt-4">
+                <button @onclick="() => ChangePage(_page - 1)"
+                        disabled="@(!_tickets.HasPrevious)"
+                        class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <span class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">
+                    Page @_page of @_tickets.TotalPages
+                </span>
+                <button @onclick="() => ChangePage(_page + 1)"
+                        disabled="@(!_tickets.HasNext)"
+                        class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+            </div>
+        }
+    }
+    else
+    {
+        <Card>
+            <EmptyState Title="No tickets found" Description="@(_hasFilters ? "Try adjusting your filters." : "No tickets have been raised yet.")">
+                @if (_hasFilters)
+                {
+                    <button @onclick="ClearFilters" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200">
+                        Clear Filters
+                    </button>
+                }
+            </EmptyState>
+        </Card>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private PagedResponse<TicketListItemDto>? _tickets;
+    private TicketSummaryDto? _summary;
+    private string _search = "";
+    private string _type = "";
+    private string _status = "";
+    private string _priority = "";
+    private int _page = 1;
+    private System.Timers.Timer? _searchTimer;
+
+    private bool _hasFilters => !string.IsNullOrEmpty(_search) || !string.IsNullOrEmpty(_type) || !string.IsNullOrEmpty(_status) || !string.IsNullOrEmpty(_priority);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadTickets(), LoadSummary());
+    }
+
+    private async Task LoadTickets()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            _tickets = await Api.GetTicketsAsync(_type, _status, _priority, null, null, _search, _page);
+        }
+        catch
+        {
+            _tickets = null;
+        }
+
+        _loading = false;
+    }
+
+    private async Task LoadSummary()
+    {
+        try
+        {
+            _summary = await Api.GetTicketSummaryAsync();
+        }
+        catch
+        {
+            _summary = null;
+        }
+    }
+
+    private void HandleSearch(KeyboardEventArgs e)
+    {
+        _searchTimer?.Stop();
+        _searchTimer?.Dispose();
+        _searchTimer = new System.Timers.Timer(300);
+        _searchTimer.Elapsed += async (s, ev) =>
+        {
+            _searchTimer?.Stop();
+            _page = 1;
+            await InvokeAsync(async () =>
+            {
+                await LoadTickets();
+                StateHasChanged();
+            });
+        };
+        _searchTimer.Start();
+    }
+
+    private async Task ChangePage(int newPage)
+    {
+        _page = newPage;
+        await LoadTickets();
+    }
+
+    private async Task ClearFilters()
+    {
+        _search = "";
+        _type = "";
+        _status = "";
+        _priority = "";
+        _page = 1;
+        await LoadTickets();
+    }
+
+    public void Dispose()
+    {
+        _searchTimer?.Dispose();
+    }
+
+    private void NavigateToTicket(int id)
+    {
+        Navigation.NavigateTo($"/tickets/{id}");
+    }
+
+    private string GetAge(DateTime createdAt)
+    {
+        var span = DateTime.UtcNow - createdAt;
+        if (span.TotalMinutes < 1) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h";
+        if (span.TotalDays < 30) return $"{(int)span.TotalDays}d";
+        return $"{(int)(span.TotalDays / 30)}mo";
+    }
+
+    private string GetTypeLabel(string type) => type switch
+    {
+        "SecurityEvent" => "Security Event",
+        _ => type
+    };
+
+    private string GetStatusLabel(string status) => status switch
+    {
+        "InProgress" => "In Progress",
+        "OnHold" => "On Hold",
+        _ => status
+    };
+}

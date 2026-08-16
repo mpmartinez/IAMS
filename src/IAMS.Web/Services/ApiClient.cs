@@ -368,6 +368,123 @@ public class ApiClient(HttpClient http, AuthService authService)
         return url;
     }
 
+    // Ticket APIs
+    public async Task<PagedResponse<TicketListItemDto>?> GetTicketsAsync(
+        string? type = null,
+        string? status = null,
+        string? priority = null,
+        string? assignedToUserId = null,
+        int? assetId = null,
+        string? search = null,
+        int page = 1,
+        int pageSize = 25)
+    {
+        var client = await GetAuthenticatedClient();
+        var query = $"api/tickets?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(type)) query += $"&type={Uri.EscapeDataString(type)}";
+        if (!string.IsNullOrEmpty(status)) query += $"&status={Uri.EscapeDataString(status)}";
+        if (!string.IsNullOrEmpty(priority)) query += $"&priority={Uri.EscapeDataString(priority)}";
+        if (!string.IsNullOrEmpty(assignedToUserId)) query += $"&assignedToUserId={Uri.EscapeDataString(assignedToUserId)}";
+        if (assetId.HasValue) query += $"&assetId={assetId.Value}";
+        if (!string.IsNullOrEmpty(search)) query += $"&search={Uri.EscapeDataString(search)}";
+
+        var response = await client.GetFromJsonAsync<ApiResponse<PagedResponse<TicketListItemDto>>>(query);
+        return response?.Data;
+    }
+
+    public async Task<TicketDto?> GetTicketAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<TicketDto>>($"api/tickets/{id}");
+        return response?.Data;
+    }
+
+    public async Task<TicketSummaryDto?> GetTicketSummaryAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<TicketSummaryDto>>("api/tickets/summary");
+        return response?.Data;
+    }
+
+    public async Task<(bool Success, TicketDto? Ticket, string? Error)> CreateTicketAsync(CreateTicketRequest request)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync("api/tickets", request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, null, error?.Message ?? "Failed to create ticket");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<ApiResponse<TicketDto>>();
+        return (true, result?.Data, null);
+    }
+
+    public async Task<(bool Success, string? Error)> AssignTicketAsync(int id, string assignedToUserId)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync($"api/tickets/{id}/assign", new AssignTicketRequest { AssignedToUserId = assignedToUserId });
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to assign ticket");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> ChangeTicketStatusAsync(int id, string status)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync($"api/tickets/{id}/status", new ChangeTicketStatusRequest { Status = status });
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to update ticket status");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> ResolveTicketAsync(int id, string resolution)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync($"api/tickets/{id}/resolve", new ResolveTicketRequest { Resolution = resolution });
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to resolve ticket");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<List<TicketCommentDto>?> GetTicketCommentsAsync(int ticketId)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<TicketCommentDto>>>($"api/tickets/{ticketId}/comments");
+        return response?.Data;
+    }
+
+    public async Task<(bool Success, TicketCommentDto? Comment, string? Error)> AddTicketCommentAsync(int ticketId, string body, bool isInternal)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync($"api/tickets/{ticketId}/comments", new AddTicketCommentRequest { Body = body, IsInternal = isInternal });
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, null, error?.Message ?? "Failed to add comment");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<ApiResponse<TicketCommentDto>>();
+        return (true, result?.Data, null);
+    }
+
     // QR Code API
     public async Task<string?> GetAssetQrCodeBase64Async(int assetId, int size = 15, bool tagOnly = true)
     {

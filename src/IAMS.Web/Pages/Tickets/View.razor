@@ -1,0 +1,442 @@
+@page "/tickets/{Id:int}"
+@attribute [Authorize(Roles = "Admin,Staff")]
+@inject ApiClient Api
+@inject NavigationManager Navigation
+@inject SnackbarService Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>@(_ticket is null ? "Ticket" : _ticket.Reference) - IAMS</PageTitle>
+
+@if (_loading)
+{
+    <div class="space-y-6 animate-pulse">
+        <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-lg skeleton"></div>
+            <div class="h-8 w-48 rounded skeleton"></div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+            <div class="space-y-4">
+                <div class="h-6 w-1/3 rounded skeleton"></div>
+                <div class="h-4 w-1/2 rounded skeleton"></div>
+                <div class="h-4 w-2/3 rounded skeleton"></div>
+            </div>
+        </div>
+    </div>
+}
+else if (_ticket is null)
+{
+    <Card>
+        <EmptyState Title="Ticket not found" Description="The ticket you're looking for doesn't exist or you don't have access to it.">
+            <a href="/tickets" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                Back to Tickets
+            </a>
+        </EmptyState>
+    </Card>
+}
+else
+{
+    <div class="space-y-4 sm:space-y-6">
+        <!-- Header -->
+        <div class="flex flex-col gap-4">
+            <div class="flex items-start gap-2 sm:gap-4">
+                <a href="/tickets" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200 shrink-0">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white truncate">@_ticket.Title</h1>
+                        <Badge Text="@GetTypeLabel(_ticket.Type)" Variant="@_ticket.Type" />
+                        <Badge Text="@_ticket.Priority" Variant="@_ticket.Priority" />
+                        <Badge Text="@GetStatusLabel(_ticket.Status)" Variant="@_ticket.Status" />
+                    </div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 font-mono">@_ticket.Reference</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <!-- Main Column -->
+            <div class="lg:col-span-2 space-y-4 sm:space-y-6">
+                <!-- Description -->
+                <Card Title="Description">
+                    @if (!string.IsNullOrWhiteSpace(_ticket.Description))
+                    {
+                        <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-sm">@_ticket.Description</p>
+                    }
+                    else
+                    {
+                        <p class="text-sm text-slate-400 dark:text-slate-500">No description provided.</p>
+                    }
+                </Card>
+
+                <!-- Activity -->
+                <Card Title="Activity">
+                    <ChildContent>
+                        <div class="space-y-4">
+                            @if (_ticket.Comments.Count == 0)
+                            {
+                                <p class="text-sm text-slate-500 dark:text-slate-400 text-center py-4">No activity yet</p>
+                            }
+                            else
+                            {
+                                @foreach (var comment in _ticket.Comments)
+                                {
+                                    <div @key="comment.Id" class="@GetCommentClasses(comment)">
+                                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-sm font-medium text-slate-900 dark:text-white">@(comment.AuthorName ?? "Unknown")</span>
+                                                @if (comment.IsInternal)
+                                                {
+                                                    <span class="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded">Internal Note</span>
+                                                }
+                                            </div>
+                                            <span class="text-xs text-slate-400 dark:text-slate-500 shrink-0">@comment.CreatedAt.ToString("MMM dd, yyyy HH:mm")</span>
+                                        </div>
+                                        <p class="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">@comment.Body</p>
+                                    </div>
+                                }
+                            }
+                        </div>
+
+                        <!-- New comment box -->
+                        <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 space-y-3">
+                            <textarea @bind="_commentBody" rows="3" placeholder="Write a reply or internal note..."
+                                      class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
+                            <div class="flex flex-col sm:flex-row gap-2 sm:justify-end">
+                                <Button Variant="outline" OnClick="() => SubmitComment(true)" Loading="@_submittingInternal" Disabled="@(string.IsNullOrWhiteSpace(_commentBody) || _submittingReply)">
+                                    Add Internal Note
+                                </Button>
+                                <Button Variant="primary" OnClick="() => SubmitComment(false)" Loading="@_submittingReply" Disabled="@(string.IsNullOrWhiteSpace(_commentBody) || _submittingInternal)">
+                                    Reply to Requester
+                                </Button>
+                            </div>
+                        </div>
+                    </ChildContent>
+                </Card>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-4 sm:space-y-6">
+                @if (_ticket.AssetId.HasValue)
+                {
+                    <Card Title="Linked Asset">
+                        <div class="space-y-4">
+                            <DetailItem Label="Asset Tag" Value="@(_ticket.AssetTag ?? "-")" />
+                            <DetailItem Label="Device" Value="@(_ticket.AssetName ?? "-")" />
+                            <DetailItem Label="Status" Value="@(_ticket.AssetStatus ?? "-")" />
+                            <DetailItem Label="Warranty End" Value="@(_ticket.WarrantyEndDate?.ToString("MMM dd, yyyy") ?? "-")" WarningDate="@_ticket.WarrantyEndDate" />
+                            <a href="/assets/@_ticket.AssetId" class="inline-flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
+                                View Asset
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                </svg>
+                            </a>
+                        </div>
+                    </Card>
+                }
+
+                <Card Title="Actions">
+                    <div class="space-y-2">
+                        @if (CanAssignToMe)
+                        {
+                            <button @onclick="AssignToMe" disabled="@_actionInProgress" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm disabled:opacity-50">
+                                <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                Assign to Me
+                            </button>
+                        }
+                        @if (CanStart)
+                        {
+                            <button @onclick="StartWork" disabled="@_actionInProgress" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm disabled:opacity-50">
+                                <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Start Work
+                            </button>
+                        }
+                        @if (CanResolve)
+                        {
+                            <button @onclick="ShowResolveModal" disabled="@_actionInProgress" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm disabled:opacity-50">
+                                <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Resolve
+                            </button>
+                        }
+                        @if (CanClose)
+                        {
+                            <button @onclick="CloseTicket" disabled="@_actionInProgress" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 text-sm disabled:opacity-50">
+                                <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Close
+                            </button>
+                        }
+                        @if (!CanAssignToMe && !CanStart && !CanResolve && !CanClose)
+                        {
+                            <p class="text-sm text-slate-400 dark:text-slate-500 text-center py-2">No actions available</p>
+                        }
+                    </div>
+                </Card>
+
+                <Card Title="Details">
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between gap-2">
+                            <span class="text-slate-500 dark:text-slate-400">Requester</span>
+                            <span class="text-slate-900 dark:text-white text-right">@(_ticket.RequesterName ?? "-")</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(_ticket.RequesterDepartment))
+                        {
+                            <div class="flex justify-between gap-2">
+                                <span class="text-slate-500 dark:text-slate-400">Department</span>
+                                <span class="text-slate-900 dark:text-white text-right">@_ticket.RequesterDepartment</span>
+                            </div>
+                        }
+                        <div class="flex justify-between gap-2">
+                            <span class="text-slate-500 dark:text-slate-400">Assignee</span>
+                            <span class="text-slate-900 dark:text-white text-right">@(_ticket.AssignedToName ?? "Unassigned")</span>
+                        </div>
+                        <div class="flex justify-between gap-2">
+                            <span class="text-slate-500 dark:text-slate-400">Created</span>
+                            <span class="text-slate-900 dark:text-white text-right">@_ticket.CreatedAt.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        @if (_ticket.ResolvedAt.HasValue)
+                        {
+                            <div class="flex justify-between gap-2">
+                                <span class="text-slate-500 dark:text-slate-400">Resolved</span>
+                                <span class="text-slate-900 dark:text-white text-right">@_ticket.ResolvedAt.Value.ToString("MMM dd, yyyy")</span>
+                            </div>
+                        }
+                        @if (_ticket.ClosedAt.HasValue)
+                        {
+                            <div class="flex justify-between gap-2">
+                                <span class="text-slate-500 dark:text-slate-400">Closed</span>
+                                <span class="text-slate-900 dark:text-white text-right">@_ticket.ClosedAt.Value.ToString("MMM dd, yyyy")</span>
+                            </div>
+                        }
+                    </div>
+                </Card>
+
+                @if (!string.IsNullOrWhiteSpace(_ticket.Resolution))
+                {
+                    <Card Title="Resolution">
+                        <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-sm">@_ticket.Resolution</p>
+                    </Card>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Resolve Modal -->
+    <Modal IsOpen="@_showResolveModal" Title="Resolve Ticket" OnClose="HideResolveModal">
+        <ChildContent>
+            <div class="space-y-4">
+                <p class="text-slate-600 dark:text-slate-300 text-sm">
+                    Describe how <strong>@_ticket.Title</strong> was resolved. This is required.
+                </p>
+                <textarea @bind="_resolutionText" rows="4" placeholder="Resolution notes..."
+                          class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
+                @if (!string.IsNullOrEmpty(_resolveError))
+                {
+                    <p class="text-sm text-red-600 dark:text-red-400">@_resolveError</p>
+                }
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="HideResolveModal">Cancel</Button>
+            <Button OnClick="ConfirmResolve" Loading="@_resolving" Disabled="@string.IsNullOrWhiteSpace(_resolutionText)">Resolve</Button>
+        </FooterContent>
+    </Modal>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _loading = true;
+    private TicketDto? _ticket;
+    private string _currentUserId = "";
+
+    private string _commentBody = "";
+    private bool _submittingReply;
+    private bool _submittingInternal;
+
+    private bool _actionInProgress;
+
+    private bool _showResolveModal;
+    private bool _resolving;
+    private string _resolutionText = "";
+    private string _resolveError = "";
+
+    private static readonly string[] OpenStatuses = ["New", "Assigned", "InProgress", "OnHold"];
+
+    private bool CanAssignToMe => _ticket is not null
+        && OpenStatuses.Contains(_ticket.Status)
+        && _ticket.AssignedToUserId != _currentUserId;
+
+    private bool CanStart => _ticket is not null
+        && (_ticket.Status == "Assigned" || _ticket.Status == "OnHold");
+
+    private bool CanResolve => _ticket is not null && _ticket.Status == "InProgress";
+
+    private bool CanClose => _ticket is not null && _ticket.Status == "Resolved";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        await LoadTicket();
+    }
+
+    private async Task LoadTicket()
+    {
+        try
+        {
+            _ticket = await Api.GetTicketAsync(Id);
+        }
+        catch
+        {
+            _ticket = null;
+        }
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private string GetCommentClasses(TicketCommentDto comment) => comment.IsInternal
+        ? "rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 p-3"
+        : "rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30 p-3";
+
+    private string GetTypeLabel(string type) => type switch
+    {
+        "SecurityEvent" => "Security Event",
+        _ => type
+    };
+
+    private string GetStatusLabel(string status) => status switch
+    {
+        "InProgress" => "In Progress",
+        "OnHold" => "On Hold",
+        _ => status
+    };
+
+    private async Task SubmitComment(bool isInternal)
+    {
+        if (string.IsNullOrWhiteSpace(_commentBody)) return;
+
+        if (isInternal) _submittingInternal = true; else _submittingReply = true;
+
+        var (success, _, error) = await Api.AddTicketCommentAsync(Id, _commentBody, isInternal);
+
+        if (success)
+        {
+            _commentBody = "";
+            Snackbar.Success(isInternal ? "Internal note added" : "Reply sent");
+            await LoadTicket();
+        }
+        else
+        {
+            Snackbar.Error(error ?? "Failed to add comment");
+        }
+
+        _submittingInternal = false;
+        _submittingReply = false;
+    }
+
+    private async Task AssignToMe()
+    {
+        _actionInProgress = true;
+
+        var (success, error) = await Api.AssignTicketAsync(Id, _currentUserId);
+
+        if (success)
+        {
+            Snackbar.Success("Ticket assigned to you");
+            await LoadTicket();
+        }
+        else
+        {
+            Snackbar.Error(error ?? "Failed to assign ticket");
+        }
+
+        _actionInProgress = false;
+    }
+
+    private async Task StartWork()
+    {
+        _actionInProgress = true;
+
+        var (success, error) = await Api.ChangeTicketStatusAsync(Id, "InProgress");
+
+        if (success)
+        {
+            Snackbar.Success("Ticket moved to In Progress");
+            await LoadTicket();
+        }
+        else
+        {
+            Snackbar.Error(error ?? "Failed to update ticket");
+        }
+
+        _actionInProgress = false;
+    }
+
+    private async Task CloseTicket()
+    {
+        _actionInProgress = true;
+
+        var (success, error) = await Api.ChangeTicketStatusAsync(Id, "Closed");
+
+        if (success)
+        {
+            Snackbar.Success("Ticket closed");
+            await LoadTicket();
+        }
+        else
+        {
+            Snackbar.Error(error ?? "Failed to close ticket");
+        }
+
+        _actionInProgress = false;
+    }
+
+    private void ShowResolveModal()
+    {
+        _resolutionText = "";
+        _resolveError = "";
+        _showResolveModal = true;
+    }
+
+    private void HideResolveModal() => _showResolveModal = false;
+
+    private async Task ConfirmResolve()
+    {
+        if (string.IsNullOrWhiteSpace(_resolutionText))
+        {
+            _resolveError = "A resolution note is required.";
+            return;
+        }
+
+        _resolving = true;
+        _resolveError = "";
+
+        var (success, error) = await Api.ResolveTicketAsync(Id, _resolutionText);
+
+        if (success)
+        {
+            _showResolveModal = false;
+            Snackbar.Success("Ticket resolved");
+            await LoadTicket();
+        }
+        else
+        {
+            _resolveError = error ?? "Failed to resolve ticket";
+        }
+
+        _resolving = false;
+    }
+}
