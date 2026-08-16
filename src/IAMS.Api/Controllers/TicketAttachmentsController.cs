@@ -69,10 +69,10 @@ public class TicketAttachmentsController(
     }
 
     /// <summary>
-    /// Upload a new attachment
+    /// Upload a new attachment. Staff may upload to any ticket; a requester may only
+    /// upload to their own ticket - same ownership check as the read endpoints above.
     /// </summary>
     [HttpPost]
-    [Authorize(Policy = "Staff")]
     [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB to account for multipart overhead
     [Consumes("multipart/form-data")]
     public async Task<ActionResult<ApiResponse<TicketAttachmentDto>>> UploadAttachment(
@@ -85,6 +85,9 @@ public class TicketAttachmentsController(
         var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null)
             return NotFound(ApiResponse<TicketAttachmentDto>.Fail("Ticket not found"));
+
+        if (!IsStaff && ticket.RequesterUserId != CurrentUserId)
+            return Forbid();
 
         // Validate category
         if (!TicketAttachmentCategories.IsValid(category))
