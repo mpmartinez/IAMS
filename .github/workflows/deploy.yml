@@ -71,12 +71,26 @@ jobs:
           echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
+
+          # Diagnostics. A fingerprint is not a secret - it is the public identity of the
+          # key, which is exactly what the server checks against authorized_keys. If the
+          # line below does not match `ssh-keygen -lf ~/.ssh/github_actions.pub` on your
+          # machine, the DO_SSH_KEY_B64 secret holds the wrong key.
+          echo "--- decoded key ---"
+          if ssh-keygen -y -f ~/.ssh/deploy_key > /tmp/derived.pub 2>/dev/null; then
+            ssh-keygen -lf /tmp/derived.pub
+          else
+            echo "FAILED TO PARSE: the decoded file is not a valid OpenSSH private key."
+            echo "First line of what was decoded:"
+            head -c 40 ~/.ssh/deploy_key; echo
+          fi
         env:
           SSH_KEY_B64: ${{ secrets.DO_SSH_KEY_B64 }}
 
       - name: Create .env file on server
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && printf 'DATABASE_CONNECTION=${{ secrets.DATABASE_CONNECTION }}\nJWT_KEY=${{ secrets.JWT_KEY }}\nSMTP_HOST=${{ secrets.SMTP_HOST }}\nSMTP_PORT=${{ secrets.SMTP_PORT }}\nSMTP_USERNAME=${{ secrets.SMTP_USERNAME }}\nSMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}\nSMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }}\nSMTP_FROM_NAME=${{ secrets.SMTP_FROM_NAME }}\nAPP_WEB_URL=${{ secrets.APP_WEB_URL }}\n' > .env"
+          ssh -v -o IdentitiesOnly=yes -o PasswordAuthentication=no \
+            -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && printf 'DATABASE_CONNECTION=${{ secrets.DATABASE_CONNECTION }}\nJWT_KEY=${{ secrets.JWT_KEY }}\nSMTP_HOST=${{ secrets.SMTP_HOST }}\nSMTP_PORT=${{ secrets.SMTP_PORT }}\nSMTP_USERNAME=${{ secrets.SMTP_USERNAME }}\nSMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}\nSMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }}\nSMTP_FROM_NAME=${{ secrets.SMTP_FROM_NAME }}\nAPP_WEB_URL=${{ secrets.APP_WEB_URL }}\n' > .env"
 
       - name: Deploy to server
         env:
