@@ -202,17 +202,37 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
     /// A failed audit save must not fail the caller's already-committed operation, and the
     /// AuditLog entities EF still has tracked as Added must not leak into some unrelated
     /// later SaveChanges on the same context. Detach them, log the loss, and swallow it.
+    /// This is the last line of defence and must not throw.
     /// </summary>
     private void DetachAndLogFailure(DbContext context, List<AuditLog> logs, Exception ex)
     {
+        // Attempt to detach each log independently so a context.Entry() failure doesn't
+        // prevent other detaches or the logging attempt.
         foreach (var log in logs)
-            context.Entry(log).State = EntityState.Detached;
+        {
+            try
+            {
+                context.Entry(log).State = EntityState.Detached;
+            }
+            catch
+            {
+                // Swallow detach failures; we are already handling a failure and must not rethrow.
+            }
+        }
 
-        var entityTypes = string.Join(", ", logs.Select(l => l.EntityType).Distinct());
-        _logger.LogError(ex,
-            "Failed to persist {Count} audit log entries for entity types [{EntityTypes}]. " +
-            "The underlying business change already committed; this audit evidence is lost.",
-            logs.Count, entityTypes);
+        // Attempt to log the loss independently so a logger failure doesn't prevent detaches.
+        try
+        {
+            var entityTypes = string.Join(", ", logs.Select(l => l.EntityType).Distinct());
+            _logger.LogError(ex,
+                "Failed to persist {Count} audit log entries for entity types [{EntityTypes}]. " +
+                "The underlying business change already committed; this audit evidence is lost.",
+                logs.Count, entityTypes);
+        }
+        catch
+        {
+            // Swallow logger failures; we are already handling a failure and must not rethrow.
+        }
     }
 
     private static Guid? ReadTenantId(EntityEntry entry)
