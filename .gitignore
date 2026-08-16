@@ -432,3 +432,7 @@ src/IAMS.Api/Uploads/
 # `nul` is a reserved Windows device name; these appear from a stray `> nul` redirect
 # and break `git add -A` because git cannot open them.
 nul
+
+# Components copied from the MaritimeOne app, parked out of the build.
+# The layout shell here depends on MaritimeOne services IAMS does not have.
+_dropin-from-maritimeone/
