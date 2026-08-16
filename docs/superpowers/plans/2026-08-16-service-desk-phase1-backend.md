@@ -34,7 +34,7 @@
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `TestDb.Create(ITenantProvider? tenantProvider = null)` returning `(AppDbContext Db, SqliteConnection Connection)`; `TestDb.SeedTenantAsync(AppDbContext db, Guid tenantId)` returning `Task<Tenant>`; `FakeTenantProvider(Guid? tenantId, bool isSuperAdmin = false)`.
+- Produces: `TestDb.Create(ITenantProvider? tenantProvider = null)` returning `(AppDbContext Db, SqliteConnection Connection)` — omitting the provider yields a super-admin context that sees every tenant; `TestDb.SeedTenantAsync(AppDbContext db, Guid tenantId)` returning `Task<Tenant>`; `FakeTenantProvider(Guid? tenantId, bool isSuperAdmin = false)`.
 
 - [ ] **Step 1: Create the test project file**
 
@@ -124,9 +124,15 @@ public static class TestDb
             .UseSqlite(connection)
             .Options;
 
-        var db = tenantProvider is null
-            ? new AppDbContext(options)
-            : new AppDbContext(options, tenantProvider);
+        // Never use the tenant-provider-less constructor here. EF Core extracts
+        // _tenantProvider.GetCurrentTenantId() into a query parameter and evaluates it
+        // eagerly, so the `_tenantProvider == null` guard inside the global query filters
+        // does NOT short-circuit the way C# || would. A null provider throws
+        // NullReferenceException on the first query. A super-admin provider is the
+        // supported way to see across every tenant.
+        var db = new AppDbContext(
+            options,
+            tenantProvider ?? new FakeTenantProvider(null, isSuperAdmin: true));
 
         db.Database.EnsureCreated();
         return (db, connection);
@@ -1126,7 +1132,8 @@ public class AuditLogTests
             .AddInterceptors(new AuditSaveChangesInterceptor(new StubUser(userId)))
             .Options;
 
-        var db = new AppDbContext(options);
+        // Super-admin provider, not the provider-less constructor — see TestDb.Create.
+        var db = new AppDbContext(options, new FakeTenantProvider(null, isSuperAdmin: true));
         db.Database.EnsureCreated();
         return (db, connection);
     }
