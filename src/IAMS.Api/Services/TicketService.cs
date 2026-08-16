@@ -48,6 +48,9 @@ public interface ITicketService
 
     Task<ServiceResult<TicketComment>> AddCommentAsync(
         int ticketId, string userId, string body, bool isInternal, CancellationToken ct = default);
+
+    Task<ServiceResult> FulfilAsync(
+        int ticketId, int assetId, string resolution, string actingUserId, CancellationToken ct = default);
 }
 
 public partial class TicketService : ITicketService
