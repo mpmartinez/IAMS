@@ -444,9 +444,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(e => e.Action).HasMaxLength(50).IsRequired();
             entity.Property(e => e.UserId).HasMaxLength(450);
 
+            // Tenant-prefixed: every read passes the tenant query filter, so real
+            // queries are always WHERE TenantId = X AND ... . This table only grows.
             entity.HasIndex(e => e.TenantId);
-            entity.HasIndex(e => new { e.EntityType, e.EntityId });
-            entity.HasIndex(e => e.Timestamp);
+            entity.HasIndex(e => new { e.TenantId, e.EntityType, e.EntityId });
+            entity.HasIndex(e => new { e.TenantId, e.Timestamp });
 
             entity.HasOne(e => e.Tenant)
                 .WithMany()

@@ -17,7 +17,10 @@ public class TicketAttachment : ITenantEntity
     public required string Category { get; set; }
     public string? Description { get; set; }
 
-    public string? UploadedByUserId { get; set; }
+    // Required, matching the deleted MaintenanceAttachment: an audit feature must
+    // always record who uploaded a file. Keeping it non-null also spares the
+    // migration an ALTER COLUMN on an existing NOT NULL column.
+    public required string UploadedByUserId { get; set; }
     public ApplicationUser? UploadedByUser { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 }

@@ -119,4 +119,36 @@ public class TicketEntityTests
             Assert.Equal(2026, reloaded.LastVerifiedAt!.Value.Year);
         }
     }
+
+    [Fact]
+    public async Task Deleting_the_asset_clears_AssetId_but_keeps_the_ticket()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create();
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "user-1", "J. Dela Cruz");
+            var asset = await TestDb.SeedAssetAsync(db, tenantId, "IAMS-0242");
+
+            var ticket = new Ticket
+            {
+                TenantId = tenantId,
+                TicketNumber = 1,
+                Title = "Laptop won't boot",
+                RequesterUserId = "user-1",
+                AssetId = asset.Id
+            };
+            db.Tickets.Add(ticket);
+            await db.SaveChangesAsync();
+
+            db.Assets.Remove(asset);
+            await db.SaveChangesAsync();
+            db.ChangeTracker.Clear();
+
+            var reloaded = await db.Tickets.SingleAsync();
+            Assert.Null(reloaded.AssetId);
+        }
+    }
 }
