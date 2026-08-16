@@ -17,12 +17,21 @@ public class TicketsController : ControllerBase
 {
     private readonly ITicketService _tickets;
     private readonly AppDbContext _db;
+    private readonly ISubscriptionService _subscriptions;
+    private readonly ITenantProvider _tenants;
     private readonly ILogger<TicketsController> _logger;
 
-    public TicketsController(ITicketService tickets, AppDbContext db, ILogger<TicketsController> logger)
+    public TicketsController(
+        ITicketService tickets,
+        AppDbContext db,
+        ISubscriptionService subscriptions,
+        ITenantProvider tenants,
+        ILogger<TicketsController> logger)
     {
         _tickets = tickets;
         _db = db;
+        _subscriptions = subscriptions;
+        _tenants = tenants;
         _logger = logger;
     }
 
@@ -74,6 +83,7 @@ public class TicketsController : ControllerBase
     }
 
     [HttpGet("mine")]
+    [Authorize(Policy = "CanFileTickets")]
     public async Task<ActionResult<ApiResponse<List<TicketListItemDto>>>> Mine(CancellationToken ct)
     {
         var mine = await _db.Tickets
@@ -88,6 +98,7 @@ public class TicketsController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Policy = "CanFileTickets")]
     public async Task<ActionResult<ApiResponse<TicketDto>>> Get(int id, CancellationToken ct)
     {
         var ticket = await _db.Tickets
@@ -108,9 +119,15 @@ public class TicketsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "CanFileTickets")]
     public async Task<ActionResult<ApiResponse<TicketDto>>> Create(
         [FromBody] CreateTicketRequest request, CancellationToken ct)
     {
+        var tenantId = _tenants.GetRequiredTenantId();
+        if (!await _subscriptions.CanCreateTicketAsync(tenantId))
+            return BadRequest(ApiResponse<TicketDto>.Fail(
+                "Monthly ticket limit reached for your subscription. Please upgrade or contact your administrator."));
+
         ServiceResult<Ticket> result;
         try
         {

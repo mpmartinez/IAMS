@@ -27,6 +27,7 @@ public class TicketCommentsController : ControllerBase
     private bool IsStaff => User.IsInRole("Admin") || User.IsInRole("Staff");
 
     [HttpGet]
+    [Authorize(Policy = "CanFileTickets")]
     public async Task<ActionResult<ApiResponse<List<TicketCommentDto>>>> List(int ticketId, CancellationToken ct)
     {
         var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
@@ -47,6 +48,7 @@ public class TicketCommentsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "CanFileTickets")]
     public async Task<ActionResult<ApiResponse<TicketCommentDto>>> Add(
         int ticketId, [FromBody] AddTicketCommentRequest request, CancellationToken ct)
     {

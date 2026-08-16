@@ -123,6 +123,11 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("CanAssignAssets", policy => policy.RequireRole("Admin", "Staff"))
     .AddPolicy("CanReturnAssets", policy => policy.RequireRole("Admin", "Staff"))
     .AddPolicy("CanViewAssignments", policy => policy.RequireRole("Admin", "Staff", "Auditor"))
+    // Every authenticated role, including Employee: covers the ticket endpoints an office
+    // user must reach to file and follow their own tickets (POST /api/tickets,
+    // GET /api/tickets/mine, per-ticket read/comment). Queue-wide operations stay behind
+    // the narrower "Staff" policy.
+    .AddPolicy("CanFileTickets", policy => policy.RequireRole("SuperAdmin", "Admin", "Management", "Staff", "Auditor", "Employee"))
     // Multi-tenant policies
     .AddPolicy("SuperAdmin", policy => policy.RequireRole("SuperAdmin"))
     .AddPolicy("TenantAdmin", policy => policy.RequireAssertion(context =>
