@@ -2,6 +2,7 @@ using IAMS.Api.Entities;
 using IAMS.Api.Services;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace IAMS.Api.Data;
 
@@ -384,7 +385,42 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 _tenantProvider.IsSuperAdmin() ||
                 e.TenantId == _tenantProvider.GetCurrentTenantId());
         });
+
+        // Normalise every DateTime to UTC on the way to the database.
+        //
+        // Npgsql refuses the mismatch in both directions: timestamptz rejects Kind=Unspecified,
+        // and plain timestamp rejects Kind=Utc. This app writes both - DateTime.UtcNow gives
+        // Utc, while .Date truncation and dates deserialised from JSON without an offset (every
+        // <input type="date"> in the client) give Unspecified. No column type accepts both, so
+        // convert the values instead and keep the timestamptz default.
+        //
+        // Unspecified is treated as UTC, which is the convention this codebase already follows
+        // everywhere it stores a date.
+        //
+        // Must stay last: it applies to the DateTime properties configured above.
+        foreach (var property in modelBuilder.Model.GetEntityTypes()
+            .SelectMany(t => t.GetProperties()))
+        {
+            if (property.ClrType == typeof(DateTime))
+                property.SetValueConverter(UtcDateTimeConverter);
+            else if (property.ClrType == typeof(DateTime?))
+                property.SetValueConverter(NullableUtcDateTimeConverter);
+        }
     }
+
+    private static DateTime ToUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
+
+    private static readonly ValueConverter<DateTime, DateTime> UtcDateTimeConverter =
+        new(v => ToUtc(v), v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+    private static readonly ValueConverter<DateTime?, DateTime?> NullableUtcDateTimeConverter =
+        new(v => v.HasValue ? ToUtc(v.Value) : null,
+            v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : null);
 
     public override int SaveChanges()
     {

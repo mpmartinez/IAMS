@@ -8,8 +8,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5000
-      - ConnectionStrings__DefaultConnection=Data Source=/app/data/iams.db
-      - Jwt__Key=${JWT_KEY:-YourSuperSecretKeyThatIsAtLeast32CharactersLong!}
+      # PostgreSQL (Neon). Contains a password, so it is never committed - set
+      # DATABASE_CONNECTION in the server's .env alongside JWT_KEY.
+      - ConnectionStrings__DefaultConnection=${DATABASE_CONNECTION:?DATABASE_CONNECTION must be set in .env}
+      # No default: the API refuses to start without a real key rather than silently
+      # signing tokens with a placeholder. Set JWT_KEY in the server's .env.
+      - Jwt__Key=${JWT_KEY:?JWT_KEY must be set in .env}
       - Jwt__Issuer=${JWT_ISSUER:-IAMS}
       - Jwt__Audience=${JWT_AUDIENCE:-IAMS}
       - Cors__AllowedOrigins__0=${CORS_ORIGIN:-https://m2netsolutions.com}
@@ -21,7 +25,8 @@ services:
       - Smtp__FromName=${SMTP_FROM_NAME:-IAMS}
       - App__WebUrl=${APP_WEB_URL:-https://m2netsolutions.com:5022}
     volumes:
-      - iams-data:/app/data
+      # No iams-data volume: the database lives in Neon now. The uploads bind mount must
+      # stay - attachment files are on disk, only their metadata rows are in the database.
       - ./data/uploads:/app/Uploads
     restart: unless-stopped
     healthcheck:
@@ -43,6 +48,3 @@ services:
       - api
     restart: unless-stopped
 
-volumes:
-  iams-data:
-    driver: local

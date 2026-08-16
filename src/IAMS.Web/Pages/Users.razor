@@ -176,7 +176,9 @@
                         <option value="Management">Management</option>
                         <option value="Admin">Admin</option>
                         <option value="Auditor">Auditor</option>
-                        <option value="SuperAdmin">SuperAdmin</option>
+                        <AuthorizeView Roles="SuperAdmin" Context="superAdmin">
+                            <option value="SuperAdmin">SuperAdmin</option>
+                        </AuthorizeView>
                     </select>
                 </div>
                 @if (_isEditing)

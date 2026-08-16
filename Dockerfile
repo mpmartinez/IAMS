@@ -39,7 +39,9 @@ COPY --from=build /app/web/wwwroot ./wwwroot/app
 # Environment variables
 ENV ASPNETCORE_URLS=http://+:5000
 ENV ASPNETCORE_ENVIRONMENT=Production
-ENV ConnectionStrings__DefaultConnection="Data Source=/app/data/iams.db"
+# No ConnectionStrings__DefaultConnection default: the app is PostgreSQL-only now, and a
+# baked-in SQLite path would just make the container fail in a confusing way. Supply the
+# Neon connection string from the orchestrator's environment.
 
 # Expose port
 EXPOSE 5000

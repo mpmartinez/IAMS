@@ -76,7 +76,7 @@ jobs:
 
       - name: Create .env file on server
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && printf 'SMTP_HOST=${{ secrets.SMTP_HOST }}\nSMTP_PORT=${{ secrets.SMTP_PORT }}\nSMTP_USERNAME=${{ secrets.SMTP_USERNAME }}\nSMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}\nSMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }}\nSMTP_FROM_NAME=${{ secrets.SMTP_FROM_NAME }}\nAPP_WEB_URL=${{ secrets.APP_WEB_URL }}\n' > .env"
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }} "cd ${{ secrets.DO_PROJECT_PATH }} && printf 'DATABASE_CONNECTION=${{ secrets.DATABASE_CONNECTION }}\nJWT_KEY=${{ secrets.JWT_KEY }}\nSMTP_HOST=${{ secrets.SMTP_HOST }}\nSMTP_PORT=${{ secrets.SMTP_PORT }}\nSMTP_USERNAME=${{ secrets.SMTP_USERNAME }}\nSMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}\nSMTP_FROM_EMAIL=${{ secrets.SMTP_FROM_EMAIL }}\nSMTP_FROM_NAME=${{ secrets.SMTP_FROM_NAME }}\nAPP_WEB_URL=${{ secrets.APP_WEB_URL }}\n' > .env"
 
       - name: Deploy to server
         env:

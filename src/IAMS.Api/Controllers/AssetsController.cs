@@ -405,23 +405,12 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService, IAs
         if (string.IsNullOrEmpty(normalizedTag))
             return BadRequest(ApiResponse<AssetDto>.Fail("Asset tag is required"));
 
-        // SQLite COLLATE NOCASE for case-insensitive comparison
+        // Case-insensitive match. Provider-neutral: translates to lower(...) = ... on any
+        // backend, unlike a COLLATE clause which is dialect-specific.
+        var loweredTag = normalizedTag.ToLower();
         var asset = await db.Assets
             .Include(a => a.AssignedToUser)
-            .FirstOrDefaultAsync(a => EF.Functions.Collate(a.AssetTag, "NOCASE") == normalizedTag);
-
-        // If not found, try exact match (in case collate doesn't work)
-        asset ??= await db.Assets
-            .Include(a => a.AssignedToUser)
-            .FirstOrDefaultAsync(a => a.AssetTag == normalizedTag);
-
-        if (asset is null)
-        {
-            // Log all existing tags for debugging
-            var allTags = await db.Assets.Select(a => a.AssetTag).ToListAsync();
-            Console.WriteLine($"Scan failed for tag: '{normalizedTag}'");
-            Console.WriteLine($"Existing tags in DB: {string.Join(", ", allTags)}");
-        }
+            .FirstOrDefaultAsync(a => a.AssetTag.ToLower() == loweredTag);
 
         return asset is null
             ? NotFound(ApiResponse<AssetDto>.Fail($"Asset not found: {normalizedTag}"))

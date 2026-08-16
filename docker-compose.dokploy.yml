@@ -2,10 +2,11 @@
 #
 # ─── Setup in Dokploy ─────────────────────────────────────────────────────────
 #  1. Create a "Compose" service pointing at this file (docker-compose.dokploy.yml).
-#  2. In the Environment tab set: JWT_KEY, SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD,
-#     SMTP_FROM_EMAIL (copy from your current DO .env / secrets).
-#  3. Deploy. Then copy the existing SQLite db + uploads from the DO droplet into
-#     this stack's volumes (iams-data, iams-uploads) — see the migration runbook.
+#  2. In the Environment tab set: DATABASE_CONNECTION (the Neon connection string, in
+#     Npgsql key=value form - NOT the postgresql:// URI, Npgsql cannot parse it), JWT_KEY,
+#     SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL.
+#  3. Deploy. Then copy the uploads directory from the old droplet into iams-uploads.
+#     The database no longer needs seeding - it is already in Neon.
 #  4. Point iams.m2netsolutions.com DNS at the Hetzner box → Traefik issues the cert.
 #
 # ─── Routing ──────────────────────────────────────────────────────────────────
@@ -14,9 +15,14 @@
 #    everything else -> web  (nginx serving the Blazor WASM on plain HTTP)
 #
 # ─── Data ─────────────────────────────────────────────────────────────────────
-#  The app's data is a SQLite file at /app/data/iams.db (volume iams-data) plus
-#  uploads at /app/Uploads (volume iams-uploads). These MUST be seeded from the
-#  DO droplet's copies or the app starts empty.
+#  The database is PostgreSQL, hosted on Neon (ap-southeast-1, same region as this box).
+#  Nothing about it lives on disk any more, so there is no iams-data volume.
+#
+#  Attachment FILES are still local, at /app/Uploads (volume iams-uploads). Only their
+#  metadata rows are in the database - drop that volume and every receipt, photo and
+#  warranty document is gone while the rows still point at them.
+#
+#  Backups are now Neon's job: point-in-time restore per branch, not a file to copy.
 services:
   iams-api:
     image: ghcr.io/mpmartinez/iams-api:latest
@@ -25,8 +31,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5000
-      ConnectionStrings__DefaultConnection: Data Source=/app/data/iams.db
-      Jwt__Key: ${JWT_KEY}
+      ConnectionStrings__DefaultConnection: ${DATABASE_CONNECTION:?DATABASE_CONNECTION must be set}
+      Jwt__Key: ${JWT_KEY:?JWT_KEY must be set}
       Jwt__Issuer: IAMS
       Jwt__Audience: IAMS
       Cors__AllowedOrigins__0: https://iams.m2netsolutions.com
@@ -38,7 +44,8 @@ services:
       Smtp__FromName: ${SMTP_FROM_NAME:-IAMS}
       App__WebUrl: https://iams.m2netsolutions.com
     volumes:
-      - iams-data:/app/data
+      # No iams-data volume: the database lives in Neon now. iams-uploads must stay -
+      # attachment files are on disk, only their metadata rows are in the database.
       - iams-uploads:/app/Uploads
     # The image's built-in HEALTHCHECK runs `curl -f /health`, but curl isn't in the
     # aspnet runtime image, so the check always fails and the container is marked
@@ -85,7 +92,6 @@ services:
       - "traefik.http.middlewares.iams-redirect.redirectscheme.scheme=https"
 
 volumes:
-  iams-data:
   iams-uploads:
 
 networks:

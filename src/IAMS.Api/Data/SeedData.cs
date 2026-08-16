@@ -15,8 +15,7 @@ public static class SeedData
         RoleManager<IdentityRole> roleManager)
     {
         // Create roles including SuperAdmin
-        string[] roles = ["SuperAdmin", "Admin", "Management", "Staff", "Auditor"];
-        foreach (var role in roles)
+        foreach (var role in Roles.All)
         {
             if (!await roleManager.RoleExistsAsync(role))
             {

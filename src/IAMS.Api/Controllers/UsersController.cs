@@ -74,6 +74,12 @@ public class UsersController(
     public async Task<ActionResult<ApiResponse<UserDto>>> CreateUser(CreateUserDto dto)
     {
         var tenantId = tenantProvider.GetRequiredTenantId();
+        var actorIsSuperAdmin = tenantProvider.IsSuperAdmin();
+
+        var role = dto.Role ?? Roles.Staff;
+        if (!Roles.CanAssign(role, actorIsSuperAdmin))
+            return BadRequest(ApiResponse<UserDto>.Fail(
+                $"Invalid role. Must be one of: {Roles.AssignableList(actorIsSuperAdmin)}"));
 
         // Check subscription limits
         if (!await subscriptionService.CanCreateUserAsync(tenantId))
@@ -101,8 +107,14 @@ public class UsersController(
             return BadRequest(ApiResponse<UserDto>.Fail(errors));
         }
 
-        var role = dto.Role ?? "Staff";
-        await userManager.AddToRoleAsync(user, role);
+        var roleResult = await userManager.AddToRoleAsync(user, role);
+        if (!roleResult.Succeeded)
+        {
+            // Don't leave a role-less account behind that no policy will ever authorize.
+            await userManager.DeleteAsync(user);
+            return BadRequest(ApiResponse<UserDto>.Fail(
+                string.Join(", ", roleResult.Errors.Select(e => e.Description))));
+        }
 
         // Update tenant user count
         await subscriptionService.UpdateUserCountAsync(tenantId);
@@ -144,8 +156,19 @@ public class UsersController(
 
         // Verify tenant access
         var tenantId = tenantProvider.GetCurrentTenantId();
-        if (!tenantProvider.IsSuperAdmin() && tenantId.HasValue && user.TenantId != tenantId.Value)
+        var actorIsSuperAdmin = tenantProvider.IsSuperAdmin();
+        if (!actorIsSuperAdmin && tenantId.HasValue && user.TenantId != tenantId.Value)
             return NotFound();
+
+        var existingRoles = await userManager.GetRolesAsync(user);
+
+        // A platform SuperAdmin is only editable by another SuperAdmin.
+        if (!actorIsSuperAdmin && existingRoles.Contains(Roles.SuperAdmin))
+            return Forbid();
+
+        if (dto.Role is not null && !Roles.CanAssign(dto.Role, actorIsSuperAdmin))
+            return BadRequest(ApiResponse<UserDto>.Fail(
+                $"Invalid role. Must be one of: {Roles.AssignableList(actorIsSuperAdmin)}"));
 
         if (dto.Email is not null && dto.Email != user.Email)
         {
@@ -171,13 +194,16 @@ public class UsersController(
         }
 
         // Update role if changed
-        if (dto.Role is not null)
+        if (dto.Role is not null && !existingRoles.Contains(dto.Role))
         {
-            var currentRoles = await userManager.GetRolesAsync(user);
-            if (!currentRoles.Contains(dto.Role))
+            await userManager.RemoveFromRolesAsync(user, existingRoles);
+            var roleResult = await userManager.AddToRoleAsync(user, dto.Role);
+            if (!roleResult.Succeeded)
             {
-                await userManager.RemoveFromRolesAsync(user, currentRoles);
-                await userManager.AddToRoleAsync(user, dto.Role);
+                // Put the old roles back rather than leaving the account with none.
+                await userManager.AddToRolesAsync(user, existingRoles);
+                return BadRequest(ApiResponse<UserDto>.Fail(
+                    string.Join(", ", roleResult.Errors.Select(e => e.Description))));
             }
         }
 
