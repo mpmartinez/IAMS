@@ -1,4 +1,5 @@
 @page "/admin/tenants"
+@using IAMS.Web.Components.UI
 @attribute [Authorize(Roles = "SuperAdmin")]
 @inject ApiClient Api
 @inject NavigationManager Navigation
@@ -38,7 +39,7 @@
     </div>
 
     <!-- Tenants Table -->
-    <Card>
+    <IAMS.Web.Components.UI.Card Class="p-6">
         @if (_loading)
         {
             <div class="space-y-4">
@@ -147,7 +148,7 @@
                 </div>
             }
         }
-    </Card>
+    </IAMS.Web.Components.UI.Card>
 </div>
 
 <!-- Create Tenant Modal -->
@@ -227,9 +228,9 @@
                 <button @onclick="CloseCreateModal" class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
                     Cancel
                 </button>
-                <Button OnClick="CreateTenant" Loading="@_saving">
+                <IAMS.Web.Components.UI.Button OnClick="CreateTenant" Loading="@_saving">
                     Create Tenant
-                </Button>
+                </IAMS.Web.Components.UI.Button>
             </div>
         </div>
     </div>
@@ -298,9 +299,9 @@
                 <button @onclick="CloseEditModal" class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
                     Cancel
                 </button>
-                <Button OnClick="UpdateTenant" Loading="@_saving">
+                <IAMS.Web.Components.UI.Button OnClick="UpdateTenant" Loading="@_saving">
                     Save Changes
-                </Button>
+                </IAMS.Web.Components.UI.Button>
             </div>
         </div>
     </div>
@@ -326,9 +327,9 @@
                     <button @onclick="CloseDeactivateModal" class="flex-1 px-4 py-2.5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
                         Cancel
                     </button>
-                    <Button Variant="danger" OnClick="DeactivateTenant" Loading="@_deactivating" class="flex-1">
+                    <IAMS.Web.Components.UI.Button Variant="destructive" OnClick="DeactivateTenant" Loading="@_deactivating" Class="flex-1">
                         Deactivate
-                    </Button>
+                    </IAMS.Web.Components.UI.Button>
                 </div>
             </div>
         </div>

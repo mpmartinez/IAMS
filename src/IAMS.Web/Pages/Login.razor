@@ -1,5 +1,6 @@
 @page "/login"
 @layout AuthLayout
+@using IAMS.Web.Components.UI
 @inject NavigationManager Navigation
 @inject IConfiguration Configuration
 @inject IServiceProvider ServiceProvider
@@ -19,10 +20,14 @@ else
     <p class="text-slate-500 dark:text-slate-400 mb-8">Sign in to manage your assets</p>
 
     <EditForm Model="@_model" OnValidSubmit="HandleLogin" class="space-y-5">
-        <Input Label="Email" Type="email" @bind-Value="_model.Email" Placeholder="you@company.com" Error="@_emailError" />
+        <FormField LabelText="Email" Error="@_emailError">
+            <IAMS.Web.Components.UI.Input Type="email" @bind-Value="_model.Email" Placeholder="you@company.com" HasError="@(!string.IsNullOrEmpty(_emailError))" />
+        </FormField>
 
         <div>
-            <Input Label="Password" Type="password" @bind-Value="_model.Password" Placeholder="Enter your password" Error="@_passwordError" />
+            <FormField LabelText="Password" Error="@_passwordError">
+                <IAMS.Web.Components.UI.Input Type="password" @bind-Value="_model.Password" Placeholder="Enter your password" HasError="@(!string.IsNullOrEmpty(_passwordError))" />
+            </FormField>
             <div class="mt-2 text-right">
                 <a href="/forgot-password" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors">
                     Forgot password?
@@ -37,7 +42,7 @@ else
             </div>
         }
 
-        <Button Type="submit" Size="lg" Loading="@_loading" Disabled="@_loading" class="w-full">
+        <IAMS.Web.Components.UI.Button Type="submit" Size="lg" Loading="@_loading" Disabled="@_loading" Class="w-full">
             @if (_loading)
             {
                 <span>Signing in...</span>
@@ -46,7 +51,7 @@ else
             {
                 <span>Sign in</span>
             }
-        </Button>
+        </IAMS.Web.Components.UI.Button>
     </EditForm>
 }
 

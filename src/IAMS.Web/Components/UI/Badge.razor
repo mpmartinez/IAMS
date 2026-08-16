@@ -1,17 +1,25 @@
 @namespace IAMS.Web.Components.UI
 
 <span class="@GetClasses()" @attributes="AdditionalAttributes">
+    @if (Pulse)
+    {
+        <span class="w-1.5 h-1.5 rounded-full @GetDotClasses() mr-1.5 status-pulse"></span>
+    }
     @ChildContent
 </span>
 
 @code {
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public string Variant { get; set; } = "default";
+    [Parameter] public bool Pulse { get; set; }
     [Parameter] public string? Class { get; set; }
     [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
 
     private string BaseClasses => "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 
+    // Status-driven variants (asset status, ticket type/status/priority, warranty status) use a
+    // soft background with an explicit dark: pairing so the semantic color coding carried over
+    // from the legacy Badge stays legible in both themes.
     private string GetVariantClasses() => Variant switch
     {
         "default" or "primary" => "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
@@ -21,7 +29,29 @@
         "success" => "border-transparent bg-green-500 text-white shadow hover:bg-green-500/80",
         "warning" => "border-transparent bg-yellow-500 text-white shadow hover:bg-yellow-500/80",
         "accent" => "border-transparent bg-accent text-accent-foreground hover:bg-accent/80",
+
+        "Available" or "warranty-active" or "Resolved" =>
+            "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+        "Maintenance" or "warranty-expiring" or "Incident" or "InProgress" or "High" =>
+            "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+        "Lost" or "Retired" or "danger" or "warranty-expired" or "SecurityEvent" or "Cancelled" or "Critical" =>
+            "border-transparent bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+        "InUse" or "info" or "Request" or "New" or "Medium" =>
+            "border-transparent bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+        "Assigned" or "OnHold" or "Closed" or "Low" =>
+            "border-transparent bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300",
+
         _ => "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80"
+    };
+
+    private string GetDotClasses() => Variant switch
+    {
+        "Available" or "warranty-active" or "Resolved" => "bg-emerald-500",
+        "Maintenance" or "warranty-expiring" or "Incident" or "InProgress" or "High" => "bg-amber-500",
+        "Lost" or "Retired" or "danger" or "warranty-expired" or "SecurityEvent" or "Cancelled" or "Critical" => "bg-red-500",
+        "InUse" or "info" or "Request" or "New" or "Medium" => "bg-blue-500",
+        "Assigned" or "OnHold" or "Closed" or "Low" => "bg-slate-500",
+        _ => "bg-primary"
     };
 
     private string GetClasses()
