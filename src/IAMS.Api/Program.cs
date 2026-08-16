@@ -22,7 +22,10 @@ if (string.IsNullOrWhiteSpace(connectionString))
         "ConnectionStrings__DefaultConnection environment variable (or user-secrets in development).");
 }
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
+
+builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
+{
     options.UseNpgsql(connectionString, npgsql =>
     {
         // Neon suspends idle computes, so the first connection after a pause can time out
@@ -31,7 +34,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(10),
             errorCodesToAdd: null);
-    }));
+    });
+    options.AddInterceptors(
+        new AuditSaveChangesInterceptor(serviceProvider.GetRequiredService<ICurrentUserAccessor>()));
+});
 
 // Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
