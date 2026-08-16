@@ -1,0 +1,380 @@
+@page "/report"
+@attribute [Authorize]
+@implements IDisposable
+@inject ApiClient Api
+@inject NavigationManager Navigation
+@inject SnackbarService Snackbar
+
+<PageTitle>Report a Problem - IAMS</PageTitle>
+
+<div class="max-w-lg mx-auto space-y-4 sm:space-y-6">
+    @if (_created is not null)
+    {
+        <!-- Success -->
+        <div class="text-center px-4 py-8 animate-scale-in">
+            <div class="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4 success-pulse">
+                <svg class="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+            <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-2">Report sent</h2>
+            <p class="text-slate-500 dark:text-slate-400 mb-1">IT has been notified.</p>
+            <p class="text-sm text-slate-400 dark:text-slate-500 font-mono mb-6">@_created.Reference</p>
+            <div class="flex flex-col gap-3">
+                <a href="/my-tickets" class="inline-flex items-center justify-center gap-2 px-5 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                    View My Reports
+                </a>
+                <button @onclick="StartOver" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 font-medium transition-colors">
+                    Report another problem
+                </button>
+            </div>
+        </div>
+    }
+    else if (_type is null)
+    {
+        <!-- Step 1: type picker -->
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Report a Problem</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">What's going on?</p>
+        </div>
+
+        @if (_linkedAsset is not null)
+        {
+            <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-900/50">
+                <svg class="w-5 h-5 text-primary-600 dark:text-primary-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 01-2-2V5a1 1 0 011-1h16a1 1 0 011 1v1a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+                <div class="min-w-0">
+                    <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@_linkedAsset.DisplayName</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">@_linkedAsset.AssetTag</p>
+                </div>
+            </div>
+        }
+
+        <div class="space-y-3">
+            <button @onclick='() => SelectType(Incident)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
+                <div class="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                    <svg class="w-7 h-7 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <p class="text-base font-semibold text-slate-900 dark:text-white">Equipment issue</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Something's broken or not working</p>
+                </div>
+                <svg class="w-5 h-5 text-slate-300 dark:text-slate-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
+
+            <button @onclick='() => SelectType(Request)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
+                <div class="w-14 h-14 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                    <svg class="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <p class="text-base font-semibold text-slate-900 dark:text-white">Request equipment</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Ask IT for something you need</p>
+                </div>
+                <svg class="w-5 h-5 text-slate-300 dark:text-slate-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
+
+            <button @onclick='() => SelectType(SecurityEvent)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
+                <div class="w-14 h-14 rounded-2xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                    <svg class="w-7 h-7 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01" />
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <p class="text-base font-semibold text-slate-900 dark:text-white">Security concern</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Lost device, phishing, suspicious activity</p>
+                </div>
+                <svg class="w-5 h-5 text-slate-300 dark:text-slate-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
+        </div>
+    }
+    else
+    {
+        <!-- Step 2: short form -->
+        <div class="flex items-center gap-2">
+            <button @onclick="() => _type = null" class="p-2 -ml-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </button>
+            <div>
+                <h1 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">@TypeHeading</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">@TypeSubheading</p>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5 space-y-4">
+            <div class="space-y-1.5">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">@TitleLabel</label>
+                <input @bind="_title" @bind:event="oninput" type="text" placeholder="@TitlePlaceholder" maxlength="200"
+                       class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 text-base" />
+            </div>
+
+            @if (_type != SecurityEvent)
+            {
+                <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Details <span class="text-slate-400 font-normal">(optional)</span></label>
+                    <textarea @bind="_description" rows="3" placeholder="Anything that will help IT understand the problem..."
+                              class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-base"></textarea>
+                </div>
+            }
+
+            @if (_type != Request)
+            {
+                <div class="space-y-1.5">
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Device <span class="text-slate-400 font-normal">(optional)</span>
+                    </label>
+
+                    @if (_linkedAsset is not null)
+                    {
+                        <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600">
+                            <svg class="w-5 h-5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 01-2-2V5a1 1 0 011-1h16a1 1 0 011 1v1a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                            </svg>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@_linkedAsset.DisplayName</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">@_linkedAsset.AssetTag</p>
+                            </div>
+                            <button @onclick="ClearAsset" class="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline shrink-0">
+                                Change
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="relative">
+                            <input @bind="_assetSearch" @bind:event="oninput" @onkeyup="HandleAssetSearch" type="text"
+                                   placeholder="Search by tag or name..."
+                                   class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 text-base" />
+
+                            @if (_assetResults.Count > 0)
+                            {
+                                <div class="mt-2 rounded-xl border border-slate-200 dark:border-slate-600 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+                                    @foreach (var asset in _assetResults)
+                                    {
+                                        <button @key="asset.Id" @onclick="() => PickAsset(asset)" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left">
+                                            <div class="min-w-0">
+                                                <p class="text-sm text-slate-900 dark:text-white truncate">@asset.DisplayName</p>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">@asset.AssetTag</p>
+                                            </div>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(_assetSearch) && _assetSearch.Length >= 2 && !_searchingAssets)
+                            {
+                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-1.5">No matching devices</p>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="flex items-start gap-2 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50">
+                    <svg class="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <p class="text-sm text-red-700 dark:text-red-400">@_error</p>
+                </div>
+            }
+
+            <button @onclick="Submit" disabled="@(_submitting || string.IsNullOrWhiteSpace(_title))"
+                    class="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-primary-600 text-white rounded-xl font-semibold text-base hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press">
+                @if (_submitting)
+                {
+                    <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                }
+                Send Report
+            </button>
+        </div>
+    }
+</div>
+
+<style>
+    .success-pulse {
+        animation: successPulse 0.6s ease-out;
+    }
+    @@keyframes successPulse {
+        0% { transform: scale(0.8); opacity: 0; }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); opacity: 1; }
+    }
+</style>
+
+@code {
+    // Mirrors IAMS.Api.Entities.TicketTypes, which the Web project (Shared DTOs only)
+    // cannot reference directly.
+    private const string Incident = "Incident";
+    private const string Request = "Request";
+    private const string SecurityEvent = "SecurityEvent";
+
+    [SupplyParameterFromQuery] public int? AssetId { get; set; }
+
+    private string? _type;
+    private string _title = "";
+    private string _description = "";
+    private int? _linkedAssetId;
+    private AssetDto? _linkedAsset;
+    private string _assetSearch = "";
+    private List<AssetDto> _assetResults = new();
+    private bool _searchingAssets;
+    private bool _submitting;
+    private string? _error;
+    private TicketDto? _created;
+    private System.Timers.Timer? _searchTimer;
+
+    private string TypeHeading => _type switch
+    {
+        Incident => "Equipment Issue",
+        Request => "Request Equipment",
+        SecurityEvent => "Security Concern",
+        _ => "Report a Problem"
+    };
+
+    private string TypeSubheading => _type switch
+    {
+        Incident => "Tell us what's wrong",
+        Request => "Tell us what you need",
+        SecurityEvent => "The fewer details the faster - just get it to us",
+        _ => ""
+    };
+
+    private string TitleLabel => _type switch
+    {
+        Incident => "What's wrong?",
+        Request => "What do you need?",
+        SecurityEvent => "What happened?",
+        _ => "Title"
+    };
+
+    private string TitlePlaceholder => _type switch
+    {
+        Incident => "e.g. Laptop won't turn on",
+        Request => "e.g. Second monitor for my desk",
+        SecurityEvent => "e.g. Lost my laptop on the way home",
+        _ => ""
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AssetId.HasValue)
+        {
+            _linkedAssetId = AssetId;
+            _linkedAsset = await Api.GetAssetAsync(AssetId.Value);
+        }
+    }
+
+    private void SelectType(string type)
+    {
+        _type = type;
+        _error = null;
+    }
+
+    private void ClearAsset()
+    {
+        _linkedAssetId = null;
+        _linkedAsset = null;
+        _assetSearch = "";
+        _assetResults.Clear();
+    }
+
+    private void PickAsset(AssetDto asset)
+    {
+        _linkedAssetId = asset.Id;
+        _linkedAsset = asset;
+        _assetSearch = "";
+        _assetResults.Clear();
+    }
+
+    private void HandleAssetSearch(KeyboardEventArgs e)
+    {
+        _searchTimer?.Stop();
+        _searchTimer?.Dispose();
+
+        if (string.IsNullOrWhiteSpace(_assetSearch) || _assetSearch.Length < 2)
+        {
+            _assetResults.Clear();
+            return;
+        }
+
+        _searchTimer = new System.Timers.Timer(300);
+        _searchTimer.Elapsed += async (s, ev) =>
+        {
+            _searchTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                _searchingAssets = true;
+                StateHasChanged();
+                var results = await Api.GetAssetsAsync(search: _assetSearch, page: 1, pageSize: 6);
+                _assetResults = results?.Items.ToList() ?? new();
+                _searchingAssets = false;
+                StateHasChanged();
+            });
+        };
+        _searchTimer.Start();
+    }
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(_title)) return;
+
+        _submitting = true;
+        _error = null;
+
+        var request = new CreateTicketRequest
+        {
+            Type = _type!,
+            Title = _title.Trim(),
+            Description = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
+            AssetId = _type == Request ? null : _linkedAssetId
+        };
+
+        var (success, ticket, error) = await Api.CreateTicketAsync(request);
+
+        if (success)
+        {
+            _created = ticket;
+            Snackbar.Success("Report sent to IT");
+        }
+        else
+        {
+            _error = error ?? "Something went wrong sending your report. Please try again.";
+        }
+
+        _submitting = false;
+    }
+
+    private void StartOver()
+    {
+        _created = null;
+        _type = null;
+        _title = "";
+        _description = "";
+        _error = null;
+        if (!AssetId.HasValue)
+        {
+            ClearAsset();
+        }
+    }
+
+    public void Dispose()
+    {
+        _searchTimer?.Dispose();
+    }
+}

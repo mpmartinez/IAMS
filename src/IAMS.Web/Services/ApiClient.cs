@@ -406,6 +406,13 @@ public class ApiClient(HttpClient http, AuthService authService)
         return response?.Data;
     }
 
+    public async Task<List<TicketListItemDto>?> GetMyTicketsAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<TicketListItemDto>>>("api/tickets/mine");
+        return response?.Data;
+    }
+
     public async Task<(bool Success, TicketDto? Ticket, string? Error)> CreateTicketAsync(CreateTicketRequest request)
     {
         var client = await GetAuthenticatedClient();

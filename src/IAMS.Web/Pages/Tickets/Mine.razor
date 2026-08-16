@@ -1,0 +1,119 @@
+@page "/my-tickets"
+@attribute [Authorize]
+@inject ApiClient Api
+
+<PageTitle>My Reports - IAMS</PageTitle>
+
+<div class="space-y-4 sm:space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">My Reports</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Problems and requests you've sent to IT</p>
+        </div>
+        <a href="/report" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press text-sm sm:text-base">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            New Report
+        </a>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="space-y-3">
+            @for (int i = 0; i < 4; i++)
+            {
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                    <div class="flex items-center gap-4">
+                        <div class="flex-1 space-y-2">
+                            <div class="h-4 w-1/2 rounded skeleton"></div>
+                            <div class="h-3 w-1/4 rounded skeleton"></div>
+                        </div>
+                        <div class="h-6 w-16 rounded skeleton"></div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (_tickets is { Count: > 0 })
+    {
+        <div class="space-y-3">
+            @foreach (var ticket in _tickets)
+            {
+                <div @key="ticket.Id" class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <Badge Text="@GetTypeLabel(ticket.Type)" Variant="@ticket.Type" />
+                                <span class="text-xs text-slate-400 dark:text-slate-500 font-mono">@ticket.Reference</span>
+                            </div>
+                            <p class="font-medium text-slate-900 dark:text-white mt-1.5 truncate">@ticket.Title</p>
+                            @if (!string.IsNullOrEmpty(ticket.AssetTag))
+                            {
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">@ticket.AssetTag</p>
+                            }
+                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1.5">Submitted @GetAge(ticket.CreatedAt)</p>
+                        </div>
+                        <Badge Text="@GetStatusLabel(ticket.Status)" Variant="@ticket.Status" />
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <Card>
+            <EmptyState Title="No reports yet" Description="Problems and requests you send to IT will show up here.">
+                <a href="/report" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Report a Problem
+                </a>
+            </EmptyState>
+        </Card>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<TicketListItemDto>? _tickets;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _tickets = await Api.GetMyTicketsAsync();
+        }
+        catch
+        {
+            _tickets = null;
+        }
+
+        _loading = false;
+    }
+
+    private string GetAge(DateTime createdAt)
+    {
+        var span = DateTime.UtcNow - createdAt;
+        if (span.TotalMinutes < 1) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        if (span.TotalDays < 30) return $"{(int)span.TotalDays}d ago";
+        return $"{(int)(span.TotalDays / 30)}mo ago";
+    }
+
+    private string GetTypeLabel(string type) => type switch
+    {
+        "SecurityEvent" => "Security Event",
+        _ => type
+    };
+
+    private string GetStatusLabel(string status) => status switch
+    {
+        "InProgress" => "In Progress",
+        "OnHold" => "On Hold",
+        _ => status
+    };
+}
