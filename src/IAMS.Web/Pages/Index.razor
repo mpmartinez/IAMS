@@ -1,4 +1,5 @@
 @page "/"
+@using IAMS.Web.Components.UI
 @attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Navigation
@@ -180,8 +181,12 @@
         <!-- Assets by Type -->
         @if (_dashboard.AssetsByType.Any())
         {
-            <Card Title="Assets by Type">
-                <div class="space-y-3 -mx-6 -my-6">
+            <IAMS.Web.Components.UI.Card>
+                <CardHeader>
+                    <CardTitle>Assets by Type</CardTitle>
+                </CardHeader>
+                <CardContent>
+                <div class="space-y-3 -mx-6 -mb-6">
                     @foreach (var type in _dashboard.AssetsByType.Take(5))
                     {
                         <a href="/assets?deviceType=@Uri.EscapeDataString(type.DeviceType)" class="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
@@ -203,20 +208,22 @@
                         </a>
                     }
                 </div>
-            </Card>
+                </CardContent>
+            </IAMS.Web.Components.UI.Card>
         }
 
         <!-- Recent Assets -->
         @if (_dashboard.RecentAssets.Any())
         {
-            <Card Title="Recent Assets">
-                <HeaderContent>
+            <IAMS.Web.Components.UI.Card>
+                <div class="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
+                    <CardTitle>Recent Assets</CardTitle>
                     <a href="/assets" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
                         View all
                     </a>
-                </HeaderContent>
-                <ChildContent>
-                    <div class="divide-y divide-slate-100 dark:divide-slate-700 -mx-6 -my-6">
+                </div>
+                <CardContent>
+                    <div class="divide-y divide-slate-100 dark:divide-slate-700 -mx-6 -mb-6">
                         @foreach (var asset in _dashboard.RecentAssets)
                         {
                             <a href="/assets/@asset.Id" class="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
@@ -234,17 +241,21 @@
                                         }
                                     </p>
                                 </div>
-                                <Badge Text="@asset.Status" Variant="@asset.Status" Pulse="@(asset.Status == "InUse")" />
+                                <IAMS.Web.Components.UI.Badge Variant="@asset.Status" Pulse="@(asset.Status == "InUse")">@asset.Status</IAMS.Web.Components.UI.Badge>
                             </a>
                         }
                     </div>
-                </ChildContent>
-            </Card>
+                </CardContent>
+            </IAMS.Web.Components.UI.Card>
         }
 
         <!-- Quick Actions (Mobile) -->
         <div class="sm:hidden">
-            <Card Title="Quick Actions">
+            <IAMS.Web.Components.UI.Card>
+                <CardHeader>
+                    <CardTitle>Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent>
                 <div class="grid grid-cols-2 gap-3 -mx-2 -my-2">
                     <a href="/scan" class="flex flex-col items-center gap-2 p-4 rounded-xl bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
                         <div class="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
@@ -263,12 +274,13 @@
                         <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Warranties</span>
                     </a>
                 </div>
-            </Card>
+                </CardContent>
+            </IAMS.Web.Components.UI.Card>
         </div>
     }
     else
     {
-        <Card>
+        <IAMS.Web.Components.UI.Card Class="p-6">
             <EmptyState Title="No assets yet" Description="Add your first asset to get started.">
                 <AuthorizeView Roles="Admin,Staff">
                     <div class="flex flex-wrap items-center justify-center gap-3">
@@ -287,7 +299,7 @@
                     </div>
                 </AuthorizeView>
             </EmptyState>
-        </Card>
+        </IAMS.Web.Components.UI.Card>
     }
 </div>
 

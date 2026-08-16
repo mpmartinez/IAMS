@@ -1,4 +1,5 @@
 @page "/warranty-alerts"
+@using IAMS.Web.Components.UI
 @attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Navigation
@@ -163,9 +164,7 @@
                                         <a href="/assets/@alert.AssetId" class="font-semibold text-slate-900 dark:text-white hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
                                             @alert.AssetDisplayName
                                         </a>
-                                        <Badge Text="@(alert.AlertType == WarrantyAlertType.Expired ? "Expired" : "Expiring")"
-                                               Variant="@(alert.AlertType == WarrantyAlertType.Expired ? "warranty-expired" : "warranty-expiring")"
-                                               Pulse="@(alert.AlertType == WarrantyAlertType.Expiring && !alert.IsAcknowledged)" />
+                                        <IAMS.Web.Components.UI.Badge Variant="@(alert.AlertType == WarrantyAlertType.Expired ? "warranty-expired" : "warranty-expiring")" Pulse="@(alert.AlertType == WarrantyAlertType.Expiring && !alert.IsAcknowledged)">@(alert.AlertType == WarrantyAlertType.Expired ? "Expired" : "Expiring")</IAMS.Web.Components.UI.Badge>
                                     </div>
                                     <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-mono">@alert.AssetTag</p>
                                 </div>
@@ -251,7 +250,7 @@
     }
     else
     {
-        <Card>
+        <IAMS.Web.Components.UI.Card Class="p-6">
             <EmptyState Title="No warranty alerts" Description="All warranties are in good standing.">
                 <div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -260,7 +259,7 @@
                     <span class="font-medium">All clear!</span>
                 </div>
             </EmptyState>
-        </Card>
+        </IAMS.Web.Components.UI.Card>
     }
 </div>
 
