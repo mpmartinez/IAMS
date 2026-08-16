@@ -24,3 +24,20 @@ public class TicketAttachment : ITenantEntity
     public ApplicationUser? UploadedByUser { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 }
+
+/// <summary>
+/// Predefined ticket attachment categories. Mirrors the deleted
+/// MaintenanceAttachmentCategories 1:1 - see TicketAttachmentsController.
+/// </summary>
+public static class TicketAttachmentCategories
+{
+    public const string BeforePhoto = "BeforePhoto";
+    public const string AfterPhoto = "AfterPhoto";
+    public const string Receipt = "Receipt";
+    public const string Document = "Document";
+    public const string Other = "Other";
+
+    public static readonly string[] All = [BeforePhoto, AfterPhoto, Receipt, Document, Other];
+
+    public static bool IsValid(string category) => All.Contains(category);
+}

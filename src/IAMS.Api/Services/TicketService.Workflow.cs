@@ -125,6 +125,17 @@ public partial class TicketService
         if (ticket is null)
             return ServiceResult<TicketComment>.Fail("Ticket not found.");
 
+        // ApplicationUser has no global tenant query filter (it's the Identity table), so
+        // resolve the author through an explicit tenant filter the same way the requester
+        // is resolved in CreateAsync and the assignee in AssignAsync - otherwise another
+        // tenant's user id would satisfy the FK and quietly attribute a comment to a user
+        // outside the tenant.
+        var tenantId = _tenants.GetRequiredTenantId();
+        var authorExists = await _db.Users
+            .AnyAsync(u => u.Id == userId && u.TenantId == tenantId, ct);
+        if (!authorExists)
+            return ServiceResult<TicketComment>.Fail("That user does not exist.");
+
         var comment = new TicketComment
         {
             TenantId = ticket.TenantId,

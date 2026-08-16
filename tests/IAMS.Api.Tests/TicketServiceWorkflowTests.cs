@@ -386,4 +386,31 @@ public class TicketServiceWorkflowTests
             Assert.Null(saved.AssignedToUserId);
         }
     }
+
+    [Fact]
+    public async Task Cannot_attribute_a_comment_to_a_user_from_another_tenant()
+    {
+        var mine = Guid.NewGuid();
+        var theirs = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(mine));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, mine);
+            await TestDb.SeedTenantAsync(db, theirs);
+            await TestDb.SeedUserAsync(db, mine, "emp-1", "J. Dela Cruz");
+            await TestDb.SeedUserAsync(db, theirs, "foreign-staff", "Foreign Staff");
+
+            var service = new TicketService(db, new TicketNumberAllocator(db), new FakeTenantProvider(mine));
+            var created = await service.CreateAsync(
+                TicketTypes.Incident, "Printer jams", null, TicketPriority.High, null, "emp-1", default);
+
+            var result = await service.AddCommentAsync(
+                created.Value!.Id, "foreign-staff", "Looking at it now.", false, default);
+
+            Assert.False(result.Success);
+            Assert.Contains("does not exist", result.Message!);
+            Assert.Equal(0, await db.TicketComments.CountAsync());
+        }
+    }
 }
