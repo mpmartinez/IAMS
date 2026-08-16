@@ -1,5 +1,5 @@
 @page "/assets/{Id:int}"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Admin,Staff")]
 @inject ApiClient Api
 @inject NavigationManager Navigation
 @inject IJSRuntime JS

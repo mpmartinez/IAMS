@@ -14,8 +14,12 @@ namespace IAMS.Api.Controllers;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AssetsController(AppDbContext db, IQrCodeService qrCodeService, IAssetImportService importService) : ControllerBase
 {
-    // All authenticated users can view assets
+    // Staff only. The register carries purchase prices and full assignment history, so
+    // browsing it is not something every employee needs. Employees reach exactly one asset
+    // at a time through scan/{assetTag}, which is what filing a ticket from a QR sticker
+    // requires - see the redaction in MapToScanDto.
     [HttpGet]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "Staff")]
     public async Task<ActionResult<PagedResponse<AssetDto>>> GetAssets(
         [FromQuery] string? search = null,
         [FromQuery] string? deviceType = null,
@@ -64,6 +68,7 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService, IAs
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "Staff")]
     public async Task<ActionResult<ApiResponse<AssetDto>>> GetAsset(int id)
     {
         var asset = await db.Assets
@@ -412,15 +417,39 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService, IAs
             .Include(a => a.AssignedToUser)
             .FirstOrDefaultAsync(a => a.AssetTag.ToLower() == loweredTag);
 
-        return asset is null
-            ? NotFound(ApiResponse<AssetDto>.Fail($"Asset not found: {normalizedTag}"))
-            : Ok(ApiResponse<AssetDto>.Ok(MapToDto(asset)));
+        if (asset is null)
+            return NotFound(ApiResponse<AssetDto>.Fail($"Asset not found: {normalizedTag}"));
+
+        // Open to every authenticated user, because an employee scanning a QR sticker to
+        // report a fault needs to resolve exactly this one asset. They do not need what it
+        // cost, so a non-staff caller gets the identifying fields without the financials.
+        var isStaff = User.IsInRole(Roles.Admin) || User.IsInRole(Roles.Staff);
+        return Ok(ApiResponse<AssetDto>.Ok(isStaff ? MapToDto(asset) : MapToScanDto(asset)));
+    }
+
+    /// <summary>
+    /// The identifying view of an asset: enough to confirm you scanned the right thing and
+    /// to attach it to a ticket. Purchase price, purchase date and warranty provider are
+    /// commercial details an employee filing a fault report has no need for.
+    /// </summary>
+    private static AssetDto MapToScanDto(Asset asset)
+    {
+        var dto = MapToDto(asset);
+        return dto with
+        {
+            PurchasePrice = null,
+            PurchaseDate = null,
+            WarrantyProvider = null
+        };
     }
 
     /// <summary>
     /// Debug endpoint - list all asset tags
     /// </summary>
+    // Admin only. This enumerates every asset tag in the tenant, which is a map of the whole
+    // estate and exactly what you would want before guessing at other endpoints.
     [HttpGet("debug/tags")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "Admin")]
     public async Task<ActionResult<List<string>>> GetAllTags()
     {
         var tags = await db.Assets.Select(a => a.AssetTag).OrderBy(t => t).ToListAsync();
