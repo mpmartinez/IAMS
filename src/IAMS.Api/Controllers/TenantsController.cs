@@ -105,7 +105,7 @@ public class TenantsController(
             return BadRequest(ApiResponse<TenantDto>.Fail("Admin email already exists"));
 
         // Get subscription limits
-        var (maxAssets, maxUsers, maxStorageBytes) = SubscriptionTiers.GetLimits(dto.SubscriptionTier);
+        var (maxAssets, maxUsers, maxStorageBytes, maxTicketsPerMonth) = SubscriptionTiers.GetLimits(dto.SubscriptionTier);
 
         // Create tenant
         var tenant = new Tenant
@@ -118,6 +118,7 @@ public class TenantsController(
             MaxAssets = maxAssets,
             MaxUsers = maxUsers,
             MaxStorageBytes = maxStorageBytes,
+            MaxTicketsPerMonth = maxTicketsPerMonth,
             IsActive = true
         };
 
@@ -190,11 +191,12 @@ public class TenantsController(
         // Update subscription tier and limits
         if (dto.SubscriptionTier != null && dto.SubscriptionTier != tenant.SubscriptionTier)
         {
-            var (maxAssets, maxUsers, maxStorageBytes) = SubscriptionTiers.GetLimits(dto.SubscriptionTier);
+            var (maxAssets, maxUsers, maxStorageBytes, maxTicketsPerMonth) = SubscriptionTiers.GetLimits(dto.SubscriptionTier);
             tenant.SubscriptionTier = dto.SubscriptionTier;
             tenant.MaxAssets = maxAssets;
             tenant.MaxUsers = maxUsers;
             tenant.MaxStorageBytes = maxStorageBytes;
+            tenant.MaxTicketsPerMonth = maxTicketsPerMonth;
         }
 
         tenant.UpdatedAt = DateTime.UtcNow;
@@ -227,14 +229,15 @@ public class TenantsController(
     {
         var tiers = SubscriptionTiers.All.Select(tier =>
         {
-            var (maxAssets, maxUsers, maxStorageBytes) = SubscriptionTiers.GetLimits(tier);
+            var (maxAssets, maxUsers, maxStorageBytes, maxTicketsPerMonth) = SubscriptionTiers.GetLimits(tier);
             return new
             {
                 Name = tier,
                 MaxAssets = maxAssets,
                 MaxUsers = maxUsers,
                 MaxStorageBytes = maxStorageBytes,
-                MaxStorageDisplay = FormatBytes(maxStorageBytes)
+                MaxStorageDisplay = FormatBytes(maxStorageBytes),
+                MaxTicketsPerMonth = maxTicketsPerMonth
             };
         }).ToArray();
 

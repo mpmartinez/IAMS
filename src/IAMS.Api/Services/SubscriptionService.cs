@@ -10,6 +10,7 @@ public interface ISubscriptionService
     Task<bool> CanCreateAssetAsync(Guid tenantId);
     Task<bool> CanCreateUserAsync(Guid tenantId);
     Task<bool> CanUploadFileAsync(Guid tenantId, long fileSizeBytes);
+    Task<bool> CanCreateTicketAsync(Guid tenantId);
     Task UpdateAssetCountAsync(Guid tenantId);
     Task UpdateUserCountAsync(Guid tenantId);
     Task UpdateStorageUsageAsync(Guid tenantId);
@@ -62,12 +63,52 @@ public class SubscriptionService : ISubscriptionService
         if (tenant.SubscriptionEndDate.HasValue && tenant.SubscriptionEndDate < DateTime.UtcNow)
             return false;
 
-        var currentCount = await db.Users
-            .IgnoreQueryFilters()
-            .Cast<ApplicationUser>()
-            .CountAsync(u => u.TenantId == tenantId);
+        var currentCount = await CountBillableUsersAsync(db, tenantId);
 
         return currentCount < tenant.MaxUsers;
+    }
+
+    public async Task<bool> CanCreateTicketAsync(Guid tenantId)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var tenant = await db.Tenants.FindAsync(tenantId);
+        if (tenant == null || !tenant.IsActive)
+            return false;
+
+        if (tenant.SubscriptionEndDate.HasValue && tenant.SubscriptionEndDate < DateTime.UtcNow)
+            return false;
+
+        var monthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var currentCount = await db.Tickets
+            .IgnoreQueryFilters()
+            .CountAsync(t => t.TenantId == tenantId && t.CreatedAt >= monthStart);
+
+        return currentCount < tenant.MaxTicketsPerMonth;
+    }
+
+    // Seats are metered per human license, not per account: a user whose only role is
+    // Employee (an office user who just files and follows their own tickets) does not
+    // count against Tenant.MaxUsers. Otherwise a 200-person agency would exhaust a
+    // 25-seat Pro plan on day one. A user with Employee plus any other role - or with no
+    // roles at all - still counts, same as today.
+    private static async Task<int> CountBillableUsersAsync(AppDbContext db, Guid tenantId)
+    {
+        var employeeRoleId = await db.Roles
+            .Where(r => r.Name == Entities.Roles.Employee)
+            .Select(r => r.Id)
+            .FirstOrDefaultAsync();
+
+        var users = db.Users.IgnoreQueryFilters().Where(u => u.TenantId == tenantId);
+
+        if (employeeRoleId is null)
+            return await users.CountAsync();
+
+        return await users.CountAsync(u =>
+            !db.UserRoles.Any(ur => ur.UserId == u.Id && ur.RoleId == employeeRoleId) ||
+            db.UserRoles.Any(ur => ur.UserId == u.Id && ur.RoleId != employeeRoleId));
     }
 
     public async Task<bool> CanUploadFileAsync(Guid tenantId, long fileSizeBytes)
@@ -122,10 +163,7 @@ public class SubscriptionService : ISubscriptionService
         var tenant = await db.Tenants.FindAsync(tenantId);
         if (tenant == null) return;
 
-        tenant.CurrentUserCount = await db.Users
-            .IgnoreQueryFilters()
-            .Cast<ApplicationUser>()
-            .CountAsync(u => u.TenantId == tenantId);
+        tenant.CurrentUserCount = await CountBillableUsersAsync(db, tenantId);
 
         tenant.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
@@ -175,10 +213,7 @@ public class SubscriptionService : ISubscriptionService
             .IgnoreQueryFilters()
             .CountAsync(a => a.TenantId == tenantId);
 
-        var userCount = await db.Users
-            .IgnoreQueryFilters()
-            .Cast<ApplicationUser>()
-            .CountAsync(u => u.TenantId == tenantId);
+        var userCount = await CountBillableUsersAsync(db, tenantId);
 
         var storageBytes = await db.Attachments
             .IgnoreQueryFilters()

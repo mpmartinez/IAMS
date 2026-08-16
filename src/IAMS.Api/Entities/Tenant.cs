@@ -18,6 +18,7 @@ public class Tenant
     public int MaxAssets { get; set; }
     public int MaxUsers { get; set; }
     public long MaxStorageBytes { get; set; }
+    public int MaxTicketsPerMonth { get; set; }
 
     // Current Usage (updated periodically)
     public int CurrentAssetCount { get; set; }
@@ -41,12 +42,12 @@ public static class SubscriptionTiers
 
     public static readonly string[] All = [Free, Pro, Enterprise];
 
-    public static (int MaxAssets, int MaxUsers, long MaxStorageBytes) GetLimits(string tier) => tier switch
+    public static (int MaxAssets, int MaxUsers, long MaxStorageBytes, int MaxTicketsPerMonth) GetLimits(string tier) => tier switch
     {
-        Free => (50, 5, 100L * 1024 * 1024),              // 50 assets, 5 users, 100MB
-        Pro => (500, 25, 1024L * 1024 * 1024),            // 500 assets, 25 users, 1GB
-        Enterprise => (10000, 500, 50L * 1024 * 1024 * 1024), // 10K assets, 500 users, 50GB
-        _ => (50, 5, 100L * 1024 * 1024)
+        Free => (50, 5, 100L * 1024 * 1024, 100),               // 50 assets, 5 users, 100MB, 100 tickets/mo
+        Pro => (500, 25, 1024L * 1024 * 1024, 1000),            // 500 assets, 25 users, 1GB, 1000 tickets/mo
+        Enterprise => (10000, 500, 50L * 1024 * 1024 * 1024, int.MaxValue), // 10K assets, 500 users, 50GB, unlimited tickets
+        _ => (50, 5, 100L * 1024 * 1024, 100)
     };
 
     public static Tenant CreateWithLimits(string name, string slug, string tier)
@@ -59,7 +60,8 @@ public static class SubscriptionTiers
             SubscriptionTier = tier,
             MaxAssets = limits.MaxAssets,
             MaxUsers = limits.MaxUsers,
-            MaxStorageBytes = limits.MaxStorageBytes
+            MaxStorageBytes = limits.MaxStorageBytes,
+            MaxTicketsPerMonth = limits.MaxTicketsPerMonth
         };
     }
 }

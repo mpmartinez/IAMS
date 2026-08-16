@@ -30,7 +30,7 @@ public static class SeedData
 
         if (defaultTenant is null)
         {
-            var (maxAssets, maxUsers, maxStorageBytes) = SubscriptionTiers.GetLimits(SubscriptionTiers.Enterprise);
+            var (maxAssets, maxUsers, maxStorageBytes, maxTicketsPerMonth) = SubscriptionTiers.GetLimits(SubscriptionTiers.Enterprise);
 
             defaultTenant = new Tenant
             {
@@ -41,6 +41,7 @@ public static class SeedData
                 MaxAssets = maxAssets,
                 MaxUsers = maxUsers,
                 MaxStorageBytes = maxStorageBytes,
+                MaxTicketsPerMonth = maxTicketsPerMonth,
                 IsActive = true
             };
 

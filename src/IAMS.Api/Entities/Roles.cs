@@ -8,11 +8,15 @@ public static class Roles
     public const string Staff = "Staff";
     public const string Auditor = "Auditor";
 
-    public static readonly string[] All = [SuperAdmin, Admin, Management, Staff, Auditor];
+    // Office users who can file and follow their own tickets. Excluded from seat
+    // metering (see SubscriptionService) and from asset/queue management.
+    public const string Employee = "Employee";
+
+    public static readonly string[] All = [SuperAdmin, Admin, Management, Staff, Auditor, Employee];
 
     // SuperAdmin is deliberately absent: it satisfies ITenantProvider.IsSuperAdmin(), which
     // short-circuits every global query filter. Only an existing SuperAdmin may grant it.
-    public static readonly string[] TenantAssignable = [Admin, Management, Staff, Auditor];
+    public static readonly string[] TenantAssignable = [Admin, Management, Staff, Auditor, Employee];
 
     public static bool CanAssign(string role, bool actorIsSuperAdmin) =>
         actorIsSuperAdmin ? All.Contains(role) : TenantAssignable.Contains(role);
