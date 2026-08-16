@@ -1,0 +1,20 @@
+@namespace IAMS.Web.Components.UI
+
+<tr class="@GetClasses()" @attributes="AdditionalAttributes">
+    @ChildContent
+</tr>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted";
+
+    private string GetClasses()
+    {
+        var selectedClass = Selected ? "bg-muted" : "";
+        return $"{BaseClasses} {selectedClass} {Class}".Trim();
+    }
+}

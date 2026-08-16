@@ -1,0 +1,90 @@
+@namespace IAMS.Web.Components.UI.Sidebar
+
+@if (!string.IsNullOrEmpty(Href))
+{
+    <a href="@Href"
+       class="@GetClasses()"
+       @onclick="HandleClick"
+       @attributes="AdditionalAttributes">
+        @if (Icon != null)
+        {
+            <span class="shrink-0 [&>svg]:size-3.5">@Icon</span>
+        }
+        <span class="truncate flex-1">@ChildContent</span>
+        @if (Badge != null)
+        {
+            <span class="ml-auto shrink-0">@Badge</span>
+        }
+    </a>
+}
+else
+{
+    <button type="button"
+            class="@GetClasses()"
+            disabled="@Disabled"
+            @onclick="HandleClick"
+            @attributes="AdditionalAttributes">
+        @if (Icon != null)
+        {
+            <span class="shrink-0 [&>svg]:size-3.5">@Icon</span>
+        }
+        <span class="truncate flex-1">@ChildContent</span>
+        @if (Badge != null)
+        {
+            <span class="ml-auto shrink-0">@Badge</span>
+        }
+    </button>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Icon { get; set; }
+    [Parameter] public RenderFragment? Badge { get; set; }
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public string Size { get; set; } = "md"; // sm, md
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string GetClasses()
+    {
+        var classes = new List<string>
+        {
+            "group/sub-item flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-md px-2",
+            "text-sidebar-foreground outline-none ring-sidebar-ring",
+            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "focus-visible:ring-2",
+            "disabled:pointer-events-none disabled:opacity-50"
+        };
+
+        // Active state
+        if (IsActive)
+        {
+            classes.Add("bg-sidebar-accent text-sidebar-accent-foreground font-medium");
+        }
+
+        // Size variants
+        classes.Add(Size switch
+        {
+            "sm" => "h-6 text-xs",
+            _ => "h-7 text-xs"
+        });
+
+        if (!string.IsNullOrEmpty(Class))
+        {
+            classes.Add(Class);
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private async Task HandleClick()
+    {
+        if (!Disabled && OnClick.HasDelegate)
+        {
+            await OnClick.InvokeAsync();
+        }
+    }
+}

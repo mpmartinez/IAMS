@@ -1,0 +1,33 @@
+@namespace IAMS.Web.Components.UI
+
+<label class="@GetClasses()" for="@For" @attributes="AdditionalAttributes">
+    @ChildContent
+    @if (Required)
+    {
+        <span class="text-destructive ml-1">*</span>
+    }
+</label>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? For { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool HasError { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70";
+
+    private string StateClasses => (Disabled, HasError) switch
+    {
+        (true, _) => "cursor-not-allowed opacity-70",
+        (_, true) => "text-destructive",
+        _ => ""
+    };
+
+    private string GetClasses()
+    {
+        return $"{BaseClasses} {StateClasses} {Class}".Trim();
+    }
+}

@@ -1,0 +1,169 @@
+@* Reusable file upload + TWAIN scanner component. Returns file bytes via callback. *@
+@using Microsoft.AspNetCore.Components.Forms
+@inject IJSRuntime JS
+
+<div class="space-y-4">
+    <!-- Upload / Scan Options -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Upload File -->
+        <label class="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg cursor-pointer hover:border-accent hover:bg-accent/5 transition-colors">
+            <svg class="h-10 w-10 text-muted-foreground mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <span class="font-medium">Upload File(s)</span>
+            <span class="text-xs text-muted-foreground mt-1">PDF, JPEG, PNG — max @(MaxFileSizeMb)MB</span>
+            <InputFile OnChange="@HandleFilesSelected" multiple accept="@AcceptedTypes" class="hidden" />
+        </label>
+
+        <!-- Scan Document -->
+        <button @onclick="HandleScanClick"
+                class="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg cursor-pointer hover:border-accent hover:bg-accent/5 transition-colors">
+            <svg class="h-10 w-10 text-muted-foreground mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2z"/>
+            </svg>
+            <span class="font-medium">Scan Document</span>
+            <span class="text-xs text-muted-foreground mt-1">TWAIN/WIA scanner (Windows)</span>
+        </button>
+    </div>
+
+    @if (_isScanning)
+    {
+        <div class="flex items-center justify-center py-4">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-accent mr-3"></div>
+            <span class="text-sm text-muted-foreground">Scanning...</span>
+        </div>
+    }
+
+    @if (_error != null)
+    {
+        <div class="p-3 rounded-lg border border-destructive/30 bg-destructive/5 text-destructive text-sm">
+            @_error
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Max file size in MB. Default 10.</summary>
+    [Parameter] public int MaxFileSizeMb { get; set; } = 10;
+
+    /// <summary>Accepted file types for the file picker.</summary>
+    [Parameter] public string AcceptedTypes { get; set; } = ".pdf,.jpg,.jpeg,.png,.tiff,.tif";
+
+    /// <summary>Allow multiple file selection. Default true.</summary>
+    [Parameter] public bool Multiple { get; set; } = true;
+
+    /// <summary>Called when file(s) are ready (from upload or scanner).</summary>
+    [Parameter] public EventCallback<List<FileResult>> OnFilesReady { get; set; }
+
+    private bool _isScanning;
+    private string? _error;
+
+    private async Task HandleFilesSelected(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var maxBytes = MaxFileSizeMb * 1024L * 1024L;
+        var results = new List<FileResult>();
+
+        var files = Multiple ? e.GetMultipleFiles(50) : e.GetMultipleFiles(1);
+
+        foreach (var file in files)
+        {
+            if (file.Size > maxBytes)
+            {
+                _error = $"File '{file.Name}' exceeds {MaxFileSizeMb}MB limit. Skipped.";
+                continue;
+            }
+
+            try
+            {
+                using var stream = file.OpenReadStream(maxBytes);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+
+                var contentType = file.ContentType;
+                if (string.IsNullOrEmpty(contentType))
+                {
+                    contentType = Path.GetExtension(file.Name).ToLower() switch
+                    {
+                        ".pdf" => "application/pdf",
+                        ".jpg" or ".jpeg" => "image/jpeg",
+                        ".png" => "image/png",
+                        ".tif" or ".tiff" => "image/tiff",
+                        _ => "application/octet-stream"
+                    };
+                }
+
+                results.Add(new FileResult(ms.ToArray(), file.Name, contentType));
+            }
+            catch (Exception ex)
+            {
+                _error = $"Failed to read '{file.Name}': {ex.Message}";
+            }
+        }
+
+        if (results.Count > 0)
+        {
+            await OnFilesReady.InvokeAsync(results);
+        }
+    }
+
+    private async Task HandleScanClick()
+    {
+        _error = null;
+
+        try
+        {
+            bool available;
+            try
+            {
+                available = await JS.InvokeAsync<bool>("scannerInterop.isAvailable");
+            }
+            catch
+            {
+                available = false;
+            }
+
+            if (!available)
+            {
+                _error = "No scanner detected. Use Upload File(s) instead.";
+                return;
+            }
+
+            _isScanning = true;
+            StateHasChanged();
+
+            var scanJson = await JS.InvokeAsync<System.Text.Json.JsonElement>("scannerInterop.scan");
+            var data = scanJson.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == System.Text.Json.JsonValueKind.String
+                ? dataProp.GetString() : null;
+            var error = scanJson.TryGetProperty("error", out var errProp) && errProp.ValueKind == System.Text.Json.JsonValueKind.String
+                ? errProp.GetString() : null;
+
+            if (data != null)
+            {
+                var fileBytes = Convert.FromBase64String(data);
+                var results = new List<FileResult>
+                {
+                    new(fileBytes, "scanned-document.png", "image/png")
+                };
+                await OnFilesReady.InvokeAsync(results);
+            }
+            else
+            {
+                _error = error ?? "No scanner detected. Use Upload File(s) instead.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Scanner error: {ex.Message}";
+        }
+        finally
+        {
+            _isScanning = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Represents a file ready for use (upload, attach, etc.)</summary>
+    public record FileResult(byte[] Bytes, string FileName, string ContentType);
+
+}

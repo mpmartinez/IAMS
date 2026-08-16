@@ -1,0 +1,91 @@
+@namespace IAMS.Web.Components.UI
+
+<div class="@Class" @attributes="AdditionalAttributes">
+    <div class="@GetTabsListClasses()">
+        @foreach (var tab in _tabs)
+        {
+            <button type="button"
+                    class="@GetTabTriggerClasses(tab)"
+                    @onclick="() => ActivateTab(tab)"
+                    role="tab"
+                    aria-selected="@(tab == _activeTab)"
+                    data-state="@(tab == _activeTab ? "active" : "inactive")">
+                @if (tab.Icon != null)
+                {
+                    <span class="mr-2">@tab.Icon</span>
+                }
+                @tab.Title
+            </button>
+        }
+    </div>
+    <div class="mt-2">
+        <CascadingValue Value="this">
+            @ChildContent
+        </CascadingValue>
+    </div>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? DefaultTab { get; set; }
+    [Parameter] public EventCallback<string?> OnTabChange { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? TabsListClass { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private List<TabPanel> _tabs = new();
+    private TabPanel? _activeTab;
+
+    private string TabsListBaseClasses => "inline-flex flex-wrap max-w-full items-center justify-start gap-1 rounded-lg bg-muted p-1 text-muted-foreground";
+
+    private string GetTabsListClasses()
+    {
+        return $"{TabsListBaseClasses} {TabsListClass}".Trim();
+    }
+
+    private string TabTriggerBaseClasses => "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
+
+    private string GetTabTriggerClasses(TabPanel tab)
+    {
+        var activeClass = tab == _activeTab
+            ? "bg-background text-foreground shadow"
+            : "";
+        return $"{TabTriggerBaseClasses} {activeClass}".Trim();
+    }
+
+    internal void RegisterTab(TabPanel tab)
+    {
+        _tabs.Add(tab);
+
+        if (_activeTab == null)
+        {
+            if (DefaultTab == null || tab.Id == DefaultTab)
+            {
+                _activeTab = tab;
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    internal void UnregisterTab(TabPanel tab)
+    {
+        _tabs.Remove(tab);
+        if (_activeTab == tab && _tabs.Count > 0)
+        {
+            _activeTab = _tabs[0];
+        }
+        StateHasChanged();
+    }
+
+    internal bool IsActive(TabPanel tab) => tab == _activeTab;
+
+    private async Task ActivateTab(TabPanel tab)
+    {
+        if (_activeTab != tab)
+        {
+            _activeTab = tab;
+            await OnTabChange.InvokeAsync(tab.Id);
+        }
+    }
+}

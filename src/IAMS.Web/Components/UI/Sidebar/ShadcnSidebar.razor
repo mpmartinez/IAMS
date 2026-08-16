@@ -1,0 +1,112 @@
+@namespace IAMS.Web.Components.UI.Sidebar
+
+<aside class="@GetSidebarClasses()" @attributes="AdditionalAttributes">
+    <CascadingValue Value="this">
+        @ChildContent
+    </CascadingValue>
+</aside>
+
+@if (IsOpen && IsMobile)
+{
+    <!-- Mobile Overlay -->
+    <div class="fixed inset-0 z-40 bg-black/80 lg:hidden"
+         @onclick="Close"></div>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string Variant { get; set; } = "sidebar"; // sidebar, floating, inset
+    [Parameter] public string Collapsible { get; set; } = "offcanvas"; // offcanvas, icon, none
+    [Parameter] public string Side { get; set; } = "left"; // left, right
+    [Parameter] public bool IsOpen { get; set; } = true;
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public bool IsMobile { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    internal bool IsCollapsed => Collapsible == "icon" && !IsOpen;
+    internal string CurrentVariant => Variant;
+    internal string CurrentSide => Side;
+
+    private string GetSidebarClasses()
+    {
+        var classes = new List<string>
+        {
+            "flex h-full flex-col bg-sidebar text-sidebar-foreground",
+            "transition-all duration-300 ease-in-out",
+            "fixed inset-y-0 z-40", // Always fixed position
+            "overflow-hidden" // Prevent content from expanding sidebar width
+        };
+
+        // Side position
+        classes.Add(Side == "left" ? "left-0" : "right-0");
+
+        // Width based on collapsible state
+        if (IsCollapsed)
+        {
+            classes.Add("w-[var(--sidebar-width-icon)]");
+        }
+        else
+        {
+            classes.Add("w-[var(--sidebar-width)]");
+        }
+
+        // Variant styles
+        switch (Variant)
+        {
+            case "floating":
+                classes.Add("m-2 rounded-lg border border-sidebar-border shadow-lg");
+                classes.Add("h-[calc(100%-1rem)]");
+                break;
+            case "inset":
+                classes.Add("border-r border-sidebar-border");
+                break;
+            default: // sidebar
+                classes.Add("border-r border-sidebar-border");
+                break;
+        }
+
+        // Mobile specific
+        if (IsMobile)
+        {
+            classes.Add("z-50");
+            if (!IsOpen)
+            {
+                classes.Add(Side == "left" ? "-translate-x-full" : "translate-x-full");
+            }
+        }
+        else
+        {
+            // Desktop - handle offcanvas collapse
+            if (Collapsible == "offcanvas" && !IsOpen)
+            {
+                classes.Add(Side == "left" ? "-translate-x-full" : "translate-x-full");
+            }
+        }
+
+        if (!string.IsNullOrEmpty(Class))
+        {
+            classes.Add(Class);
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    public async Task Toggle()
+    {
+        IsOpen = !IsOpen;
+        await IsOpenChanged.InvokeAsync(IsOpen);
+    }
+
+    public async Task Open()
+    {
+        IsOpen = true;
+        await IsOpenChanged.InvokeAsync(IsOpen);
+    }
+
+    public async Task Close()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(IsOpen);
+    }
+}

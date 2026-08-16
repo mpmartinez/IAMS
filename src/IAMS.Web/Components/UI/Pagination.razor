@@ -1,0 +1,88 @@
+@namespace IAMS.Web.Components.UI
+
+<nav class="flex items-center justify-between px-4 py-3 @Class">
+    <div class="text-sm text-muted-foreground">
+        Page @CurrentPage of @TotalPages
+    </div>
+    <div class="flex gap-1">
+        <IAMS.Web.Components.UI.Button Variant="outline" Size="icon" Disabled="@(CurrentPage <= 1)" OnClick="() => GoToPage(CurrentPage - 1)">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </IAMS.Web.Components.UI.Button>
+        @foreach (var pageNum in GetVisiblePages())
+        {
+            @if (pageNum == -1)
+            {
+                <span class="px-2 py-1 text-muted-foreground">...</span>
+            }
+            else
+            {
+                <IAMS.Web.Components.UI.Button Variant="@(pageNum == CurrentPage ? "primary" : "outline")" Size="sm" OnClick="() => GoToPage(pageNum)">
+                    @pageNum
+                </IAMS.Web.Components.UI.Button>
+            }
+        }
+        <IAMS.Web.Components.UI.Button Variant="outline" Size="icon" Disabled="@(CurrentPage >= TotalPages)" OnClick="() => GoToPage(CurrentPage + 1)">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+        </IAMS.Web.Components.UI.Button>
+    </div>
+</nav>
+
+@code {
+    [Parameter] public int CurrentPage { get; set; } = 1;
+    [Parameter] public int TotalPages { get; set; }
+    [Parameter] public EventCallback<int> OnPageChange { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>
+    /// How many numbered buttons to show at once, first and last aside. Defaults to the seven
+    /// this component has always shown; a dense table can ask for fewer.
+    /// </summary>
+    [Parameter] public int MaxVisiblePages { get; set; } = 7;
+
+    private async Task GoToPage(int page)
+    {
+        if (page >= 1 && page <= TotalPages && page != CurrentPage)
+        {
+            await OnPageChange.InvokeAsync(page);
+        }
+    }
+
+    private IEnumerable<int> GetVisiblePages()
+    {
+        var pages = new List<int>();
+
+        if (TotalPages <= MaxVisiblePages)
+        {
+            for (int i = 1; i <= TotalPages; i++)
+                pages.Add(i);
+        }
+        else
+        {
+            pages.Add(1);
+
+            if (CurrentPage > 3)
+                pages.Add(-1); // ellipsis
+
+            // Room for the window once first, last and both ellipses have taken their places.
+            var span = Math.Max(1, MaxVisiblePages - 2);
+            var half = (span - 1) / 2;
+            int start = Math.Max(2, CurrentPage - half);
+            int end = Math.Min(TotalPages - 1, start + span - 1);
+            start = Math.Max(2, end - span + 1);
+
+            for (int i = start; i <= end; i++)
+                pages.Add(i);
+
+            if (CurrentPage < TotalPages - 2)
+                pages.Add(-1); // ellipsis
+
+            pages.Add(TotalPages);
+        }
+
+        return pages;
+    }
+}

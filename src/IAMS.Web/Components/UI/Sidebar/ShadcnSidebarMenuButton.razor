@@ -1,0 +1,122 @@
+@namespace IAMS.Web.Components.UI.Sidebar
+
+@if (!string.IsNullOrEmpty(Href))
+{
+    <a href="@Href"
+       class="@GetClasses()"
+       @onclick="HandleClick"
+       @attributes="AdditionalAttributes">
+        @if (Icon != null)
+        {
+            <span class="@GetIconClasses()">@Icon</span>
+        }
+        @if (Sidebar?.IsCollapsed != true)
+        {
+            <span class="truncate">@ChildContent</span>
+        }
+        @if (Badge != null && Sidebar?.IsCollapsed != true)
+        {
+            <span class="ml-auto">@Badge</span>
+        }
+    </a>
+}
+else
+{
+    <button type="button"
+            class="@GetClasses()"
+            disabled="@Disabled"
+            @onclick="HandleClick"
+            @attributes="AdditionalAttributes">
+        @if (Icon != null)
+        {
+            <span class="@GetIconClasses()">@Icon</span>
+        }
+        @if (Sidebar?.IsCollapsed != true)
+        {
+            <span class="truncate">@ChildContent</span>
+        }
+        @if (Badge != null && Sidebar?.IsCollapsed != true)
+        {
+            <span class="ml-auto">@Badge</span>
+        }
+    </button>
+}
+
+@if (Sidebar?.IsCollapsed == true && TooltipContent != null)
+{
+    <!-- Tooltip for collapsed state -->
+    <div class="absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 rounded-md bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md opacity-0 group-hover/menu-item:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+        @TooltipContent
+    </div>
+}
+
+@code {
+    [CascadingParameter] public ShadcnSidebar? Sidebar { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Icon { get; set; }
+    [Parameter] public RenderFragment? Badge { get; set; }
+    [Parameter] public RenderFragment? TooltipContent { get; set; }
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public string Variant { get; set; } = "default"; // default, outline
+    [Parameter] public string Size { get; set; } = "default"; // default, sm, lg
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string GetClasses()
+    {
+        var classes = new List<string>
+        {
+            "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2",
+            "text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding]",
+            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "focus-visible:ring-2",
+            "active:bg-sidebar-accent active:text-sidebar-accent-foreground",
+            "disabled:pointer-events-none disabled:opacity-50",
+            "[&>svg]:size-4 [&>svg]:shrink-0"
+        };
+
+        // Active state
+        if (IsActive)
+        {
+            classes.Add("bg-sidebar-accent text-sidebar-accent-foreground font-medium");
+        }
+
+        // Size variants
+        classes.Add(Size switch
+        {
+            "sm" => "h-7 text-xs",
+            "lg" => "h-12 text-sm",
+            _ => "h-8"
+        });
+
+        // Collapsed state - icon only
+        if (Sidebar?.IsCollapsed == true)
+        {
+            classes.Add("justify-center px-2");
+        }
+
+        if (!string.IsNullOrEmpty(Class))
+        {
+            classes.Add(Class);
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private string GetIconClasses()
+    {
+        return Sidebar?.IsCollapsed == true ? "" : "shrink-0";
+    }
+
+    private async Task HandleClick()
+    {
+        if (!Disabled && OnClick.HasDelegate)
+        {
+            await OnClick.InvokeAsync();
+        }
+    }
+}

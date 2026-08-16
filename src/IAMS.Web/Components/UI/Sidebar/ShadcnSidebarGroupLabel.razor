@@ -1,0 +1,43 @@
+@namespace IAMS.Web.Components.UI.Sidebar
+
+<div class="@GetClasses()" @attributes="AdditionalAttributes">
+    @if (Sidebar?.IsCollapsed == true)
+    {
+        <span class="sr-only">@ChildContent</span>
+    }
+    else
+    {
+        @ChildContent
+    }
+</div>
+
+@code {
+    [CascadingParameter] public ShadcnSidebar? Sidebar { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string GetClasses()
+    {
+        var classes = new List<string>
+        {
+            "flex h-8 shrink-0 items-center rounded-md px-2",
+            "text-xs font-medium text-sidebar-foreground/70",
+            "outline-none ring-sidebar-ring transition-[margin,opa] duration-200",
+            "ease-linear focus-visible:ring-2"
+        };
+
+        if (Sidebar?.IsCollapsed == true)
+        {
+            classes.Add("justify-center");
+        }
+
+        if (!string.IsNullOrEmpty(Class))
+        {
+            classes.Add(Class);
+        }
+
+        return string.Join(" ", classes);
+    }
+}

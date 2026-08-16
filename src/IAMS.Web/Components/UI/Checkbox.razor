@@ -1,0 +1,56 @@
+@namespace IAMS.Web.Components.UI
+
+<div class="flex items-center space-x-2 @Class">
+    <button type="button"
+            role="checkbox"
+            aria-checked="@Value"
+            class="@GetCheckboxClasses()"
+            disabled="@Disabled"
+            @onclick="HandleClick"
+            @attributes="AdditionalAttributes">
+        @if (Value)
+        {
+            <svg class="h-4 w-4 text-current" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        }
+    </button>
+    @if (ChildContent != null)
+    {
+        <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 @(Disabled ? "cursor-not-allowed opacity-70" : "cursor-pointer")"
+               @onclick="HandleClick">
+            @ChildContent
+        </label>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public bool Value { get; set; }
+    [Parameter] public EventCallback<bool> ValueChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool HasError { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+
+    private string StateClasses => Value
+        ? "bg-primary text-primary-foreground"
+        : "bg-background";
+
+    private string ErrorClasses => HasError ? "border-destructive" : "";
+
+    private string GetCheckboxClasses()
+    {
+        return $"{BaseClasses} {StateClasses} {ErrorClasses} flex items-center justify-center".Trim();
+    }
+
+    private async Task HandleClick()
+    {
+        if (Disabled) return;
+        Value = !Value;
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

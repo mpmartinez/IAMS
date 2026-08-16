@@ -1,0 +1,100 @@
+@namespace IAMS.Web.Components.UI
+@implements IDisposable
+
+<div class="relative inline-block @Class"
+     @onmouseenter="HandleMouseEnter"
+     @onmouseleave="HandleMouseLeave"
+     @attributes="AdditionalAttributes">
+    @Trigger
+
+    @if (_isOpen)
+    {
+        <div class="@GetContentClasses()">
+            @Content
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public RenderFragment? Trigger { get; set; }
+    [Parameter] public RenderFragment? Content { get; set; }
+    [Parameter] public string Side { get; set; } = "bottom"; // top, right, bottom, left
+    [Parameter] public string Align { get; set; } = "center"; // start, center, end
+    [Parameter] public int OpenDelay { get; set; } = 700;
+    [Parameter] public int CloseDelay { get; set; } = 300;
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private bool _isOpen;
+    private System.Threading.Timer? _openTimer;
+    private System.Threading.Timer? _closeTimer;
+
+    private void HandleMouseEnter()
+    {
+        _closeTimer?.Dispose();
+        _closeTimer = null;
+
+        _openTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                _isOpen = true;
+                StateHasChanged();
+            });
+        }, null, OpenDelay, System.Threading.Timeout.Infinite);
+    }
+
+    private void HandleMouseLeave()
+    {
+        _openTimer?.Dispose();
+        _openTimer = null;
+
+        _closeTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                _isOpen = false;
+                StateHasChanged();
+            });
+        }, null, CloseDelay, System.Threading.Timeout.Infinite);
+    }
+
+    private string ContentBaseClasses => "absolute z-50 w-64 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95";
+
+    private string GetPositionClasses()
+    {
+        var sideClass = Side switch
+        {
+            "top" => "bottom-full mb-2",
+            "bottom" => "top-full mt-2",
+            "left" => "right-full mr-2",
+            "right" => "left-full ml-2",
+            _ => "top-full mt-2"
+        };
+
+        var alignClass = (Side is "top" or "bottom") ? Align switch
+        {
+            "start" => "left-0",
+            "end" => "right-0",
+            _ => "left-1/2 -translate-x-1/2"
+        } : Align switch
+        {
+            "start" => "top-0",
+            "end" => "bottom-0",
+            _ => "top-1/2 -translate-y-1/2"
+        };
+
+        return $"{sideClass} {alignClass}";
+    }
+
+    private string GetContentClasses()
+    {
+        return $"{ContentBaseClasses} {GetPositionClasses()}".Trim();
+    }
+
+    public void Dispose()
+    {
+        _openTimer?.Dispose();
+        _closeTimer?.Dispose();
+    }
+}

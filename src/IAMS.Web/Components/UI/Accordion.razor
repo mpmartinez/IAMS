@@ -1,0 +1,61 @@
+@namespace IAMS.Web.Components.UI
+
+<div class="@GetClasses()" @attributes="AdditionalAttributes">
+    <CascadingValue Value="this">
+        @ChildContent
+    </CascadingValue>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string Type { get; set; } = "single"; // single or multiple
+    [Parameter] public string? DefaultValue { get; set; }
+    [Parameter] public List<string>? DefaultValues { get; set; }
+    [Parameter] public bool Collapsible { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private HashSet<string> _openItems = new();
+
+    protected override void OnInitialized()
+    {
+        if (DefaultValue != null)
+        {
+            _openItems.Add(DefaultValue);
+        }
+        if (DefaultValues != null)
+        {
+            foreach (var value in DefaultValues)
+            {
+                _openItems.Add(value);
+            }
+        }
+    }
+
+    internal bool IsOpen(string value) => _openItems.Contains(value);
+
+    internal void Toggle(string value)
+    {
+        if (_openItems.Contains(value))
+        {
+            if (Collapsible || _openItems.Count > 1)
+            {
+                _openItems.Remove(value);
+            }
+        }
+        else
+        {
+            if (Type == "single")
+            {
+                _openItems.Clear();
+            }
+            _openItems.Add(value);
+        }
+        StateHasChanged();
+    }
+
+    private string GetClasses()
+    {
+        return $"{Class}".Trim();
+    }
+}

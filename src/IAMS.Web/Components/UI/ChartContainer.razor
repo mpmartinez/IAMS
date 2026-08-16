@@ -1,0 +1,33 @@
+@namespace IAMS.Web.Components.UI
+
+<div class="@GetContainerClasses()">
+    @if (!string.IsNullOrEmpty(Title) || !string.IsNullOrEmpty(Description))
+    {
+        <div class="chart-header">
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                <h3 class="chart-title">@Title</h3>
+            }
+            @if (!string.IsNullOrEmpty(Description))
+            {
+                <p class="chart-description">@Description</p>
+            }
+        </div>
+    }
+    <div class="chart-content @HeightClass">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string HeightClass { get; set; } = "min-h-[200px]";
+
+    private string GetContainerClasses()
+    {
+        return $"chart-container {Class}".Trim();
+    }
+}

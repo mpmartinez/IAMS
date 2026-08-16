@@ -1,0 +1,105 @@
+@namespace IAMS.Web.Components.UI
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<ChartContainer Title="@Title" Description="@Description" Class="@Class" HeightClass="@HeightClass">
+    <canvas id="@_canvasId"></canvas>
+</ChartContainer>
+
+@code {
+    private readonly string _canvasId = $"line-chart-{Guid.NewGuid():N}";
+    private bool _isInitialized;
+    private DotNetObjectReference<LineChart>? _dotNetRef;
+
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string HeightClass { get; set; } = "min-h-[250px]";
+    [Parameter] public string[] Labels { get; set; } = Array.Empty<string>();
+    [Parameter] public List<ChartDataset> Datasets { get; set; } = new();
+    [Parameter] public bool ShowLegend { get; set; } = true;
+    [Parameter] public bool ShowXAxis { get; set; } = true;
+    [Parameter] public bool ShowYAxis { get; set; } = true;
+
+    /// <summary>
+    /// Callback when a data point on the chart is clicked. Receives "label|datasetLabel".
+    /// </summary>
+    [Parameter] public EventCallback<string> OnClick { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await InitializeChart();
+            _isInitialized = true;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_isInitialized && Labels.Length > 0 && Datasets.Count > 0)
+        {
+            await UpdateChart();
+        }
+    }
+
+    private async Task InitializeChart()
+    {
+        if (Labels.Length == 0 || Datasets.Count == 0) return;
+
+        object config;
+
+        if (OnClick.HasDelegate)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            config = new
+            {
+                labels = Labels,
+                datasets = Datasets.Select(d => new { label = d.Label, data = d.Data, color = d.Color }).ToArray(),
+                showLegend = ShowLegend, showXAxis = ShowXAxis, showYAxis = ShowYAxis,
+                dotnetHelper = _dotNetRef,
+                clickMethod = "HandleChartClick"
+            };
+        }
+        else
+        {
+            config = new
+            {
+                labels = Labels,
+                datasets = Datasets.Select(d => new { label = d.Label, data = d.Data, color = d.Color }).ToArray(),
+                showLegend = ShowLegend, showXAxis = ShowXAxis, showYAxis = ShowYAxis
+            };
+        }
+
+        await JS.InvokeVoidAsync("chartInterop.createLineChart", _canvasId, config);
+    }
+
+    [JSInvokable]
+    public async Task HandleChartClick(string clickInfo)
+    {
+        await OnClick.InvokeAsync(clickInfo);
+    }
+
+    private async Task UpdateChart()
+    {
+        var datasets = Datasets.Select(d => new { data = d.Data }).ToArray();
+        await JS.InvokeVoidAsync("chartInterop.updateChart", _canvasId, Labels, datasets);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("chartInterop.destroyChart", _canvasId);
+        }
+        catch { }
+        _dotNetRef?.Dispose();
+    }
+
+    public class ChartDataset
+    {
+        public string Label { get; set; } = "";
+        public double[] Data { get; set; } = Array.Empty<double>();
+        public string? Color { get; set; }
+    }
+}

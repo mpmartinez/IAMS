@@ -1,0 +1,18 @@
+@namespace IAMS.Web.Components.UI
+
+<h3 class="@GetClasses()" @attributes="AdditionalAttributes">
+    @ChildContent
+</h3>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "font-semibold leading-none tracking-tight";
+
+    private string GetClasses()
+    {
+        return $"{BaseClasses} {Class}".Trim();
+    }
+}

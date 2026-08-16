@@ -1,0 +1,97 @@
+@namespace IAMS.Web.Components.UI.InputOTP
+@implements IDisposable
+
+<div class="@GetClasses()"
+     @onclick="HandleClick"
+     @attributes="AdditionalAttributes">
+    @if (_char.HasValue)
+    {
+        <span>@_char.Value</span>
+    }
+    else if (_isActive && !_isDisabled)
+    {
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div class="w-px h-4 bg-foreground animate-caret-blink"></div>
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter] public InputOTP? Parent { get; set; }
+
+    [Parameter] public int Index { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private char? _char;
+    private bool _isActive;
+    private bool _isDisabled;
+
+    private string BaseClasses => "relative flex h-10 w-10 items-center justify-center border-y border-r border-input text-sm transition-all first:rounded-l-md first:border-l last:rounded-r-md";
+
+    protected override void OnInitialized()
+    {
+        Parent?.RegisterSlot(this);
+        UpdateState();
+    }
+
+    protected override void OnParametersSet()
+    {
+        UpdateState();
+    }
+
+    private void UpdateState()
+    {
+        if (Parent != null)
+        {
+            _char = Parent.GetCharAtIndex(Index);
+            _isActive = Parent.ActiveIndex == Index;
+            _isDisabled = Parent.IsDisabled;
+        }
+    }
+
+    public void Refresh()
+    {
+        UpdateState();
+        StateHasChanged();
+    }
+
+    private string GetClasses()
+    {
+        var classes = new List<string> { BaseClasses };
+
+        if (_isActive && !_isDisabled)
+        {
+            classes.Add("z-10 ring-2 ring-ring ring-offset-background");
+        }
+
+        if (_isDisabled)
+        {
+            classes.Add("opacity-50 cursor-not-allowed");
+        }
+        else
+        {
+            classes.Add("cursor-text");
+        }
+
+        if (!string.IsNullOrEmpty(Class))
+        {
+            classes.Add(Class);
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private async Task HandleClick()
+    {
+        if (Parent != null && !_isDisabled)
+        {
+            await Parent.FocusSlot(Index);
+        }
+    }
+
+    public void Dispose()
+    {
+        Parent?.UnregisterSlot(this);
+    }
+}

@@ -1,0 +1,25 @@
+@namespace IAMS.Web.Components.UI
+
+<button type="button"
+        class="@Class"
+        disabled="@(Parent?.IsDisabled ?? false)"
+        @onclick="HandleClick"
+        @attributes="AdditionalAttributes">
+    @ChildContent
+</button>
+
+@code {
+    [CascadingParameter] public Collapsible? Parent { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private async Task HandleClick()
+    {
+        if (Parent != null)
+        {
+            await Parent.Toggle();
+        }
+    }
+}

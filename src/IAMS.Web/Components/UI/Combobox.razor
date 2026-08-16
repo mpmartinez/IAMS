@@ -1,0 +1,162 @@
+@namespace IAMS.Web.Components.UI
+@typeparam TItem
+
+<div class="relative @Class" @attributes="AdditionalAttributes">
+    <!-- Trigger Button -->
+    <button type="button"
+            class="@GetTriggerClasses()"
+            role="combobox"
+            aria-expanded="@_isOpen"
+            disabled="@Disabled"
+            @onclick="Toggle">
+        <span class="flex-1 text-left truncate">
+            @if (SelectedItem != null)
+            {
+                @DisplayValue(SelectedItem)
+            }
+            else
+            {
+                <span class="text-muted-foreground">@Placeholder</span>
+            }
+        </span>
+        <svg class="ml-2 h-4 w-4 shrink-0 opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m7 15 5 5 5-5"/>
+            <path d="m7 9 5-5 5 5"/>
+        </svg>
+    </button>
+
+    <!-- Dropdown -->
+    @if (_isOpen)
+    {
+        <div class="fixed inset-0 z-40" @onclick="Close"></div>
+        <div class="absolute z-50 mt-1 w-full rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in fade-in-0 zoom-in-95">
+            <!-- Search Input -->
+            <div class="flex items-center border-b px-3">
+                <svg class="mr-2 h-4 w-4 shrink-0 opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.3-4.3"/>
+                </svg>
+                <input type="text"
+                       class="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                       placeholder="@SearchPlaceholder"
+                       @bind="_searchQuery"
+                       @bind:event="oninput" />
+            </div>
+
+            <!-- Options List -->
+            <div class="max-h-[300px] overflow-y-auto p-1">
+                @if (!FilteredItems.Any())
+                {
+                    <div class="py-6 text-center text-sm text-muted-foreground">
+                        @EmptyMessage
+                    </div>
+                }
+                else
+                {
+                    @foreach (var item in FilteredItems)
+                    {
+                        <button type="button"
+                                class="@GetOptionClasses(item)"
+                                @onclick="() => SelectItem(item)">
+                            <svg class="@GetCheckClasses(item)" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 6 9 17l-5-5"/>
+                            </svg>
+                            @DisplayValue(item)
+                        </button>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public TItem? Value { get; set; }
+    [Parameter] public EventCallback<TItem?> ValueChanged { get; set; }
+    [Parameter] public IEnumerable<TItem> Items { get; set; } = Enumerable.Empty<TItem>();
+    [Parameter] public Func<TItem, string> DisplayValue { get; set; } = item => item?.ToString() ?? "";
+    [Parameter] public Func<TItem, object>? ValueSelector { get; set; }
+    [Parameter] public Func<TItem, string, bool>? FilterPredicate { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Select an option...";
+    [Parameter] public string SearchPlaceholder { get; set; } = "Search...";
+    [Parameter] public string EmptyMessage { get; set; } = "No results found.";
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool HasError { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private bool _isOpen;
+    private string _searchQuery = "";
+
+    private TItem? SelectedItem => Value;
+
+    private IEnumerable<TItem> FilteredItems
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_searchQuery))
+                return Items;
+
+            if (FilterPredicate != null)
+                return Items.Where(item => FilterPredicate(item, _searchQuery));
+
+            return Items.Where(item =>
+                DisplayValue(item).Contains(_searchQuery, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private string TriggerBaseClasses => "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+
+    private string GetTriggerClasses()
+    {
+        var errorClass = HasError ? "border-destructive focus:ring-destructive" : "";
+        return $"{TriggerBaseClasses} {errorClass}".Trim();
+    }
+
+    private string GetOptionClasses(TItem item)
+    {
+        var baseClass = "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+        return baseClass;
+    }
+
+    private string GetCheckClasses(TItem item)
+    {
+        var isSelected = IsSelected(item);
+        return isSelected ? "absolute left-2 h-4 w-4" : "absolute left-2 h-4 w-4 opacity-0";
+    }
+
+    private bool IsSelected(TItem item)
+    {
+        if (Value == null) return false;
+
+        if (ValueSelector != null)
+            return Equals(ValueSelector(Value), ValueSelector(item));
+
+        return Equals(Value, item);
+    }
+
+    private void Toggle()
+    {
+        if (!Disabled)
+        {
+            _isOpen = !_isOpen;
+            if (_isOpen)
+            {
+                _searchQuery = "";
+            }
+        }
+    }
+
+    private void Close()
+    {
+        _isOpen = false;
+        _searchQuery = "";
+    }
+
+    private async Task SelectItem(TItem item)
+    {
+        Value = item;
+        await ValueChanged.InvokeAsync(item);
+        Close();
+    }
+}

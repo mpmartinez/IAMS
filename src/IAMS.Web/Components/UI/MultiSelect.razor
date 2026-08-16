@@ -1,0 +1,159 @@
+@namespace IAMS.Web.Components.UI
+
+@*
+    Checkbox picker for choosing several options at once.
+
+    The option panel expands *inline* rather than floating: this control is used inside Dialog,
+    whose body is `overflow-y-auto`, so an absolutely-positioned dropdown would be clipped.
+*@
+
+<div class="space-y-2 @Class">
+    <button type="button"
+            class="@GetTriggerClasses()"
+            aria-expanded="@_isOpen"
+            disabled="@Disabled"
+            @onclick="Toggle">
+        <span class="flex-1 text-left truncate @(SelectedCount == 0 ? "text-muted-foreground" : "")">@TriggerText</span>
+        <svg class="ml-2 h-4 w-4 shrink-0 opacity-50 transition-transform @(_isOpen ? "rotate-180" : "")" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m6 9 6 6 6-6" />
+        </svg>
+    </button>
+
+    @if (SelectedCount > 0)
+    {
+        <div class="flex flex-wrap gap-1">
+            @foreach (var option in SelectedOptions)
+            {
+                <span class="inline-flex items-center gap-1 rounded-md border bg-muted px-2 py-0.5 text-xs">
+                    @option.Label
+                    <button type="button" class="opacity-60 hover:opacity-100" title="Remove" @onclick="() => ToggleValue(option.Value)">
+                        <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+                        </svg>
+                    </button>
+                </span>
+            }
+        </div>
+    }
+
+    @if (_isOpen)
+    {
+        <div class="rounded-md border bg-popover text-popover-foreground shadow-sm">
+            <div class="flex items-center border-b px-3">
+                <svg class="mr-2 h-4 w-4 shrink-0 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                </svg>
+                <input type="text"
+                       class="flex h-9 w-full rounded-md bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
+                       placeholder="@SearchPlaceholder"
+                       @bind="_search"
+                       @bind:event="oninput" />
+                @if (SelectedCount > 0)
+                {
+                    <button type="button" class="ml-2 shrink-0 text-xs text-muted-foreground hover:text-foreground" @onclick="ClearAll">Clear</button>
+                }
+            </div>
+
+            <div class="max-h-48 overflow-y-auto p-1">
+                @if (FilteredOptions.Count == 0)
+                {
+                    <div class="py-6 text-center text-sm text-muted-foreground">@EmptyMessage</div>
+                }
+                else
+                {
+                    @if (FilteredOptions.Count > 1)
+                    {
+                        <button type="button" class="flex w-full items-center rounded-sm px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground" @onclick="SelectAllFiltered">
+                            Select all @(string.IsNullOrWhiteSpace(_search) ? "" : "matching ")(@FilteredOptions.Count)
+                        </button>
+                    }
+                    @foreach (var option in FilteredOptions)
+                    {
+                        var isSelected = Values.Contains(option.Value);
+                        <button type="button"
+                                class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                                @onclick="() => ToggleValue(option.Value)">
+                            <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary @(isSelected ? "bg-primary text-primary-foreground" : "bg-background")">
+                                @if (isSelected)
+                                {
+                                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                }
+                            </span>
+                            <span class="truncate">@option.Label</span>
+                        </button>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<MultiSelectOption> Options { get; set; } = Array.Empty<MultiSelectOption>();
+    [Parameter] public HashSet<string> Values { get; set; } = new();
+    [Parameter] public EventCallback<HashSet<string>> ValuesChanged { get; set; }
+    /// <summary>Shown on the trigger when nothing is selected — e.g. "All ranks".</summary>
+    [Parameter] public string Placeholder { get; set; } = "Select...";
+    [Parameter] public string SearchPlaceholder { get; set; } = "Search...";
+    [Parameter] public string EmptyMessage { get; set; } = "No results found.";
+    /// <summary>Plural noun used in the "3 selected" summary — e.g. "documents".</summary>
+    [Parameter] public string ItemNoun { get; set; } = "selected";
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool HasError { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private bool _isOpen;
+    private string _search = "";
+
+    private int SelectedCount => Values.Count;
+
+    private List<MultiSelectOption> SelectedOptions => Options.Where(o => Values.Contains(o.Value)).ToList();
+
+    private List<MultiSelectOption> FilteredOptions => string.IsNullOrWhiteSpace(_search)
+        ? Options.ToList()
+        : Options.Where(o => o.Label.Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private string TriggerText => SelectedCount switch
+    {
+        0 => Placeholder,
+        1 => SelectedOptions.FirstOrDefault()?.Label ?? Placeholder,
+        _ => $"{SelectedCount} {ItemNoun}"
+    };
+
+    private string GetTriggerClasses()
+    {
+        var baseClasses = "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+        return HasError ? $"{baseClasses} border-destructive focus:ring-destructive" : baseClasses;
+    }
+
+    private void Toggle()
+    {
+        if (Disabled) return;
+        _isOpen = !_isOpen;
+        if (!_isOpen) _search = "";
+    }
+
+    private Task ToggleValue(string value)
+    {
+        var next = new HashSet<string>(Values);
+        if (!next.Add(value)) next.Remove(value);
+        return Commit(next);
+    }
+
+    private Task SelectAllFiltered()
+    {
+        var next = new HashSet<string>(Values);
+        foreach (var option in FilteredOptions) next.Add(option.Value);
+        return Commit(next);
+    }
+
+    private Task ClearAll() => Commit(new HashSet<string>());
+
+    private async Task Commit(HashSet<string> next)
+    {
+        Values = next;
+        await ValuesChanged.InvokeAsync(next);
+    }
+}

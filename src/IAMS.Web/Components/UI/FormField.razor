@@ -1,0 +1,34 @@
+@namespace IAMS.Web.Components.UI
+
+<div class="space-y-2 @Class" @attributes="AdditionalAttributes">
+    @if (!string.IsNullOrEmpty(LabelText))
+    {
+        <Label For="@Id" Required="@Required" HasError="@HasError">@LabelText</Label>
+    }
+    <div>
+        @ChildContent
+    </div>
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <p class="text-[0.8rem] font-medium text-destructive">@Error</p>
+    }
+    else if (!string.IsNullOrEmpty(Description))
+    {
+        <p class="text-[0.8rem] text-muted-foreground">@Description</p>
+    }
+</div>
+
+@code {
+    [Parameter] public string? LabelText { get; set; }
+    [Parameter] public string? Label { get => LabelText; set => LabelText = value; }
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? HelperText { get => Description; set => Description = value; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private bool HasError => !string.IsNullOrEmpty(Error);
+}

@@ -1,0 +1,32 @@
+@namespace IAMS.Web.Components.UI.Sidebar
+
+<div class="@GetClasses()" @attributes="AdditionalAttributes">
+    @ChildContent
+</div>
+
+@code {
+    [CascadingParameter] public ShadcnSidebar? Sidebar { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "flex flex-col gap-2 p-2";
+
+    private string GetClasses()
+    {
+        var classes = new List<string> { BaseClasses };
+
+        if (Sidebar?.IsCollapsed == true)
+        {
+            classes.Add("items-center");
+        }
+
+        if (!string.IsNullOrEmpty(Class))
+        {
+            classes.Add(Class);
+        }
+
+        return string.Join(" ", classes);
+    }
+}

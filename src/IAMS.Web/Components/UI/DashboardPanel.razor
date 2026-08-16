@@ -1,0 +1,133 @@
+@inject IJSRuntime JS
+
+<div class="dashboard-panel @Class @(_isCollapsed ? "collapsed" : "")"
+     data-panel-id="@PanelId"
+     draggable="@(EnableDrag ? "true" : "false")"
+     @ondragstart="HandleDragStart"
+     @ondragover="HandleDragOver"
+     @ondragover:preventDefault="true"
+     @ondrop="HandleDrop">
+
+    <!-- Panel Header -->
+    <div class="dashboard-panel-header @(EnableDrag ? "cursor-move" : "")">
+        <div class="flex items-center gap-2">
+            @if (EnableDrag)
+            {
+                <svg class="h-4 w-4 text-muted-foreground/50" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="9" cy="5" r="1.5"/>
+                    <circle cx="15" cy="5" r="1.5"/>
+                    <circle cx="9" cy="12" r="1.5"/>
+                    <circle cx="15" cy="12" r="1.5"/>
+                    <circle cx="9" cy="19" r="1.5"/>
+                    <circle cx="15" cy="19" r="1.5"/>
+                </svg>
+            }
+            @if (Icon != null)
+            {
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg @IconClass">
+                    @Icon
+                </div>
+            }
+            <div>
+                <h3 class="font-semibold font-display text-sm">@Title</h3>
+                @if (!string.IsNullOrEmpty(Description) && !_isCollapsed)
+                {
+                    <p class="text-xs text-muted-foreground">@Description</p>
+                }
+            </div>
+        </div>
+        <div class="flex items-center gap-1">
+            @if (HeaderActions != null)
+            {
+                @HeaderActions
+            }
+            <button type="button"
+                    class="p-1.5 rounded-md hover:bg-muted transition-colors"
+                    @onclick="ToggleCollapse"
+                    title="@(_isCollapsed ? "Expand" : "Collapse")">
+                <svg class="h-4 w-4 text-muted-foreground transition-transform duration-200 @(_isCollapsed ? "rotate-180" : "")"
+                     viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Panel Content -->
+    <div class="dashboard-panel-content @(_isCollapsed ? "hidden" : "")">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public string PanelId { get; set; } = Guid.NewGuid().ToString();
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? Icon { get; set; }
+    [Parameter] public string? IconClass { get; set; }
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public bool DefaultCollapsed { get; set; }
+    [Parameter] public bool EnableDrag { get; set; } = true;
+    [Parameter] public EventCallback<string> OnDragStart { get; set; }
+    [Parameter] public EventCallback<string> OnDrop { get; set; }
+
+    private bool _isCollapsed;
+    private string StorageKey => $"dashboard_panel_{PanelId}_collapsed";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load collapsed state from localStorage
+        try
+        {
+            var stored = await JS.InvokeAsync<string?>("localStorage.getItem", StorageKey);
+            if (stored != null)
+            {
+                _isCollapsed = stored == "true";
+            }
+            else
+            {
+                _isCollapsed = DefaultCollapsed;
+            }
+        }
+        catch
+        {
+            _isCollapsed = DefaultCollapsed;
+        }
+    }
+
+    private async Task ToggleCollapse()
+    {
+        _isCollapsed = !_isCollapsed;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", StorageKey, _isCollapsed.ToString().ToLower());
+        }
+        catch
+        {
+            // Ignore storage errors
+        }
+    }
+
+    private async Task HandleDragStart()
+    {
+        if (EnableDrag)
+        {
+            await OnDragStart.InvokeAsync(PanelId);
+        }
+    }
+
+    private void HandleDragOver()
+    {
+        // Allow drop
+    }
+
+    private async Task HandleDrop()
+    {
+        if (EnableDrag)
+        {
+            await OnDrop.InvokeAsync(PanelId);
+        }
+    }
+}
