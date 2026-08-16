@@ -1,6 +1,8 @@
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace IAMS.Api.Services;
 
@@ -71,12 +73,20 @@ public partial class TicketService : ITicketService
     private readonly AppDbContext _db;
     private readonly ITicketNumberAllocator _numbers;
     private readonly ITenantProvider _tenants;
+    private readonly ILogger<TicketService> _logger;
 
-    public TicketService(AppDbContext db, ITicketNumberAllocator numbers, ITenantProvider tenants)
+    // The logger is optional so the many tests that construct this service directly stay
+    // readable; every composition-root path resolves a real one from DI.
+    public TicketService(
+        AppDbContext db,
+        ITicketNumberAllocator numbers,
+        ITenantProvider tenants,
+        ILogger<TicketService>? logger = null)
     {
         _db = db;
         _numbers = numbers;
         _tenants = tenants;
+        _logger = logger ?? NullLogger<TicketService>.Instance;
     }
 
     // Raises `priority` to `floor` when it ranks lower, but never lowers a priority that

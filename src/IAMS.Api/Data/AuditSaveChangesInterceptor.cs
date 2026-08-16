@@ -26,14 +26,22 @@ public class HttpContextCurrentUserAccessor : ICurrentUserAccessor
 /// Writes an append-only AuditLog row for every insert, update and delete of an audited
 /// entity. Lives at the DbContext layer so no controller can forget to record history.
 ///
-/// Trade-off, accepted deliberately: audit rows commit in a second transaction, issued
-/// after the business transaction has already committed. If that second save fails, the
-/// business change stands but its audit trail does not — the failure is logged at error
-/// level and swallowed rather than rethrown, so a lost audit row never turns into a
-/// duplicate ticket or asset from a client retrying an operation that actually succeeded.
-/// Making both writes commit atomically would mean this interceptor manages a transaction
-/// spanning both saves; that is a real gap, left as a deliberate open follow-up rather than
-/// solved here.
+/// Trade-off, accepted deliberately: with no caller-managed transaction in play, audit rows
+/// commit in a second transaction, issued after the business transaction has already
+/// committed. If that second save fails, the business change stands but its audit trail does
+/// not — the failure is logged at error level and swallowed rather than rethrown, so a lost
+/// audit row never turns into a duplicate ticket or asset from a client retrying an operation
+/// that actually succeeded. Making both writes commit atomically would mean this interceptor
+/// manages a transaction spanning both saves; that is a real gap, left as a deliberate open
+/// follow-up rather than solved here.
+///
+/// That reasoning does not hold inside a caller-managed transaction (see
+/// TicketService.FulfilAsync). There, SavedChanges fires before the caller's Commit, so the
+/// audit save joins the caller's transaction rather than following it — and on PostgreSQL a
+/// failed statement aborts the whole transaction block, where COMMIT then silently rolls back
+/// and reports success. Swallowing there would let a caller report success for an operation
+/// that persisted nothing. So when DbContext.Database.CurrentTransaction is not null the
+/// exception is rethrown, and the caller's own catch decides to roll back deliberately.
 /// </summary>
 public class AuditSaveChangesInterceptor : SaveChangesInterceptor
 {
@@ -164,7 +172,7 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
         }
         catch (Exception ex)
         {
-            DetachAndLogFailure(context, logs, ex);
+            if (!TryHandleFailure(context, logs, ex)) throw;
         }
         finally
         {
@@ -190,7 +198,7 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
         }
         catch (Exception ex)
         {
-            DetachAndLogFailure(context, logs, ex);
+            if (!TryHandleFailure(context, logs, ex)) throw;
         }
         finally
         {
@@ -199,12 +207,17 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
     }
 
     /// <summary>
-    /// A failed audit save must not fail the caller's already-committed operation, and the
-    /// AuditLog entities EF still has tracked as Added must not leak into some unrelated
-    /// later SaveChanges on the same context. Detach them, log the loss, and swallow it.
-    /// This is the last line of defence and must not throw.
+    /// Handles a failed audit save. Returns true when the failure was absorbed, false when the
+    /// caller must rethrow it.
+    ///
+    /// With no caller-managed transaction the audit save follows an already-committed business
+    /// change, so failing the caller's operation would be worse than losing the audit row:
+    /// detach, log, swallow. Inside a caller-managed transaction the business change has NOT
+    /// committed yet and the failed statement may have poisoned that transaction, so the
+    /// failure has to reach the caller — it still detaches and logs, then reports "not handled"
+    /// so the exception propagates. This is the last line of defence and must not itself throw.
     /// </summary>
-    private void DetachAndLogFailure(DbContext context, List<AuditLog> logs, Exception ex)
+    private bool TryHandleFailure(DbContext context, List<AuditLog> logs, Exception ex)
     {
         // Attempt to detach each log independently so a context.Entry() failure doesn't
         // prevent other detaches or the logging attempt.
@@ -220,19 +233,43 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
             }
         }
 
+        var insideCallerTransaction = false;
+        try
+        {
+            insideCallerTransaction = context.Database.CurrentTransaction is not null;
+        }
+        catch
+        {
+            // Reading the ambient transaction must never be the thing that throws here; on
+            // doubt, fall back to the swallowing behaviour that cannot fail the caller.
+        }
+
         // Attempt to log the loss independently so a logger failure doesn't prevent detaches.
         try
         {
             var entityTypes = string.Join(", ", logs.Select(l => l.EntityType).Distinct());
-            _logger.LogError(ex,
-                "Failed to persist {Count} audit log entries for entity types [{EntityTypes}]. " +
-                "The underlying business change already committed; this audit evidence is lost.",
-                logs.Count, entityTypes);
+            if (insideCallerTransaction)
+            {
+                _logger.LogError(ex,
+                    "Failed to persist {Count} audit log entries for entity types [{EntityTypes}] " +
+                    "inside a caller-managed transaction. Rethrowing so the caller rolls back: the " +
+                    "business change has not committed and the transaction may already be aborted.",
+                    logs.Count, entityTypes);
+            }
+            else
+            {
+                _logger.LogError(ex,
+                    "Failed to persist {Count} audit log entries for entity types [{EntityTypes}]. " +
+                    "The underlying business change already committed; this audit evidence is lost.",
+                    logs.Count, entityTypes);
+            }
         }
         catch
         {
             // Swallow logger failures; we are already handling a failure and must not rethrow.
         }
+
+        return !insideCallerTransaction;
     }
 
     private static Guid? ReadTenantId(EntityEntry entry)
