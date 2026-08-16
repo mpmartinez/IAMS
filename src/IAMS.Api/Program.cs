@@ -36,7 +36,9 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
             errorCodesToAdd: null);
     });
     options.AddInterceptors(
-        new AuditSaveChangesInterceptor(serviceProvider.GetRequiredService<ICurrentUserAccessor>()));
+        new AuditSaveChangesInterceptor(
+            serviceProvider.GetRequiredService<ICurrentUserAccessor>(),
+            serviceProvider.GetRequiredService<ILogger<AuditSaveChangesInterceptor>>()));
 });
 
 // Identity
