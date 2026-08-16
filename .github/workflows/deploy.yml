@@ -77,13 +77,16 @@ jobs:
         env:
           WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK }}
         run: |
+          # A missing webhook is a warning, not a failure. The images are built and pushed
+          # either way, so the run has done its real work - failing here would paint every
+          # run red until the secret exists, and a permanently red pipeline is one nobody
+          # reads. A webhook that is set but broken still fails loudly, below.
           if [ -z "$WEBHOOK" ]; then
-            echo "::error::DOKPLOY_DEPLOY_WEBHOOK is not set."
-            echo "Get it from the Dokploy UI: open the IAMS compose service, then"
-            echo "Deployments -> Webhook URL, and save it as a repository secret."
-            echo "The images for this commit are already in GHCR, so until then you can"
-            echo "deploy by clicking Redeploy in Dokploy."
-            exit 1
+            echo "::warning::DOKPLOY_DEPLOY_WEBHOOK is not set - images built, but nothing was told to deploy them."
+            echo "Images for this commit are in GHCR. Deploy by clicking Redeploy in Dokploy."
+            echo "To automate it: Dokploy UI -> the IAMS compose service -> Deployments ->"
+            echo "Webhook URL, saved as the DOKPLOY_DEPLOY_WEBHOOK repository secret."
+            exit 0
           fi
 
           # --fail so an HTTP error is a failed job rather than a silent success.
