@@ -42,14 +42,16 @@ public class TicketsController : ControllerBase
         [FromQuery] int pageSize = 25,
         CancellationToken ct = default)
     {
-        var (items, total) = await _tickets.ListAsync(
+        // effectivePage/effectiveSize, not the raw query values: ListAsync clamps both, and
+        // reporting the unclamped ones makes the client's TotalCount / PageSize arithmetic wrong.
+        var (items, total, effectivePage, effectiveSize) = await _tickets.ListAsync(
             new TicketQuery(type, status, priority, assignedToUserId, assetId, search, page, pageSize), ct);
 
         var payload = new PagedResponse<TicketListItemDto>
         {
             Items = items.Select(t => t.ToListItem()).ToList(),
-            Page = page,
-            PageSize = pageSize,
+            Page = effectivePage,
+            PageSize = effectiveSize,
             TotalCount = total
         };
 

@@ -270,7 +270,7 @@ public class TicketServiceCreateTests
 
             await service.CreateAsync(TicketTypes.Incident, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
 
-            var (results, total) = await service.ListAsync(
+            var (results, total, _, _) = await service.ListAsync(
                 new TicketQuery(null, null, null, null, null, "PRINTER"), default);
 
             Assert.Equal(1, total);
@@ -295,7 +295,7 @@ public class TicketServiceCreateTests
             await service.CreateAsync(TicketTypes.Incident, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
             await service.CreateAsync(TicketTypes.Incident, "50% battery warning", null, TicketPriority.Low, null, "emp-1", default);
 
-            var (results, total) = await service.ListAsync(
+            var (results, total, _, _) = await service.ListAsync(
                 new TicketQuery(null, null, null, null, null, "%"), default);
 
             Assert.Equal(1, total);
@@ -318,11 +318,11 @@ public class TicketServiceCreateTests
             await service.CreateAsync(TicketTypes.Incident, "One", null, TicketPriority.Low, null, "emp-1", default);
             await service.CreateAsync(TicketTypes.Request, "Two", null, TicketPriority.Low, null, "emp-1", default);
 
-            var (all, total) = await service.ListAsync(new TicketQuery(null, null, null, null, null, null), default);
+            var (all, total, _, _) = await service.ListAsync(new TicketQuery(null, null, null, null, null, null), default);
             Assert.Equal(2, total);
             Assert.Equal(2, all.Count);
 
-            var (requests, requestTotal) = await service.ListAsync(
+            var (requests, requestTotal, _, _) = await service.ListAsync(
                 new TicketQuery(TicketTypes.Request, null, null, null, null, null), default);
             Assert.Equal(1, requestTotal);
             Assert.Equal("Two", requests[0].Title);
@@ -350,6 +350,32 @@ public class TicketServiceCreateTests
             Assert.Equal(2, summary.Unassigned);
             Assert.Equal(0, summary.InProgress);
             Assert.Equal(0, summary.Overdue);
+        }
+    }
+
+    [Fact]
+    public async Task ListAsync_reports_the_page_and_size_it_actually_used()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "J. Dela Cruz");
+            var service = Build(db, tenantId);
+
+            await service.CreateAsync(
+                TicketTypes.Incident, "One", null, TicketPriority.Low, null, "emp-1", default);
+
+            // A caller asking for page 0 at 5000 per page gets page 1 at 200. The response must
+            // say so: a client computing TotalCount / PageSize off the raw values sees one page
+            // and silently drops the rest.
+            var (_, _, page, size) = await service.ListAsync(
+                new TicketQuery(null, null, null, null, null, null, Page: 0, PageSize: 5000), default);
+
+            Assert.Equal(1, page);
+            Assert.Equal(200, size);
         }
     }
 }

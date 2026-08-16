@@ -669,4 +669,35 @@ public class TicketFulfilmentTests
             Assert.Equal(0, await db.AssetAssignments.CountAsync());
         }
     }
+
+    [Fact]
+    public async Task Refuses_an_acting_user_from_another_tenant()
+    {
+        var mine = Guid.NewGuid();
+        var theirs = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(mine));
+        using (db)
+        using (conn)
+        {
+            var (service, request) = await SetupAsync(db, mine);
+            await TestDb.SeedTenantAsync(db, theirs);
+            await TestDb.SeedUserAsync(db, theirs, "outsider-1", "Foreign Staff");
+            var asset = await TestDb.SeedAssetAsync(db, mine, "IAMS-0356");
+
+            // ApplicationUser carries no global query filter, so an unscoped id check would
+            // accept this and write a foreign-tenant staff member into AssetAssignment's
+            // AssignedByUserId - the chain-of-custody field.
+            var result = await service.FulfilAsync(
+                request.Id, asset.Id, "Issued.", "outsider-1", default);
+
+            Assert.False(result.Success);
+
+            db.ChangeTracker.Clear();
+            Assert.Equal(0, await db.AssetAssignments.CountAsync());
+            var savedAsset = await db.Assets.SingleAsync(a => a.Id == asset.Id);
+            Assert.Equal(AssetStatus.Available, savedAsset.Status);
+            var savedTicket = await db.Tickets.SingleAsync(t => t.Id == request.Id);
+            Assert.Equal(TicketStatus.New, savedTicket.Status);
+        }
+    }
 }

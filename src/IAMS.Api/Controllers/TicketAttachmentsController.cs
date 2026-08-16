@@ -27,7 +27,7 @@ public class TicketAttachmentsController(
     [HttpGet]
     public async Task<ActionResult<List<TicketAttachmentDto>>> GetAttachments(int ticketId, CancellationToken ct)
     {
-        var ticket = await db.Tickets.FindAsync([ticketId], ct);
+        var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null)
             return NotFound(ApiResponse<List<TicketAttachmentDto>>.Fail("Ticket not found"));
 
@@ -51,7 +51,7 @@ public class TicketAttachmentsController(
     public async Task<ActionResult<ApiResponse<TicketAttachmentDto>>> GetAttachment(
         int ticketId, int attachmentId, CancellationToken ct)
     {
-        var ticket = await db.Tickets.FindAsync([ticketId], ct);
+        var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null)
             return NotFound(ApiResponse<TicketAttachmentDto>.Fail("Ticket not found"));
 
@@ -82,7 +82,7 @@ public class TicketAttachmentsController(
         [FromForm] string? description,
         CancellationToken ct)
     {
-        var ticket = await db.Tickets.FindAsync([ticketId], ct);
+        var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null)
             return NotFound(ApiResponse<TicketAttachmentDto>.Fail("Ticket not found"));
 
@@ -143,7 +143,7 @@ public class TicketAttachmentsController(
     [HttpGet("{attachmentId:int}/download")]
     public async Task<IActionResult> DownloadAttachment(int ticketId, int attachmentId, CancellationToken ct)
     {
-        var ticket = await db.Tickets.FindAsync([ticketId], ct);
+        var ticket = await db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null)
             return NotFound(ApiResponse<object>.Fail("Ticket not found"));
 

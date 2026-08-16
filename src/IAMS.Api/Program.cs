@@ -35,6 +35,12 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
             maxRetryDelay: TimeSpan.FromSeconds(10),
             errorCodesToAdd: null);
     });
+    // AuditSaveChangesInterceptor holds mutable per-operation state (_pending, _writing).
+    // That is safe only because AddDbContext's optionsLifetime defaults to Scoped, so this
+    // lambda — and this `new` — runs once per request scope. Switching to AddDbContextPool,
+    // or passing optionsLifetime: ServiceLifetime.Singleton, would share one instance across
+    // concurrent requests and let one tenant's pending audit rows flush through another
+    // tenant's context. Do not change the lifetime without making this interceptor stateless.
     options.AddInterceptors(
         new AuditSaveChangesInterceptor(
             serviceProvider.GetRequiredService<ICurrentUserAccessor>(),
@@ -114,7 +120,6 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("CanAssignAssets", policy => policy.RequireRole("Admin", "Staff"))
     .AddPolicy("CanReturnAssets", policy => policy.RequireRole("Admin", "Staff"))
     .AddPolicy("CanViewAssignments", policy => policy.RequireRole("Admin", "Staff", "Auditor"))
-    .AddPolicy("CanManageMaintenance", policy => policy.RequireRole("Admin", "Staff"))
     // Multi-tenant policies
     .AddPolicy("SuperAdmin", policy => policy.RequireRole("SuperAdmin"))
     .AddPolicy("TenantAdmin", policy => policy.RequireAssertion(context =>

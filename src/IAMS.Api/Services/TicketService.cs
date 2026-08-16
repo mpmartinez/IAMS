@@ -38,7 +38,13 @@ public interface ITicketService
 
     Task<Ticket?> GetAsync(int id, CancellationToken ct = default);
 
-    Task<(List<Ticket> Items, int TotalCount)> ListAsync(TicketQuery query, CancellationToken ct = default);
+    /// <summary>
+    /// Returns the requested page along with the page and size actually used. Callers must
+    /// report these rather than the values they passed in — this method clamps both, and a
+    /// response echoing an unclamped page size makes the client's page arithmetic wrong.
+    /// </summary>
+    Task<(List<Ticket> Items, int TotalCount, int Page, int PageSize)> ListAsync(
+        TicketQuery query, CancellationToken ct = default);
 
     Task<TicketSummary> GetSummaryAsync(CancellationToken ct = default);
 
@@ -189,7 +195,7 @@ public partial class TicketService : ITicketService
             .Include(t => t.AssignedToUser)
             .FirstOrDefaultAsync(t => t.Id == id, ct);
 
-    public async Task<(List<Ticket> Items, int TotalCount)> ListAsync(
+    public async Task<(List<Ticket> Items, int TotalCount, int Page, int PageSize)> ListAsync(
         TicketQuery query, CancellationToken ct = default)
     {
         var q = _db.Tickets
@@ -237,7 +243,7 @@ public partial class TicketService : ITicketService
             .Take(size)
             .ToListAsync(ct);
 
-        return (items, total);
+        return (items, total, page, size);
     }
 
     public async Task<TicketSummary> GetSummaryAsync(CancellationToken ct = default)

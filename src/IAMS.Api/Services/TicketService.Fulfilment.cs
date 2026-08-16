@@ -129,9 +129,11 @@ public partial class TicketService
                 // the audit trail never sees the claim. Restate the same values on the tracked
                 // entity so the Ticket change is still audited; EF re-issues them as an UPDATE
                 // against the row this transaction already wrote, which is a no-op on the data
-                // and the price of keeping the audit trail honest. AssetAssignmentId is set
-                // later, once the assignment exists, and folds into the same tracked entity so
-                // the audit interceptor still sees one Ticket change, not two.
+                // and the price of keeping the audit trail honest. AssetAssignmentId cannot be
+                // set here — the assignment has no id until it is saved — so it is written after
+                // the first save and produces a SECOND Ticket/Updated audit row carrying only
+                // that field. Two rows per fulfilment is expected, not a bug: both are inside
+                // this transaction and both are true.
                 ticket.AssetId = asset.Id;
                 ticket.Resolution = resolution.Trim();
                 ticket.Status = TicketStatus.Closed;
