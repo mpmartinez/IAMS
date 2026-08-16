@@ -54,6 +54,7 @@ public partial class TicketService : ITicketService
 {
     private const int MaxNumberRetries = 3;
     private const int MaxTitleLength = 200;
+    private const int MaxCommentLength = 4000;
 
     // Lower rank = lower urgency. Keyed by the TicketPriority constants.
     private static readonly Dictionary<string, int> PriorityRank = new()

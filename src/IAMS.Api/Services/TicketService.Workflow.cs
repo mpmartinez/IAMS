@@ -12,6 +12,23 @@ public partial class TicketService
         if (ticket is null)
             return ServiceResult.Fail("Ticket not found.");
 
+        // Judge whether the ticket's current status even permits (re)assignment before
+        // touching the assignee - otherwise a bad user id on a closed ticket reports "That
+        // user does not exist" instead of the real reason it was rejected.
+        // Reassigning an in-flight ticket keeps its status; only a New ticket advances.
+        var advanceToAssigned = false;
+        if (ticket.Status == TicketStatus.New)
+        {
+            if (!TicketWorkflow.CanTransition(ticket.Status, TicketStatus.Assigned))
+                return ServiceResult.Fail($"A {ticket.Status} ticket cannot be assigned.");
+
+            advanceToAssigned = true;
+        }
+        else if (!TicketWorkflow.IsOpen(ticket.Status))
+        {
+            return ServiceResult.Fail($"A {ticket.Status} ticket cannot be reassigned.");
+        }
+
         // ApplicationUser has no global tenant query filter (it's the Identity table), so
         // resolve the assignee through an explicit tenant filter the same way the requester
         // is resolved in CreateAsync - otherwise another tenant's user id would satisfy the
@@ -22,18 +39,8 @@ public partial class TicketService
         if (!assigneeExists)
             return ServiceResult.Fail("That user does not exist.");
 
-        // Reassigning an in-flight ticket keeps its status; only a New ticket advances.
-        if (ticket.Status == TicketStatus.New)
-        {
-            if (!TicketWorkflow.CanTransition(ticket.Status, TicketStatus.Assigned))
-                return ServiceResult.Fail($"A {ticket.Status} ticket cannot be assigned.");
-
+        if (advanceToAssigned)
             ticket.Status = TicketStatus.Assigned;
-        }
-        else if (!TicketWorkflow.IsOpen(ticket.Status))
-        {
-            return ServiceResult.Fail($"A {ticket.Status} ticket cannot be reassigned.");
-        }
 
         ticket.AssignedToUserId = assigneeUserId;
         ticket.AssignedAt ??= DateTime.UtcNow;
@@ -110,6 +117,10 @@ public partial class TicketService
         if (string.IsNullOrWhiteSpace(body))
             return ServiceResult<TicketComment>.Fail("A comment cannot be empty.");
 
+        var trimmedBody = body.Trim();
+        if (trimmedBody.Length > MaxCommentLength)
+            return ServiceResult<TicketComment>.Fail($"Comment cannot exceed {MaxCommentLength} characters.");
+
         var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null)
             return ServiceResult<TicketComment>.Fail("Ticket not found.");
@@ -119,7 +130,7 @@ public partial class TicketService
             TenantId = ticket.TenantId,
             TicketId = ticket.Id,
             UserId = userId,
-            Body = body.Trim(),
+            Body = trimmedBody,
             IsInternal = isInternal,
             CreatedAt = DateTime.UtcNow
         };
