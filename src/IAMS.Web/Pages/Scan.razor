@@ -69,29 +69,50 @@
         }
         else if (_scanSuccess)
         {
-            <!-- Success State -->
-            <div class="text-center px-6 animate-scale-in">
-                <div class="w-24 h-24 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4 success-pulse">
-                    <svg class="w-12 h-12 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                    </svg>
-                </div>
-                <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-2">Asset Found!</h2>
-                @if (_scannedAsset is not null)
-                {
-                    <p class="text-slate-600 dark:text-slate-300 font-medium">@_scannedAsset.DisplayName</p>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">@_scannedAsset.AssetTag</p>
-                }
-                @if (_isFromCache)
-                {
-                    <div class="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-medium">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+            <!-- Success State: resolved-asset panel -->
+            <div class="w-full max-w-sm mx-auto px-6 animate-scale-in">
+                <div class="text-center">
+                    <div class="w-24 h-24 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4 success-pulse">
+                        <svg class="w-12 h-12 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
                         </svg>
-                        From cache
                     </div>
-                }
-                <p class="text-sm text-slate-400 dark:text-slate-500 mt-4">Redirecting...</p>
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-2">Asset Found!</h2>
+                    @if (_scannedAsset is not null)
+                    {
+                        <p class="text-slate-600 dark:text-slate-300 font-medium">@_scannedAsset.DisplayName</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 font-mono">@_scannedAsset.AssetTag</p>
+                    }
+                    @if (_isFromCache)
+                    {
+                        <div class="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-medium">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                            </svg>
+                            From cache
+                        </div>
+                    }
+                </div>
+
+                <!-- Report a problem: the differentiator - a ticket that already knows its asset -->
+                <div class="mt-6 flex flex-col gap-3">
+                    <button @onclick="ReportProblem" class="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-primary-600 text-white rounded-xl font-semibold text-base hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Report a Problem
+                    </button>
+
+                    <AuthorizeView Roles="Admin,Staff,Management,Auditor,SuperAdmin">
+                        <button @onclick="ViewAsset" class="w-full flex items-center justify-center gap-2 px-5 py-3 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200">
+                            View Asset Details
+                        </button>
+                    </AuthorizeView>
+
+                    <button @onclick="ScanAgain" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 font-medium transition-colors">
+                        Scan Again
+                    </button>
+                </div>
             </div>
         }
         else if (_isProcessingFile)
@@ -369,9 +390,10 @@
             _scanSuccess = true;
             StateHasChanged();
 
-            // Navigate after short delay for visual feedback
-            await Task.Delay(1200);
-            Navigation.NavigateTo($"/assets/{asset.Id}");
+            // Stay on the resolved-asset panel rather than auto-navigating: "Report a
+            // problem" is the whole point of scanning, and an Employee cannot follow the
+            // old auto-redirect into /assets/{id} anyway.
+            await JS.InvokeVoidAsync("QrScanner.triggerHaptic");
         }
         else
         {
@@ -419,11 +441,29 @@
     private async Task ScanAgain()
     {
         _assetNotFound = false;
+        _scanSuccess = false;
+        _scannedAsset = null;
         _scannedTag = null;
         _isScanning = true;
         StateHasChanged();
 
         await JS.InvokeVoidAsync("QrScanner.resume");
+    }
+
+    private void ReportProblem()
+    {
+        if (_scannedAsset is not null)
+        {
+            Navigation.NavigateTo($"/report?assetId={_scannedAsset.Id}");
+        }
+    }
+
+    private void ViewAsset()
+    {
+        if (_scannedAsset is not null)
+        {
+            Navigation.NavigateTo($"/assets/{_scannedAsset.Id}");
+        }
     }
 
     private void ShowManualEntry()
