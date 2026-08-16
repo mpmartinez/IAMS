@@ -45,7 +45,6 @@ public class AuthStateProvider(ILocalStorageService localStorage) : Authenticati
                 new(ClaimTypes.NameIdentifier, user.Id),
                 new(ClaimTypes.Email, user.Email),
                 new(ClaimTypes.Name, user.FullName),
-                new(ClaimTypes.Role, user.Role),
                 new("department", user.Department ?? ""),
                 new("tenant_id", user.TenantId.ToString()),
                 new("tenant_name", user.TenantName ?? ""),
@@ -53,11 +52,24 @@ public class AuthStateProvider(ILocalStorageService localStorage) : Authenticati
                 new("is_super_admin", user.IsSuperAdmin.ToString().ToLower())
             };
 
-            // Add SuperAdmin role if applicable
-            if (user.IsSuperAdmin)
-            {
-                claims.Add(new Claim(ClaimTypes.Role, "SuperAdmin"));
-            }
+            // Roles come from the token, which is what the API authorises against - not from
+            // UserDto.Role, which holds only one. A user in several roles (the seeded super
+            // admin is in both SuperAdmin and Admin) lost all but that one here, so the API
+            // would accept a request the UI had already hidden the button for.
+            var roleClaims = jwtToken.Claims
+                .Where(c => c.Type == ClaimTypes.Role || c.Type == "role")
+                .Select(c => c.Value)
+                .Distinct()
+                .ToList();
+
+            // Fall back to the stored single role only if the token carried none.
+            if (roleClaims.Count == 0 && !string.IsNullOrWhiteSpace(user.Role))
+                roleClaims.Add(user.Role);
+
+            if (user.IsSuperAdmin && !roleClaims.Contains("SuperAdmin"))
+                roleClaims.Add("SuperAdmin");
+
+            claims.AddRange(roleClaims.Select(r => new Claim(ClaimTypes.Role, r)));
 
             var identity = new ClaimsIdentity(claims, "jwt");
             return new AuthenticationState(new ClaimsPrincipal(identity));
