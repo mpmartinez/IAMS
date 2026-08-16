@@ -124,6 +124,50 @@ public class TicketFulfilmentTests
         }
     }
 
+    /// <summary>
+    /// Simulates the race the ticket's conditional claim exists to close: once armed, it
+    /// flips every ticket to Closed on the same connection immediately before FulfilAsync's
+    /// ticket-claim statement executes - that is, after the IsOpen guard has already read the
+    /// ticket as open. Stands in for a second, concurrent fulfilment of the same ticket (e.g.
+    /// a replayed offline sync action) that got there first.
+    /// </summary>
+    private sealed class StealTheTicketInterceptor : DbCommandInterceptor
+    {
+        private bool _armed;
+
+        public void Arm() => _armed = true;
+
+        private void StealBefore(DbCommand command)
+        {
+            if (!_armed) return;
+            if (!command.CommandText.Contains("UPDATE", StringComparison.Ordinal)) return;
+            if (!command.CommandText.Contains("Tickets", StringComparison.Ordinal)) return;
+
+            // Only the first Tickets UPDATE in the transaction - the claim - is raced.
+            _armed = false;
+
+            using var steal = command.Connection!.CreateCommand();
+            steal.Transaction = command.Transaction;
+            steal.CommandText = "UPDATE \"Tickets\" SET \"Status\" = 'Closed'";
+            steal.ExecuteNonQuery();
+        }
+
+        public override InterceptionResult<int> NonQueryExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+        {
+            StealBefore(command);
+            return base.NonQueryExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            StealBefore(command);
+            return base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
     private sealed class StubUser : ICurrentUserAccessor
     {
         public string? GetUserId() => "staff-1";
@@ -490,6 +534,49 @@ public class TicketFulfilmentTests
             Assert.Equal(TicketStatus.New, saved.Status);
             Assert.Null(saved.AssetAssignmentId);
             Assert.Equal(AssetStatus.Available, savedAsset.Status);
+            Assert.Equal(0, await db.AssetAssignments.CountAsync());
+        }
+    }
+
+    /// <summary>
+    /// Mirrors An_asset_taken_after_the_availability_check_is_not_issued_again for the other
+    /// half of the race: two fulfilments of the *same* ticket, each naming a different
+    /// available asset, can both pass the IsOpen guard, which is a plain read outside the
+    /// transaction. The conditional claim on Tickets is what actually stops the second one
+    /// from creating a second assignment against a ticket the first one already closed.
+    /// </summary>
+    [Fact]
+    public async Task A_ticket_closed_after_the_open_check_is_not_fulfilled_again()
+    {
+        var tenantId = Guid.NewGuid();
+        var thief = new StealTheTicketInterceptor();
+        var (db, conn) = CreateWith(tenantId, thief);
+
+        using (db)
+        using (conn)
+        {
+            var (service, request) = await SetupAsync(db, tenantId);
+            var asset = await TestDb.SeedAssetAsync(db, tenantId, "IAMS-0356");
+
+            thief.Arm();
+
+            var result = await service.FulfilAsync(request.Id, asset.Id, "Issued.", "staff-1", default);
+
+            Assert.False(result.Success);
+            // Specifically the claim's rejection, not the earlier IsOpen guard, which the
+            // ticket was still New for, and distinguishable from that guard's wording too.
+            Assert.Contains("no longer open", result.Message!, StringComparison.OrdinalIgnoreCase);
+
+            db.ChangeTracker.Clear();
+            var saved = await db.Tickets.SingleAsync(t => t.Id == request.Id);
+            var savedAsset = await db.Assets.SingleAsync(a => a.Id == asset.Id);
+
+            // The steal ran inside the same transaction, so the rollback undoes it too: what
+            // matters is that the asset was never claimed and no assignment was created.
+            Assert.Equal(TicketStatus.New, saved.Status);
+            Assert.Null(saved.AssetAssignmentId);
+            Assert.Equal(AssetStatus.Available, savedAsset.Status);
+            Assert.Null(savedAsset.AssignedToUserId);
             Assert.Equal(0, await db.AssetAssignments.CountAsync());
         }
     }

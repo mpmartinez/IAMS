@@ -1,6 +1,7 @@
 using System.Data.Common;
 using IAMS.Api.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace IAMS.Api.Services;
@@ -18,7 +19,10 @@ public partial class TicketService
     /// transaction under a retrying strategy — the whole unit has to be handed to the
     /// strategy so it can be retried as a whole. That means the body below can run more
     /// than once, so it re-reads and re-checks everything from a cleared change tracker
-    /// on every attempt.
+    /// on every attempt. That clear happens unconditionally on entry, too: any change a
+    /// caller staged on this DbContext before calling FulfilAsync is discarded, not saved
+    /// alongside it. There is no caller yet that does that, but a future one must not
+    /// assume otherwise.
     /// </summary>
     public async Task<ServiceResult> FulfilAsync(
         int ticketId, int assetId, string resolution, string actingUserId, CancellationToken ct = default)
@@ -77,15 +81,72 @@ public partial class TicketService
             {
                 var now = DateTime.UtcNow;
 
-                // Claim the asset conditionally, as the first write in the transaction. The
-                // guard above is a time-of-check/time-of-use read: two fulfilments of
-                // different tickets naming the same asset can both pass it and both issue the
-                // same machine. This UPDATE ... WHERE Status = 'Available' is the invariant -
-                // it affects a row only while the asset is still available, and it holds that
-                // row's lock until this transaction ends, so a concurrent fulfilment either
-                // blocks here and then matches nothing, or is already visible to us as InUse.
-                // A re-read instead of a conditional write would have exactly the same
-                // time-of-check problem at read-committed isolation.
+                // Claim the ticket conditionally, as the first write in the transaction -
+                // ahead of the asset. The IsOpen guard above is a time-of-check/time-of-use
+                // read: two fulfilments of the *same* ticket (with two different available
+                // assets, so they never contend on the asset row) can both pass it and both
+                // issue a machine, leaving one asset's assignment with no ticket pointing at
+                // it. This app has an offline PWA whose sync queue replays queued actions, so
+                // a double-submit of the same fulfilment is a realistic way to hit this, not
+                // just a two-operator edge case. This UPDATE ... WHERE Status IN (open) is the
+                // invariant - it closes the ticket only while it is still open, and holds that
+                // row's lock until this transaction ends, so a concurrent fulfilment of the
+                // same ticket either blocks here and then matches nothing, or already sees it
+                // as Closed.
+                //
+                // Claimed ahead of the asset deliberately: a duplicate submission always
+                // targets the same ticket, so rejecting the ticket claim first means the
+                // Assets table is never touched for it at all. It also fixes a lock order
+                // (Tickets before Assets) for this method's two claims; since this is the only
+                // place that takes both locks, that ordering choice cannot deadlock against
+                // itself, but keeping it fixed here is what would keep a future caller that
+                // also needs both from deadlocking against this one.
+                var ticketClaimed = await _db.Tickets
+                    .Where(t => t.Id == ticket.Id && TicketStatus.Open.Contains(t.Status))
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(t => t.AssetId, asset.Id)
+                        .SetProperty(t => t.Resolution, resolution.Trim())
+                        .SetProperty(t => t.Status, TicketStatus.Closed)
+                        .SetProperty(t => t.ResolvedAt, now)
+                        .SetProperty(t => t.ClosedAt, now), ct);
+
+                if (ticketClaimed != 1)
+                {
+                    await SafeRollbackAsync(transaction);
+                    _db.ChangeTracker.Clear();
+
+                    // Fires only when the race this claim exists to close actually happens in
+                    // production - worth a trace so how often that is isn't a total unknown.
+                    _logger.LogWarning(
+                        "Fulfilment of ticket {TicketId} rejected: ticket was no longer open when claimed.",
+                        ticketId);
+
+                    return ServiceResult.Fail(
+                        "This request is no longer open — it was already fulfilled or closed a moment ago.");
+                }
+
+                // ExecuteUpdate bypasses the change tracker, so the interceptor that writes
+                // the audit trail never sees the claim. Restate the same values on the tracked
+                // entity so the Ticket change is still audited; EF re-issues them as an UPDATE
+                // against the row this transaction already wrote, which is a no-op on the data
+                // and the price of keeping the audit trail honest. AssetAssignmentId is set
+                // later, once the assignment exists, and folds into the same tracked entity so
+                // the audit interceptor still sees one Ticket change, not two.
+                ticket.AssetId = asset.Id;
+                ticket.Resolution = resolution.Trim();
+                ticket.Status = TicketStatus.Closed;
+                ticket.ResolvedAt = now;
+                ticket.ClosedAt = now;
+
+                // Claim the asset conditionally, second. The guard above is a
+                // time-of-check/time-of-use read: two fulfilments of different tickets naming
+                // the same asset can both pass it and both issue the same machine. This
+                // UPDATE ... WHERE Status = 'Available' is the invariant - it affects a row
+                // only while the asset is still available, and it holds that row's lock until
+                // this transaction ends, so a concurrent fulfilment either blocks here and
+                // then matches nothing, or is already visible to us as InUse. A re-read
+                // instead of a conditional write would have exactly the same time-of-check
+                // problem at read-committed isolation.
                 var claimed = await _db.Assets
                     .Where(a => a.Id == asset.Id && a.Status == AssetStatus.Available)
                     .ExecuteUpdateAsync(setters => setters
@@ -95,17 +156,20 @@ public partial class TicketService
 
                 if (claimed != 1)
                 {
-                    await transaction.RollbackAsync(CancellationToken.None);
+                    await SafeRollbackAsync(transaction);
                     _db.ChangeTracker.Clear();
+
+                    // Same reasoning as the ticket claim's log above: this is the trace for
+                    // how often the asset side of the race is actually hit.
+                    _logger.LogWarning(
+                        "Fulfilment of ticket {TicketId} rejected: asset {AssetId} was no longer available when claimed.",
+                        ticketId, assetId);
+
                     return ServiceResult.Fail(
                         $"{asset.AssetTag} is no longer available — it was issued to someone else a moment ago.");
                 }
 
-                // ExecuteUpdate bypasses the change tracker, so the interceptor that writes
-                // the audit trail never sees the claim. Restate the same values on the tracked
-                // entity so the Asset change is still audited; EF re-issues them as an UPDATE
-                // against the row this transaction already wrote, which is a no-op on the data
-                // and the price of keeping the audit trail honest.
+                // Same restatement reasoning as the ticket claim above.
                 asset.Status = AssetStatus.InUse;
                 asset.AssignedToUserId = ticket.RequesterUserId;
                 asset.UpdatedAt = now;
@@ -124,12 +188,7 @@ public partial class TicketService
                 _db.AssetAssignments.Add(assignment);
                 await _db.SaveChangesAsync(ct);
 
-                ticket.AssetId = asset.Id;
                 ticket.AssetAssignmentId = assignment.Id;
-                ticket.Resolution = resolution.Trim();
-                ticket.Status = TicketStatus.Closed;
-                ticket.ResolvedAt = now;
-                ticket.ClosedAt = now;
 
                 await _db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
@@ -146,7 +205,7 @@ public partial class TicketService
                 // rolling back with the already-cancelled token throws and replaces the real
                 // exception, leaving the rollback to transaction disposal instead of running
                 // deliberately here.
-                await transaction.RollbackAsync(CancellationToken.None);
+                await SafeRollbackAsync(transaction);
                 _db.ChangeTracker.Clear();
 
                 // The exception text names constraints, columns and tables; it belongs in the
@@ -161,11 +220,35 @@ public partial class TicketService
             {
                 // Any other failure (cancellation, an unexpected exception, etc.) must still
                 // roll back before propagating, so a partial write never survives.
-                await transaction.RollbackAsync(CancellationToken.None);
+                await SafeRollbackAsync(transaction);
                 _db.ChangeTracker.Clear();
                 throw;
             }
         });
+    }
+
+    /// <summary>
+    /// Rolls back a transaction without letting a rollback failure replace whatever exception
+    /// (or claim rejection) triggered it. By the time any caller here reaches a rollback, the
+    /// most likely cause is precisely the kind of failure that also kills the connection - a
+    /// Neon compute suspending, a dropped socket - and on a dead connection RollbackAsync
+    /// itself throws. The server-side transaction is already gone in that case, so there is
+    /// nothing left to roll back and swallowing the failure loses nothing. Letting it
+    /// propagate instead would replace the original exception: a transient failure would stop
+    /// looking transient to the execution strategy (defeating the retry this whole design
+    /// exists to enable), and the non-transient path would leak raw provider text to the
+    /// caller instead of running the friendly failure message that follows it.
+    /// </summary>
+    private static async Task SafeRollbackAsync(IDbContextTransaction transaction)
+    {
+        try
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
+        }
+        catch
+        {
+            // Deliberately swallowed - see method doc above.
+        }
     }
 
     /// <summary>Walks the inner-exception chain for a provider exception the driver itself
