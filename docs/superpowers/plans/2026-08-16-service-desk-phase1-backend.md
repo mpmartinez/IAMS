@@ -685,7 +685,10 @@ public class TicketAttachment : ITenantEntity
     public required string Category { get; set; }
     public string? Description { get; set; }
 
-    public string? UploadedByUserId { get; set; }
+    // Required, matching the deleted MaintenanceAttachment: an audit feature must
+    // always record who uploaded a file. Keeping it non-null also spares the
+    // migration an ALTER COLUMN on an existing NOT NULL column.
+    public required string UploadedByUserId { get; set; }
     public ApplicationUser? UploadedByUser { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 }
@@ -898,9 +901,11 @@ Then replace the whole `modelBuilder.Entity<Maintenance>(...)` and `modelBuilder
             entity.Property(e => e.Action).HasMaxLength(50).IsRequired();
             entity.Property(e => e.UserId).HasMaxLength(450);
 
+            // Tenant-prefixed: every read passes the tenant query filter, so real
+            // queries are always WHERE TenantId = X AND ... . This table only grows.
             entity.HasIndex(e => e.TenantId);
-            entity.HasIndex(e => new { e.EntityType, e.EntityId });
-            entity.HasIndex(e => e.Timestamp);
+            entity.HasIndex(e => new { e.TenantId, e.EntityType, e.EntityId });
+            entity.HasIndex(e => new { e.TenantId, e.Timestamp });
 
             entity.HasOne(e => e.Tenant)
                 .WithMany()
@@ -985,6 +990,8 @@ protected override void Up(MigrationBuilder migrationBuilder)
     migrationBuilder.RenameTable(name: "MaintenanceAttachments", newName: "TicketAttachments");
 
     migrationBuilder.RenameColumn(name: "MaintenanceId", table: "TicketAttachments", newName: "TicketId");
+    // MaintenanceAttachment called this CreatedAt; TicketAttachment calls it UploadedAt.
+    migrationBuilder.RenameColumn(name: "CreatedAt", table: "TicketAttachments", newName: "UploadedAt");
     migrationBuilder.RenameColumn(name: "PerformedByUserId", table: "Tickets", newName: "AssignedToUserId");
     migrationBuilder.RenameColumn(name: "CreatedByUserId", table: "Tickets", newName: "RequesterUserId");
     migrationBuilder.RenameColumn(name: "CompletedAt", table: "Tickets", newName: "ResolvedAt");
@@ -3270,12 +3277,35 @@ public class TicketCommentsController : ControllerBase
 
 Create `src/IAMS.Api/Controllers/TicketAttachmentsController.cs` as a copy of the old `MaintenanceAttachmentsController` retrieved in the task preamble, with these substitutions applied throughout: route `api/maintenance/{maintenanceId:int}/attachments` becomes `api/tickets/{ticketId:int}/attachments`; `_db.MaintenanceAttachments` becomes `_db.TicketAttachments`; `MaintenanceAttachment` becomes `TicketAttachment`; `MaintenanceId` becomes `TicketId`; `_db.Maintenances` becomes `_db.Tickets`. Keep every validation, quota check and storage call byte-for-byte otherwise.
 
-- [ ] **Step 5: Verify the solution builds and every test passes**
+- [ ] **Step 5: Count ticket attachments toward the tenant storage quota**
+
+`SubscriptionService` sums only `db.Attachments`, so maintenance attachments never
+counted toward `Tenant.MaxStorageBytes` and ticket attachments would not either — the
+quota check would run on every ticket upload and never be able to fail. Fix all three
+places in `src/IAMS.Api/Services/SubscriptionService.cs` that sum attachment bytes
+(`CanUploadFileAsync`, `UpdateStorageUsageAsync`, `GetUsageAsync`) to add the ticket
+attachment total. In each, alongside the existing `db.Attachments` sum, add:
+
+```csharp
+        var ticketBytes = await db.TicketAttachments
+            .IgnoreQueryFilters()
+            .Where(a => a.TenantId == tenantId)
+            .SumAsync(a => a.FileSizeBytes);
+```
+
+and use `currentUsage + ticketBytes` (respectively `storageBytes + ticketBytes`) where
+the single sum is used today.
+
+Add a test to `tests/IAMS.Api.Tests/` proving a tenant's reported storage includes both
+tables: seed a tenant, insert one `Attachment` of 100 bytes and one `TicketAttachment`
+of 50 bytes, and assert `GetUsageAsync` reports 150.
+
+- [ ] **Step 6: Verify the solution builds and every test passes**
 
 Run: `dotnet build && dotnet test`
 Expected: build succeeds; `Failed: 0` across the whole suite
 
-- [ ] **Step 6: Smoke-test the API by hand**
+- [ ] **Step 7: Smoke-test the API by hand**
 
 ```bash
 cd src/IAMS.Api && dotnet run
@@ -3283,7 +3313,7 @@ cd src/IAMS.Api && dotnet run
 
 In Swagger at `https://localhost:5001/swagger`, sign in as `admin@company.com` / `Admin123!` and confirm: `POST /api/tickets` returns a ticket with `reference: "TKT-0001"`; `GET /api/tickets` lists it; `POST /api/tickets/{id}/assign` then `/status` to `InProgress` then `/resolve` walks the ticket through; and `POST /api/tickets/{id}/status` with `Closed` from `New` returns 400 with a readable message.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add -A
