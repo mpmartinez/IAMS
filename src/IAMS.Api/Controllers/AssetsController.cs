@@ -1,3 +1,4 @@
+using IAMS.Api.Authorization;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Api.Services;
@@ -430,7 +431,7 @@ public class AssetsController(
         // Open to every authenticated user, because an employee scanning a QR sticker to
         // report a fault needs to resolve exactly this one asset. They do not need what it
         // cost, so a non-staff caller gets the identifying fields without the financials.
-        var isStaff = User.IsInRole(Roles.Admin) || User.IsInRole(Roles.Staff);
+        var isStaff = User.HasPermission(Permissions.AssetsView);
         return Ok(ApiResponse<AssetDto>.Ok(isStaff ? MapToDto(asset) : MapToScanDto(asset)));
     }
 

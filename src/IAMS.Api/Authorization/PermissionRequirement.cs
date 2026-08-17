@@ -13,8 +13,8 @@ public sealed class PermissionAuthorizationHandler : AuthorizationHandler<Permis
     protected override Task HandleRequirementAsync(
         AuthorizationHandlerContext context, PermissionRequirement requirement)
     {
-        // SuperAdmin keeps the bypass it has always had: it short-circuits tenant isolation, so
-        // gating it on per-tenant grants would be incoherent.
+        // SuperAdmin bypasses permission checks by design, consistent with it short-circuiting
+        // tenant isolation elsewhere: gating it on per-tenant grants would be incoherent.
         if (context.User.IsInRole(Roles.SuperAdmin) ||
             context.User.HasClaim(Permissions.ClaimType, requirement.Permission))
         {

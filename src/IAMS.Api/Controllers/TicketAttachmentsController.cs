@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using IAMS.Api.Authorization;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Api.Services;
@@ -20,7 +21,7 @@ public class TicketAttachmentsController(
     ILookupService lookups) : ControllerBase
 {
     private string CurrentUserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-    private bool IsStaff => User.IsInRole("Admin") || User.IsInRole("Staff");
+    private bool IsStaff => User.HasPermission(Permissions.TicketsQueue);
 
     /// <summary>
     /// Get all attachments for a ticket
