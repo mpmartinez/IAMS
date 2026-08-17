@@ -28,7 +28,12 @@ public static class SeedData
                     Description = Roles.DescriptionFor(role)
                 });
             }
-            else if (!existing.IsBuiltIn || existing.Description is null)
+            // TenantId is null is the guard against a name collision: without it, a tenant's own
+            // PRIVATE custom role happening to share a name with a built-in role Roles.All gains
+            // in some future release would get promoted here - IsBuiltIn flipped to true and
+            // TenantId cleared - publishing that tenant's role name (and now its grants) to every
+            // tenant on the platform.
+            else if (existing.TenantId is null && (!existing.IsBuiltIn || existing.Description is null))
             {
                 existing.IsBuiltIn = true;
                 existing.TenantId = null;

@@ -458,7 +458,7 @@ public class AssetsController(
     // Admin only. This enumerates every asset tag in the tenant, which is a map of the whole
     // estate and exactly what you would want before guessing at other endpoints.
     [HttpGet("debug/tags")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanListAssetTags")]
     public async Task<ActionResult<List<string>>> GetAllTags()
     {
         var tags = await db.Assets.Select(a => a.AssetTag).OrderBy(t => t).ToListAsync();

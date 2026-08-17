@@ -173,13 +173,6 @@ public class AuthController(
         return Ok(ApiResponse<object>.Ok(new { }, "Logged out from all devices"));
     }
 
-    [AllowAnonymous]
-    [HttpGet("roles")]
-    public ActionResult<string[]> GetRoles()
-    {
-        return Ok(new[] { "Admin", "Staff", "Auditor" });
-    }
-
     /// <summary>
     /// Request a password reset link
     /// </summary>
