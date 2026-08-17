@@ -120,6 +120,11 @@ public class AuthService(
             }
 
             await StoreTokensAsync(result.Data);
+            // MainLayout and every PermissionView gate read the auth state once, in
+            // OnInitializedAsync - they never re-evaluate on their own. Without this notification
+            // a successful refresh writes a fresh, permission-bearing token to storage but the UI
+            // keeps rendering off the stale principal until a full page reload.
+            ((AuthStateProvider)authStateProvider).NotifyAuthenticationStateChanged();
             Console.WriteLine("Token refresh successful");
             return true;
         }

@@ -3,10 +3,11 @@ using System.Security.Claims;
 using Blazored.LocalStorage;
 using IAMS.Shared.DTOs;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IAMS.Web.Services;
 
-public class AuthStateProvider(ILocalStorageService localStorage) : AuthenticationStateProvider
+public class AuthStateProvider(ILocalStorageService localStorage, IServiceProvider serviceProvider) : AuthenticationStateProvider
 {
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
@@ -24,6 +25,29 @@ public class AuthStateProvider(ILocalStorageService localStorage) : Authenticati
                 return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
 
             var jwtToken = handler.ReadJwtToken(token);
+
+            // A token minted before this feature shipped is still unexpired and readable, but
+            // carries no "permission" claim at all - every PermissionView and nav gate would read
+            // that as "holds nothing", locking an already-logged-in user out for up to the token's
+            // remaining lifetime (Jwt:ExpireMinutes, currently 30). Force one refresh attempt to
+            // pick up a claim-bearing token instead. Bounded to a single attempt within this call -
+            // if the refreshed token is itself still claim-less (e.g. the refresh hit an old API
+            // instance mid-deploy), fall through and use what we have rather than looping.
+            if (jwtToken.ValidTo >= DateTime.UtcNow && !jwtToken.Claims.Any(c => c.Type == "permission"))
+            {
+                var authService = serviceProvider.GetRequiredService<AuthService>();
+                if (await authService.TryRefreshTokenAsync())
+                {
+                    var refreshedToken = await localStorage.GetItemAsync<string>("authToken");
+                    if (!string.IsNullOrEmpty(refreshedToken) && handler.CanReadToken(refreshedToken))
+                    {
+                        token = refreshedToken;
+                        jwtToken = handler.ReadJwtToken(token);
+                        user = await localStorage.GetItemAsync<UserDto>("currentUser") ?? user;
+                    }
+                }
+            }
+
             if (jwtToken.ValidTo < DateTime.UtcNow)
             {
                 // Token is expired - return unauthenticated
