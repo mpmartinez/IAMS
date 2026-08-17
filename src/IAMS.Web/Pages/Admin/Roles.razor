@@ -185,7 +185,7 @@
         }
     </ChildContent>
     <FooterContent>
-        <Button Variant="ghost" OnClick="CloseDeleteModal">Cancel</Button>
+        <Button Variant="ghost" OnClick="CloseDeleteModal" Disabled="@_deleting">Cancel</Button>
         <Button Variant="destructive" OnClick="DeleteRole" Loading="@_deleting">Delete</Button>
     </FooterContent>
 </Modal>
@@ -332,19 +332,30 @@
 
     private void CloseDeleteModal()
     {
+        // Ignore dismiss requests (Cancel, backdrop click, X) while a delete is in flight -
+        // Modal.razor has no way to suppress its own backdrop/X close, so this guard is what
+        // actually stops _roleToDelete being cleared out from under the pending await in
+        // DeleteRole. The Cancel button is also visually disabled below, but this is what
+        // makes the backdrop/X close safe too.
+        if (_deleting) return;
+
         _showDeleteModal = false;
         _roleToDelete = null;
     }
 
     private async Task DeleteRole()
     {
-        if (_roleToDelete is null) return;
+        // Capture the target before the await so the continuation below never depends on
+        // mutable component state - even though CloseDeleteModal now refuses to run while
+        // _deleting is true, this keeps the method correct on its own.
+        var target = _roleToDelete;
+        if (target is null) return;
 
         _deleting = true;
-        var (success, error) = await Api.DeleteRoleAsync(_roleToDelete.Id);
+        var (success, error) = await Api.DeleteRoleAsync(target.Id);
         if (success)
         {
-            Snackbar.Success($"Deleted {_roleToDelete.Name}");
+            Snackbar.Success($"Deleted {target.Name}");
             _showDeleteModal = false;
             _roleToDelete = null;
             await Load();
