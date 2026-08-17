@@ -654,6 +654,12 @@ Add to `src/IAMS.Api/Data/SeedData.cs`:
     /// Additive and idempotent on purpose: it inserts what is missing and never deletes. A tenant
     /// that unticks a permission must keep it unticked across restarts, so "missing row" is a
     /// legitimate customisation, not drift to repair.
+    ///
+    /// Known limitation: because a role with any grant counts as provisioned, a permission added
+    /// to the catalog in a later release does not reach tenants that already exist - an admin must
+    /// tick it on each one. Fixing that needs a marker distinguishing "never provisioned" from
+    /// "provisioned then revoked"; per-key insertion is not the fix, since it would resurrect every
+    /// permission a tenant deliberately revoked on the next restart.
     /// </summary>
     public static async Task EnsureRolePermissionsAsync(AppDbContext db, Guid tenantId)
     {
@@ -1323,7 +1329,6 @@ namespace IAMS.Api.Controllers;
 public class RolesController(
     AppDbContext db,
     RoleManager<ApplicationRole> roleManager,
-    UserManager<ApplicationUser> userManager,
     ITenantProvider tenantProvider) : ControllerBase
 {
     /// <summary>
@@ -1374,22 +1379,37 @@ public class RolesController(
             .Select(rp => new { rp.RoleId, rp.Permission })
             .ToListAsync();
 
-        var result = new List<RoleDto>();
-        foreach (var role in roles)
+        var counts = await UserCountsByRole(tenantId, roleIds);
+
+        var result = roles.Select(role => new RoleDto
         {
-            var usersInRole = await userManager.GetUsersInRoleAsync(role.Name!);
-            result.Add(new RoleDto
-            {
-                Id = role.Id,
-                Name = role.Name!,
-                Description = role.Description,
-                IsBuiltIn = role.IsBuiltIn,
-                UserCount = usersInRole.Count(u => u.TenantId == tenantId),
-                Permissions = grants.Where(g => g.RoleId == role.Id).Select(g => g.Permission).ToList()
-            });
-        }
+            Id = role.Id,
+            Name = role.Name!,
+            Description = role.Description,
+            IsBuiltIn = role.IsBuiltIn,
+            UserCount = counts.GetValueOrDefault(role.Id),
+            Permissions = grants.Where(g => g.RoleId == role.Id).Select(g => g.Permission).ToList()
+        }).ToList();
 
         return Ok(ApiResponse<List<RoleDto>>.Ok(result.OrderByDescending(r => r.IsBuiltIn).ThenBy(r => r.Name).ToList()));
+    }
+
+    /// <summary>
+    /// How many users in this tenant hold each of these roles, in one query.
+    ///
+    /// Deliberately not UserManager.GetUsersInRoleAsync: that loads every holder of a role across
+    /// every tenant into memory before filtering, so a role like Employee would pull the whole
+    /// platform's users on each page load.
+    /// </summary>
+    private async Task<Dictionary<string, int>> UserCountsByRole(Guid tenantId, List<string> roleIds)
+    {
+        var tenantUserIds = db.Users.Where(u => u.TenantId == tenantId).Select(u => u.Id);
+
+        return await db.UserRoles
+            .Where(ur => roleIds.Contains(ur.RoleId) && tenantUserIds.Contains(ur.UserId))
+            .GroupBy(ur => ur.RoleId)
+            .Select(g => new { RoleId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.RoleId, x => x.Count);
     }
 
     [HttpGet("assignable")]
@@ -1477,7 +1497,7 @@ public class RolesController(
 
         await ReplaceGrants(role.Id, tenantId, accepted);
 
-        var usersInRole = await userManager.GetUsersInRoleAsync(role.Name!);
+        var counts = await UserCountsByRole(tenantId, [role.Id]);
 
         return Ok(ApiResponse<RoleDto>.Ok(new RoleDto
         {
@@ -1485,7 +1505,7 @@ public class RolesController(
             Name = role.Name!,
             Description = role.Description,
             IsBuiltIn = role.IsBuiltIn,
-            UserCount = usersInRole.Count(u => u.TenantId == tenantId),
+            UserCount = counts.GetValueOrDefault(role.Id),
             Permissions = accepted
         }));
     }
@@ -1502,8 +1522,7 @@ public class RolesController(
         if (role.IsBuiltIn)
             return BadRequest(ApiResponse<object>.Fail("Built-in roles cannot be deleted."));
 
-        var holders = (await userManager.GetUsersInRoleAsync(role.Name!))
-            .Count(u => u.TenantId == tenantId);
+        var holders = (await UserCountsByRole(tenantId, [role.Id])).GetValueOrDefault(role.Id);
         if (holders > 0)
             return Conflict(ApiResponse<object>.Fail(
                 $"{holders} user{(holders == 1 ? "" : "s")} still hold this role. Move them to another role first."));
