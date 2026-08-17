@@ -949,6 +949,69 @@ public class ApiClient(HttpClient http, AuthService authService)
 
         return (true, null);
     }
+
+    // Roles and permissions.
+
+    public async Task<List<RoleDto>?> GetRolesAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<RoleDto>>>("api/roles");
+        return response?.Data;
+    }
+
+    public async Task<List<AssignableRoleDto>?> GetAssignableRolesAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<AssignableRoleDto>>>("api/roles/assignable");
+        return response?.Data;
+    }
+
+    public async Task<List<PermissionGroupDto>?> GetPermissionGroupsAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<PermissionGroupDto>>>("api/permissions");
+        return response?.Data;
+    }
+
+    public async Task<(bool Success, RoleDto? Role, string? Error)> CreateRoleAsync(CreateRoleDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync("api/roles", dto);
+
+        var payload = await response.Content.ReadFromJsonAsync<ApiResponse<RoleDto>>();
+        if (!response.IsSuccessStatusCode)
+            return (false, null, payload?.Message ?? "Failed to create role.");
+
+        return (true, payload?.Data, null);
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateRoleAsync(string id, UpdateRoleDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PutAsJsonAsync($"api/roles/{id}", dto);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to update role.");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> DeleteRoleAsync(string id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.DeleteAsync($"api/roles/{id}");
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to delete role.");
+        }
+
+        return (true, null);
+    }
 }
 
 public record UserListItem(string Id, string FullName, string? Department);

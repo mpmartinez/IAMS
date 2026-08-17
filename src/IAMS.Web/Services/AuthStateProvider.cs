@@ -71,6 +71,14 @@ public class AuthStateProvider(ILocalStorageService localStorage) : Authenticati
 
             claims.AddRange(roleClaims.Select(r => new Claim(ClaimTypes.Role, r)));
 
+            // Permission claims come from the token for the same reason roles do: the token is
+            // what the API authorises against. UserDto carries no permissions at all.
+            claims.AddRange(jwtToken.Claims
+                .Where(c => c.Type == "permission")
+                .Select(c => c.Value)
+                .Distinct()
+                .Select(p => new Claim("permission", p)));
+
             var identity = new ClaimsIdentity(claims, "jwt");
             return new AuthenticationState(new ClaimsPrincipal(identity));
         }

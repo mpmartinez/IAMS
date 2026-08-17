@@ -27,16 +27,14 @@
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
-        if (user.Identity?.IsAuthenticated == true)
+        if (user.Identity?.IsAuthenticated != true)
         {
-            // Check for specific permission claim
-            _hasPermission = user.HasClaim("permission", Permission);
-
-            // Also allow if user is Admin (has all permissions)
-            if (!_hasPermission)
-            {
-                _hasPermission = user.IsInRole("Admin") || user.IsInRole("Administrator");
-            }
+            _hasPermission = false;
+            return;
         }
+
+        // SuperAdmin bypasses authorisation on the API, so it must bypass here too or the UI
+        // would hide controls that would in fact work.
+        _hasPermission = user.IsInRole("SuperAdmin") || user.HasClaim("permission", Permission);
     }
 }
