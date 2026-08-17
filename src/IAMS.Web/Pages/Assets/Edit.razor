@@ -451,7 +451,10 @@
     {
         _deviceTypes = await Api.GetDeviceTypesAsync();
         _statuses = await Api.GetStatusesAsync();
-        _currencies = ["PHP", "USD"]; // Only Peso and Dollar
+        // Fed from the currency lookup data (admin-editable) rather than hardcoded here. A
+        // built-in fallback covers a failed fetch - an empty dropdown is worse than one
+        // showing the defaults.
+        _currencies = await Api.GetCurrenciesAsync() is { Length: > 0 } fetched ? fetched : ["PHP", "USD"];
         _users = await Api.GetUserListAsync();
 
         if (!IsNew)

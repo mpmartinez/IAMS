@@ -153,20 +153,54 @@ public class ApiClient(HttpClient http, AuthService authService)
         return (payload?.Data, null);
     }
 
-    public async Task<string[]?> GetDeviceTypesAsync()
+    // Per-session cache for the small "give me the dropdown options" endpoints backed by
+    // admin-editable lookup data. ApiClient is registered Scoped, and Blazor WASM has one
+    // root scope for the whole browser session, so this dictionary lives exactly as long as
+    // the tab does - populated once per lookup type, not refetched on every page visit or
+    // keystroke. AssetsController.GetStatuses() is deliberately not cached through here: it is
+    // the locked AssetStatus vocabulary, a short constant list, not lookup data.
+    private readonly Dictionary<string, string[]> _lookupCache = new();
+    private readonly SemaphoreSlim _lookupCacheLock = new(1, 1);
+
+    private async Task<string[]?> GetCachedLookupAsync(string cacheKey, Func<Task<string[]?>> fetch)
     {
-        return await http.GetFromJsonAsync<string[]>("api/assets/device-types");
+        if (_lookupCache.TryGetValue(cacheKey, out var cached))
+            return cached;
+
+        await _lookupCacheLock.WaitAsync();
+        try
+        {
+            if (_lookupCache.TryGetValue(cacheKey, out cached))
+                return cached;
+
+            var result = await fetch();
+            if (result is not null)
+                _lookupCache[cacheKey] = result;
+            return result;
+        }
+        finally
+        {
+            _lookupCacheLock.Release();
+        }
     }
+
+    public Task<string[]?> GetDeviceTypesAsync() =>
+        GetCachedLookupAsync("device-types", () => http.GetFromJsonAsync<string[]>("api/assets/device-types"));
 
     public async Task<string[]?> GetStatusesAsync()
     {
         return await http.GetFromJsonAsync<string[]>("api/assets/statuses");
     }
 
-    public async Task<string[]?> GetCurrenciesAsync()
-    {
-        return await http.GetFromJsonAsync<string[]>("api/assets/currencies");
-    }
+    public Task<string[]?> GetCurrenciesAsync() =>
+        GetCachedLookupAsync("currencies", () => http.GetFromJsonAsync<string[]>("api/assets/currencies"));
+
+    public Task<string[]?> GetTicketCategoriesAsync() =>
+        GetCachedLookupAsync("ticket-categories", async () =>
+        {
+            var values = await GetLookupValuesAsync(LookupTypeNames.TicketCategory);
+            return values?.Select(v => v.Value).ToArray();
+        });
 
     public async Task<List<UserListItem>?> GetUserListAsync()
     {
@@ -856,6 +890,64 @@ public class ApiClient(HttpClient http, AuthService authService)
     {
         var response = await http.GetFromJsonAsync<ApiResponse<SubscriptionTierInfo[]>>("api/tenants/subscription-tiers");
         return response?.Data;
+    }
+
+    // Lookup APIs. Reading is open to any authenticated user; creating, updating and
+    // reordering are SuperAdmin-only and reject locked types server-side - see
+    // /admin/lookups.
+    public async Task<List<LookupTypeDto>?> GetLookupTypesAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<LookupTypeDto>>>("api/lookups/types");
+        return response?.Data;
+    }
+
+    public async Task<List<LookupValueDto>?> GetLookupValuesAsync(string lookupType, bool includeInactive = false)
+    {
+        var client = await GetAuthenticatedClient();
+        var url = $"api/lookups/{Uri.EscapeDataString(lookupType)}?includeInactive={includeInactive}";
+        var response = await client.GetFromJsonAsync<ApiResponse<List<LookupValueDto>>>(url);
+        return response?.Data;
+    }
+
+    public async Task<(bool Success, LookupValueDto? Value, string? Error)> CreateLookupValueAsync(CreateLookupValueDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync("api/lookups", dto);
+
+        var payload = await response.Content.ReadFromJsonAsync<ApiResponse<LookupValueDto>>();
+        if (!response.IsSuccessStatusCode)
+            return (false, null, payload?.Message ?? "Failed to create value.");
+
+        return (true, payload?.Data, null);
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateLookupValueAsync(int id, UpdateLookupValueDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PutAsJsonAsync($"api/lookups/{id}", dto);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to update value.");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> ReorderLookupValuesAsync(string lookupType, List<int> orderedIds)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync($"api/lookups/{Uri.EscapeDataString(lookupType)}/reorder", orderedIds);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to reorder values.");
+        }
+
+        return (true, null);
     }
 }
 

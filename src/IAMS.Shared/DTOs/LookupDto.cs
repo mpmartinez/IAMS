@@ -34,3 +34,23 @@ public record UpdateLookupValueDto
     public int? SortOrder { get; init; }
     public bool? IsActive { get; init; }
 }
+
+/// <summary>
+/// The lookup type key strings, mirrored from IAMS.Api.Entities.LookupTypes so Web call sites
+/// (ApiClient, the admin screen) do not have to spell them as string literals. The API is the
+/// source of truth for which of these are editable vs locked - see LookupTypeDto - this class
+/// exists only so both sides agree on the identifiers.
+/// </summary>
+public static class LookupTypeNames
+{
+    public const string DeviceType = "DeviceType";
+    public const string Currency = "Currency";
+    public const string AttachmentCategory = "AttachmentCategory";
+    public const string TicketAttachmentCategory = "TicketAttachmentCategory";
+    public const string TicketCategory = "TicketCategory";
+
+    public const string TicketStatus = "TicketStatus";
+    public const string TicketType = "TicketType";
+    public const string AssetStatus = "AssetStatus";
+    public const string TicketPriority = "TicketPriority";
+}

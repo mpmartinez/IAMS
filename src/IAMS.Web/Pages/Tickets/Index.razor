@@ -269,6 +269,22 @@
                 <Input Value="@_newTitle" ValueChanged="v => _newTitle = v" Placeholder="Short summary of the issue" />
             </FormField>
 
+            <FormField LabelText="Category">
+                <Select Value="@_newCategory" ValueChanged="v => _newCategory = v">
+                    @if (_categories is not null)
+                    {
+                        @foreach (var cat in _categories)
+                        {
+                            <option value="@cat">@cat</option>
+                        }
+                    }
+                    else
+                    {
+                        <option value="Other">Other</option>
+                    }
+                </Select>
+            </FormField>
+
             <div class="space-y-1.5">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description <span class="text-slate-400 font-normal">(optional)</span></label>
                 <textarea @bind="_newDescription" rows="3" placeholder="Details for whoever picks this up..."
@@ -359,8 +375,10 @@
     private string? _createError;
     private string _newType = "Incident";
     private string _newTitle = "";
+    private string _newCategory = "Other";
     private string _newDescription = "";
     private string _newPriority = "Medium";
+    private string[]? _categories;
     private int? _newLinkedAssetId;
     private AssetDto? _newLinkedAsset;
     private string _assetSearch = "";
@@ -441,15 +459,19 @@
         _assetSearchTimer?.Dispose();
     }
 
-    private void ShowCreateModal()
+    private async Task ShowCreateModal()
     {
         _newType = "Incident";
         _newTitle = "";
+        _newCategory = "Other";
         _newDescription = "";
         _newPriority = "Medium";
         _createError = null;
         ClearNewAsset();
         _showCreateModal = true;
+
+        // Fetched once and cached for the session by ApiClient, not on every modal open.
+        _categories ??= await Api.GetTicketCategoriesAsync();
     }
 
     private void HideCreateModal() => _showCreateModal = false;
@@ -515,6 +537,7 @@
         var request = new CreateTicketRequest
         {
             Type = _newType,
+            Category = _newCategory,
             Title = _newTitle.Trim(),
             Description = string.IsNullOrWhiteSpace(_newDescription) ? null : _newDescription.Trim(),
             Priority = _newPriority,
