@@ -156,6 +156,10 @@ public class TenantsController(
 
         await userManager.AddToRoleAsync(adminUser, "Admin");
 
+        // Give the new tenant its own copy of every built-in role's default grants, so its admin
+        // can start editing them straight away.
+        await SeedData.EnsureRolePermissionsAsync(db, tenant.Id);
+
         // Update tenant user count
         tenant.CurrentUserCount = 1;
         await db.SaveChangesAsync();
