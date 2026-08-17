@@ -17,10 +17,14 @@ zero references to attachments. The API's `GetAttachments`, `DownloadAttachment`
 The result: an employee attaches photos to a ticket, those photos consume tenant storage, and nobody
 — not the requester, not the IT staff working the ticket — can ever see them.
 
-**The camera rejects the photos it takes.** `Report.razor` already has a "Take Photo" button using
-`capture="environment"`. It also enforces `MaxFileSizeBytes = 5 * 1024 * 1024`, matching the server.
-A modern phone camera produces 3–8 MB JPEGs, so the button frequently produces a file its own page
-rejects with *"…is over the 5 MB limit and wasn't added."*
+**Correction from an earlier draft of this document:** it claimed the camera button rejects the photos
+it takes, and proposed a new `js/imageResize.js` to fix that. Both were wrong. `Report.razor` already
+downscales client-side using Blazor's built-in
+`IBrowserFile.RequestImageFileAsync(file.ContentType, 1600, 1600)`, with a `catch` that falls back to
+the original for formats the browser cannot resize (HEIC), plus a `MaxTotalBytes = 20 MB` aggregate
+cap. A 1600px re-encode lands well under the 5 MB per-file limit, so oversized photos are already
+handled and no new JavaScript is needed. This makes extraction more valuable, not less: the other
+surfaces inherit working downscaling for free.
 
 **The good implementation is trapped in one page.** `Report.razor` is 666 lines, roughly 200 of them
 a well-considered attachment picker: camera capture, multi-select, thumbnail previews with remove,
@@ -37,7 +41,7 @@ Extract the existing picker, fix the two defects, and wire attachments to every 
 | Decision | Choice | Why |
 |---|---|---|
 | Camera | Native `capture="environment"` | Already implemented and working in `Report.razor`. Opens the OS camera on phones, handles orientation and permissions for free, zero JS. Falls back to the file picker on desktop. |
-| Oversized photos | Downscale in the browser | The alternative is raising the server limit, which consumes tenant storage ~10× faster on a metered quota. |
+| Oversized photos | Already solved — keep `RequestImageFileAsync` | Blazor's built-in canvas downscale is already in `Report.razor` at 1600px. Nothing to build; extraction spreads it to the other surfaces. |
 | Who uploads | The ticket creator | Stated requirement. Staff working the queue view but do not upload. |
 | When | At creation, and afterwards by the requester on their own ticket | Covers IT replying "can you send a photo of the error?" after the ticket is filed. |
 | Delete | The uploader only | It is the requester's photo, and possibly a sensitive one. IT working the queue can view it but cannot remove it, so an attachment cannot be quietly dropped from a ticket by anyone but the person who put it there. |
@@ -79,31 +83,20 @@ rule is uploader-only, so it compares each `TicketAttachmentDto.UploadedByUserId
 user's id from `AuthenticationStateProvider`. Every host would otherwise pass the identical callback,
 and a host that got it wrong would offer a control the API rejects.
 
-### `wwwroot/js/imageResize.js` (new)
+### Downscaling — no new code
 
-One exported function:
+Nothing is built here. The extracted picker carries `Report.razor`'s existing logic verbatim:
 
-```
-downscaleImage(dataUrl, maxEdge, quality) -> Promise<{ dataUrl, width, height, bytes }>
-```
+- `image/*` files go through `file.RequestImageFileAsync(file.ContentType, 1600, 1600)`, Blazor's
+  built-in canvas resize.
+- The surrounding `try`/`catch` falls back to the original file when the browser cannot resize the
+  format (HEIC is the case the existing comment names), leaving the per-file size check as the
+  backstop. Downscaling is an optimisation, never a gate.
+- Non-images — PDF, DOC, DOCX, TXT — pass through untouched.
 
-Draws the image to a canvas capped at `maxEdge` on its longest side and re-encodes as JPEG at
-`quality`. Defaults: `maxEdge = 1920`, `quality = 0.8`.
-
-1920px is chosen so a serial-number label photographed at arm's length stays legible — the limiting
-factor for this app's actual use, which is reading asset tags and seeing physical damage. An 8 MB
-phone photo lands around 300–600 KB.
-
-Rules:
-
-- Only `image/*` inputs are downscaled. PDFs, DOCX, and TXT pass through untouched.
-- An image already under the max edge is still re-encoded only if that makes it smaller; otherwise the
-  original bytes are kept, so a small PNG screenshot is not needlessly degraded into a larger JPEG.
-- If the canvas step throws (corrupt image, exotic format), the original file is used unchanged and the
-  server's size check remains the backstop. Downscaling is an optimisation, never a gate.
-
-Both constants live in one place in the picker so the quality floor can be retuned without hunting
-through pages.
+The constants move with the code and become the component's defaults: `MaxFiles = 6`,
+`MaxFileSizeBytes = 5 MB` (matching `FileStorageService`), `MaxTotalBytes = 20 MB`,
+`MaxImageDimension = 1600`.
 
 ## API Changes
 
@@ -152,7 +145,7 @@ No other API change. No migration: `TicketAttachment` already carries everything
 
 | Page | Picker | Gallery | Notes |
 |---|---|---|---|
-| `Pages/Tickets/Report.razor` | yes (already) | no | Swaps its inline markup for the component. Gains downscaling. Behavior otherwise unchanged. |
+| `Pages/Tickets/Report.razor` | yes (already) | no | Swaps its inline markup and file-handling code for the component. Behavior must be identical afterwards — this page is the reference implementation, not a beneficiary. |
 | `Pages/Tickets/Index.razor` (New Ticket dialog) | yes | no | Staff creating a ticket are its creator, so they attach here. Uploads after create, same order `Report.razor` uses. |
 | `Pages/Tickets/View.razor` | requester only | yes | Everyone with access to the ticket sees the gallery. The Add control renders only when the viewer is the requester and `TicketStatus.Open.Contains(ticket.Status)` — so nothing can be attached to a Resolved, Closed, or Cancelled ticket. |
 
@@ -205,12 +198,11 @@ delete control. This is stated plainly rather than implied to be covered.
 ## Build Order
 
 1. `PendingAttachment` + `TicketAttachmentPicker` extracted from `Report.razor`; `Report.razor` consumes it.
-2. `imageResize.js` and its wiring into the picker.
-3. `ApiClient` read/download/delete methods.
-4. `DeleteAttachment` ownership check + tests.
-5. `TicketAttachmentGallery`.
-6. `View.razor` — gallery, plus the requester-only Add control.
-7. `Index.razor` New Ticket dialog — picker + upload-after-create.
+2. `ApiClient` read/download/delete methods.
+3. `DeleteAttachment` uploader-only rule + tests.
+4. `TicketAttachmentGallery`.
+5. `View.razor` — gallery, plus the requester-only Add control.
+6. `Index.razor` New Ticket dialog — picker + upload-after-create.
 
 Step 1 is deliberately first and behavior-preserving: it should produce an identical `Report.razor`
 experience, which makes it easy to tell whether a later step broke something.
