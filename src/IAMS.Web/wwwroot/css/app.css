@@ -51,6 +51,22 @@
     --ring: 243 75% 65%;
 }
 
+/* Tell the browser which scheme its own widgets should render in.
+   The popup list a native <select> opens is painted by the browser, not by the page, so no
+   amount of dark: utility classes on the <select> reaches it - the closed control went dark
+   while its dropdown stayed white with near-invisible option text (see the Category field on
+   the New Ticket dialog). color-scheme is the only hook that reaches those widgets. It also
+   fixes the <input type="date"> calendar pickers on the asset warranty fields and the default
+   scrollbars, which had the same problem for the same reason.
+   .dark is set on <html> by wwwroot/js/theme.js, so :root is the right place for this. */
+:root {
+    color-scheme: light;
+}
+
+:root.dark {
+    color-scheme: dark;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
