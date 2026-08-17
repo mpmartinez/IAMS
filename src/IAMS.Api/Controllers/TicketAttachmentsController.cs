@@ -79,9 +79,10 @@ public class TicketAttachmentsController(
     }
 
     /// <summary>
-    /// Upload a new attachment. A holder of the ticket-queue permission may upload to any
-    /// ticket; a requester may only upload to their own ticket - same ownership check as the
-    /// read endpoints above.
+    /// Upload a new attachment. A holder of iams:tickets:manage may upload to any ticket; a
+    /// requester may only upload to their own ticket. Note this is stricter than the read
+    /// endpoints above, which accept the read-only iams:tickets:queue permission - see
+    /// CanManageQueue's doc comment for why.
     /// </summary>
     [HttpPost]
     [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB to account for multipart overhead
