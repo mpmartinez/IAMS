@@ -39,17 +39,107 @@
 
 ---
 
-### Task 1: Extract the attachment picker
+### Task 1: Extract the attachment picker, and add the two shared values it needs
 
 **Files:**
-- Create: `src/IAMS.Web/Components/PendingAttachment.cs`, `src/IAMS.Web/Components/TicketAttachmentPicker.razor`
-- Modify: `src/IAMS.Web/Pages/Tickets/Report.razor`
+- Create: `src/IAMS.Web/Components/PendingAttachment.cs`, `src/IAMS.Web/Components/TicketAttachmentPicker.razor`, `src/IAMS.Web/Components/TicketAttachmentDefaults.cs`
+- Modify: `src/IAMS.Shared/DTOs/TicketDto.cs`, `src/IAMS.Web/Pages/Tickets/Report.razor`
+- Test: `tests/IAMS.Api.Tests/TicketDtoIsOpenTests.cs`
+
+**Why the two shared values are here.** Tasks 5 and 6 both need "is this ticket still open?" and both need the
+default attachment category. Writing either inline in each page would put a literal status list and a magic
+string in three files — the same drift that has already bitten this codebase twice. Both get one definition
+now, before the first consumer exists.
 
 **Interfaces:**
 - Consumes: nothing
 - Produces: `IAMS.Web.Components.PendingAttachment` with `Guid Id`, `string Name`, `string ContentType`, `byte[] Data`, `string? PreviewUrl`. `TicketAttachmentPicker` with parameters `List<PendingAttachment> Files`, `EventCallback<List<PendingAttachment>> FilesChanged`, `bool Disabled`, `int MaxFiles` (default 6).
 
 This task moves code. Nothing about the user-visible behavior of `Report.razor` may change.
+
+- [ ] **Step 0a: Add `IsOpen` to the shared ticket DTO**
+
+In `src/IAMS.Shared/DTOs/TicketDto.cs`, add to `TicketListItemDto` beside the existing computed
+`Reference` property:
+
+```csharp
+    /// <summary>
+    /// Whether the ticket is still being worked. Mirrors IAMS.Api.Entities.TicketStatus.Open.
+    ///
+    /// Duplicated here rather than referenced because IAMS.Web cannot see IAMS.Api. It lives on the
+    /// DTO so there is exactly one copy shared by both projects instead of a status list pasted into
+    /// each page, and TicketDtoIsOpenTests pins it against TicketStatus.Open so the two cannot drift.
+    /// </summary>
+    public bool IsOpen => Status is "New" or "Assigned" or "InProgress" or "OnHold";
+```
+
+- [ ] **Step 0b: Pin `IsOpen` against the API's canonical list**
+
+Create `tests/IAMS.Api.Tests/TicketDtoIsOpenTests.cs`:
+
+```csharp
+using IAMS.Api.Entities;
+using IAMS.Shared.DTOs;
+
+namespace IAMS.Api.Tests;
+
+public class TicketDtoIsOpenTests
+{
+    private static TicketListItemDto WithStatus(string status) => new()
+    {
+        Type = TicketType.Incident,
+        Category = TicketCategory.Other,
+        Title = "t",
+        Status = status,
+        Priority = TicketPriority.Medium
+    };
+
+    [Fact]
+    public void IsOpen_AgreesWithTicketStatusOpen_ForEveryStatus()
+    {
+        // TicketDto.IsOpen duplicates TicketStatus.Open because IAMS.Web cannot reference
+        // IAMS.Api. This test is what makes that duplication safe: add a status to one side
+        // without the other and it fails here rather than silently in the UI.
+        foreach (var status in TicketStatus.All)
+        {
+            var expected = TicketStatus.Open.Contains(status);
+            Assert.Equal(expected, WithStatus(status).IsOpen);
+        }
+    }
+
+    [Fact]
+    public void IsOpen_IsFalse_ForAnUnknownStatus()
+    {
+        Assert.False(WithStatus("NoSuchStatus").IsOpen);
+    }
+}
+```
+
+- [ ] **Step 0c: Run the pinning test**
+
+Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketDtoIsOpenTests`
+
+Expected: PASS, 2 tests. A failure here means the literal list in `IsOpen` disagrees with
+`TicketStatus.Open` — fix `IsOpen`, not the test.
+
+- [ ] **Step 0d: Add the default attachment category constant**
+
+Create `src/IAMS.Web/Components/TicketAttachmentDefaults.cs`:
+
+```csharp
+namespace IAMS.Web.Components;
+
+/// <summary>
+/// Values every page that uploads a ticket attachment needs. One definition so the three upload
+/// sites (Report, the New Ticket dialog, the ticket detail page) cannot disagree.
+/// </summary>
+public static class TicketAttachmentDefaults
+{
+    /// Mirrors IAMS.Api.Entities.TicketAttachmentCategories.Other. The API requires a category and
+    /// the picker does not expose the lookup, so every upload from the Web client sends this one.
+    public const string Category = "Other";
+}
+```
 
 - [ ] **Step 1: Create the shared model**
 
@@ -293,6 +383,10 @@ to:
 It loses `readonly` because `@bind-Files` assigns to it.
 
 In `UploadAttachments`, the loop body is unchanged — `f.Data`, `f.Name`, `f.ContentType` exist on `PendingAttachment` with the same names and types.
+
+Also delete `Report.razor`'s own `private const string TicketAttachmentCategoryOther = "Other";` and change the
+`UploadTicketAttachmentAsync` call in `UploadAttachments` to pass `TicketAttachmentDefaults.Category`, so all
+three upload sites share the constant added in Step 0d.
 
 - [ ] **Step 4: Build and confirm nothing else referenced the removed members**
 
@@ -1003,10 +1097,6 @@ Add to the `@code` block in `src/IAMS.Web/Pages/Tickets/View.razor`:
     private bool _uploading;
     private string? _currentUserId;
 
-    // Mirrors IAMS.Api.Entities.TicketAttachmentCategories.Other. The API requires a category and
-    // the picker does not expose the lookup, matching what Report.razor already sends.
-    private const string TicketAttachmentCategoryOther = "Other";
-
     // The creator uploads: the requester may add to their own ticket while it is still open.
     // Staff working the queue can see attachments but are not offered an upload control, even
     // though UploadAttachment would accept one from them - see the spec's UI/API asymmetry note.
@@ -1014,9 +1104,7 @@ Add to the `@code` block in `src/IAMS.Web/Pages/Tickets/View.razor`:
         _ticket is not null
         && _currentUserId is not null
         && _ticket.RequesterUserId == _currentUserId
-        && TicketStatusOpen.Contains(_ticket.Status);
-
-    private static readonly string[] TicketStatusOpen = ["New", "Assigned", "InProgress", "OnHold"];
+        && _ticket.IsOpen;
 
     private void ClearPending()
     {
@@ -1036,7 +1124,7 @@ Add to the `@code` block in `src/IAMS.Web/Pages/Tickets/View.razor`:
         {
             using var stream = new MemoryStream(f.Data);
             var (ok, _, _) = await Api.UploadTicketAttachmentAsync(
-                _ticket.Id, stream, f.Name, f.ContentType, TicketAttachmentCategoryOther);
+                _ticket.Id, stream, f.Name, f.ContentType, TicketAttachmentDefaults.Category);
 
             if (!ok) failed++;
         }
@@ -1114,9 +1202,6 @@ Add to the `@code` block:
 ```csharp
     private List<PendingAttachment> _pendingFiles = new();
 
-    // Mirrors IAMS.Api.Entities.TicketAttachmentCategories.Other, matching what Report.razor sends.
-    private const string TicketAttachmentCategoryOther = "Other";
-
     private async Task<int> UploadPendingAttachments(int ticketId)
     {
         var failed = 0;
@@ -1126,7 +1211,7 @@ Add to the `@code` block:
         {
             using var stream = new MemoryStream(f.Data);
             var (ok, _, _) = await Api.UploadTicketAttachmentAsync(
-                ticketId, stream, f.Name, f.ContentType, TicketAttachmentCategoryOther);
+                ticketId, stream, f.Name, f.ContentType, TicketAttachmentDefaults.Category);
 
             if (!ok) failed++;
         }
@@ -1221,5 +1306,5 @@ Checked against the spec:
 Deviations recorded rather than left silent:
 
 - Task 4 Step 2 fixes a real defect in Step 1's own code: `ThumbnailSrc` returns empty until an image is previewed, so thumbnails would start blank. Kept as a separate step so the reason is visible rather than folded into the component silently.
-- `TicketStatusOpen` is duplicated as a string array in `View.razor` rather than referencing `IAMS.Api.Entities.TicketStatus.Open`, because `IAMS.Web` does not reference `IAMS.Api`. Checked: `IAMS.Shared` carries no ticket status constants (only the lookup **type name** `"TicketStatus"` in `LookupDto.cs:52`), so the local array stands. This is a genuine duplication of `TicketStatus.Open` — the same class of drift this codebase has been bitten by twice. Worth promoting the status constants into `IAMS.Shared` in a later pass; not done here to keep this plan scoped.
+- A pre-flight review flagged that the first draft duplicated the open-status list and the `"Other"` category into each page. Both are now single definitions added in Task 1: `TicketListItemDto.IsOpen` in `IAMS.Shared` (pinned against `TicketStatus.Open` by `TicketDtoIsOpenTests`, so the two cannot drift) and `TicketAttachmentDefaults.Category` in `IAMS.Web`. Moving `TicketStatus` itself into `IAMS.Shared` would have been the purist fix but touches 95 call sites across the API and tests — out of scope for this feature.
 - Task 3's `AnotherUser_CannotDelete` test may pass before the fix, because attribute policies are not evaluated on a directly-constructed controller. This is stated in the step so nobody reads it as a discriminating test; the other two carry the proof.
