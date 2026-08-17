@@ -1,11 +1,12 @@
 @page "/assets"
 @using IAMS.Web.Components.UI
-@attribute [Authorize(Roles = "Admin,Staff")]
+@attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Navigation
 
 <PageTitle>Assets - IAMS</PageTitle>
 
+<PermissionView Permission="iams:assets:view">
 <div class="space-y-4 sm:space-y-6">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -13,22 +14,24 @@
             <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Assets</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage your IT inventory</p>
         </div>
-        <AuthorizeView Roles="Admin,Staff">
-            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+            <PermissionView Permission="iams:assets:import">
                 <a href="/assets/import" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium transition-all duration-200 btn-press text-sm sm:text-base">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M17 8l-5-5-5 5M12 3v12" />
                     </svg>
                     Import
                 </a>
+            </PermissionView>
+            <PermissionView Permission="iams:assets:create">
                 <a href="/assets/new" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press text-sm sm:text-base">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
                     Add Asset
                 </a>
-            </div>
-        </AuthorizeView>
+            </PermissionView>
+        </div>
     </div>
 
     <!-- Filters -->
@@ -259,22 +262,24 @@
             <EmptyState Title="No assets found" Description="@(_hasFilters ? "Try adjusting your filters." : "Add your first asset to get started.")">
                 @if (!_hasFilters)
                 {
-                    <AuthorizeView Roles="Admin,Staff">
-                        <div class="flex flex-wrap items-center justify-center gap-3">
+                    <div class="flex flex-wrap items-center justify-center gap-3">
+                        <PermissionView Permission="iams:assets:create">
                             <a href="/assets/new" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                 </svg>
                                 Add Asset
                             </a>
+                        </PermissionView>
+                        <PermissionView Permission="iams:assets:import">
                             <a href="/assets/import" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium transition-all duration-200">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M17 8l-5-5-5 5M12 3v12" />
                                 </svg>
                                 Import from Excel
                             </a>
-                        </div>
-                    </AuthorizeView>
+                        </PermissionView>
+                    </div>
                 }
                 else
                 {
@@ -286,6 +291,7 @@
         </Card>
     }
 </div>
+</PermissionView>
 
 @code {
     private bool _loading = true;

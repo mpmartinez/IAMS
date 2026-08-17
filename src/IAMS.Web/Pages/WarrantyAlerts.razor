@@ -89,7 +89,7 @@
         </select>
         @if (_selectedAlertIds.Count > 0)
         {
-            <AuthorizeView Roles="Admin,Staff">
+            <PermissionView Permission="iams:warranty:manage">
                 <button @onclick="AcknowledgeSelected" disabled="@_acknowledging" class="px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 text-sm disabled:opacity-50">
                     @if (_acknowledging)
                     {
@@ -100,7 +100,7 @@
                         <span>Acknowledge (@_selectedAlertIds.Count)</span>
                     }
                 </button>
-            </AuthorizeView>
+            </PermissionView>
         }
     </div>
 
@@ -130,7 +130,7 @@
                 <div class="bg-white dark:bg-slate-800 rounded-2xl border @(alert.IsAcknowledged ? "border-slate-200 dark:border-slate-700 opacity-75" : GetAlertBorderClass(alert.AlertType)) p-4 transition-all duration-200">
                     <div class="flex items-start gap-4">
                         <!-- Checkbox for bulk actions -->
-                        <AuthorizeView Roles="Admin,Staff">
+                        <PermissionView Permission="iams:warranty:manage">
                             @if (!alert.IsAcknowledged)
                             {
                                 <input type="checkbox"
@@ -138,7 +138,7 @@
                                        @onchange="e => ToggleAlertSelection(alert.Id, (bool)(e.Value ?? false))"
                                        class="mt-1 w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500" />
                             }
-                        </AuthorizeView>
+                        </PermissionView>
 
                         <!-- Alert Icon -->
                         <div class="w-10 h-10 rounded-xl @GetAlertBgClass(alert.AlertType) flex items-center justify-center shrink-0">
@@ -170,11 +170,11 @@
                                 </div>
                                 @if (!alert.IsAcknowledged)
                                 {
-                                    <AuthorizeView Roles="Admin,Staff">
+                                    <PermissionView Permission="iams:warranty:manage">
                                         <button @onclick="() => AcknowledgeAlert(alert.Id)" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors whitespace-nowrap">
                                             Acknowledge
                                         </button>
-                                    </AuthorizeView>
+                                    </PermissionView>
                                 }
                             </div>
 

@@ -1,12 +1,13 @@
 @page "/assets/import"
 @using IAMS.Web.Components.UI
-@attribute [Authorize(Roles = "Admin,Staff")]
+@attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Navigation
 @inject SnackbarService Snackbar
 
 <PageTitle>Import Assets - IAMS</PageTitle>
 
+<PermissionView Permission="iams:assets:import">
 <div class="max-w-3xl mx-auto space-y-4 sm:space-y-6">
     <!-- Header -->
     <div class="flex items-center gap-3 sm:gap-4">
@@ -178,6 +179,7 @@
         </Card>
     }
 </div>
+</PermissionView>
 
 @code {
     private FileUpload? _fileUpload;

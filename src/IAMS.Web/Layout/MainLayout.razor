@@ -42,22 +42,22 @@
                     <NavItem Href="/my-tickets" Icon="clipboard-list" Label="My reports" OnNavigation="CloseMobileMenu" />
                 </AuthorizeView>
 
-                <AuthorizeView Roles="Admin,Staff,Management,Auditor,SuperAdmin">
+                <PermissionView Permission="iams:assets:view">
                     <NavItem Href="/assets" Icon="cube" Label="Assets" OnNavigation="CloseMobileMenu" />
-                </AuthorizeView>
-                <AuthorizeView Roles="Admin,Staff">
+                </PermissionView>
+                <PermissionView Permission="iams:tickets:queue">
                     <NavItem Href="/tickets" Icon="wrench" Label="Tickets" OnNavigation="CloseMobileMenu" />
-                </AuthorizeView>
+                </PermissionView>
                 <NavItem Href="/scan" Icon="qr-scan" Label="Scan QR" OnNavigation="CloseMobileMenu" />
-                <AuthorizeView Roles="Admin,Staff,Management,Auditor,SuperAdmin">
+                <PermissionView Permission="iams:warranty:manage">
                     <NavItem Href="/warranty-alerts" Icon="shield-exclamation" Label="Warranty Alerts" BadgeCount="@_alertCount" OnNavigation="CloseMobileMenu" />
-                </AuthorizeView>
+                </PermissionView>
                 <NavItem Href="/notifications" Icon="bell" Label="Notifications" BadgeCount="@Notifications.UnreadCount" OnNavigation="CloseMobileMenu" />
-                <AuthorizeView Roles="Admin,Staff,Management,Auditor,SuperAdmin">
+                <PermissionView Permission="iams:assets:view">
                     <NavItem Href="/categories" Icon="tag" Label="Categories" OnNavigation="CloseMobileMenu" />
-                </AuthorizeView>
+                </PermissionView>
 
-                <AuthorizeView Roles="Admin,SuperAdmin">
+                <PermissionView Permission="iams:users:view">
                     <div class="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
                         <p class="px-3 mb-2 text-xs font-medium text-slate-400 uppercase tracking-wider">Admin</p>
                         <NavItem Href="/users" Icon="users" Label="Users" OnNavigation="CloseMobileMenu" />
@@ -65,7 +65,7 @@
                             <NavItem Href="/admin/roles" Icon="users" Label="Roles" OnNavigation="CloseMobileMenu" />
                         </PermissionView>
                     </div>
-                </AuthorizeView>
+                </PermissionView>
 
                 <AuthorizeView Roles="SuperAdmin">
                     <div class="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
@@ -415,7 +415,7 @@
                         <span class="text-xs mt-1">Home</span>
                     </a>
 
-                    <AuthorizeView Roles="Admin,Staff,Management,Auditor,SuperAdmin">
+                    <PermissionView Permission="iams:assets:view">
                         <!-- Assets -->
                         <a href="/assets" class="@GetFooterNavClass("/assets")">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -423,7 +423,7 @@
                             </svg>
                             <span class="text-xs mt-1">Assets</span>
                         </a>
-                    </AuthorizeView>
+                    </PermissionView>
                     <AuthorizeView Roles="Employee">
                         <!-- Report a problem -->
                         <a href="/report" class="@GetFooterNavClass("/report")">
@@ -444,7 +444,7 @@
                         <span class="text-xs mt-1 text-primary-600 dark:text-primary-400 font-medium">Scan</span>
                     </a>
 
-                    <AuthorizeView Roles="Admin,Staff,Management,Auditor,SuperAdmin">
+                    <PermissionView Permission="iams:warranty:manage">
                         <!-- Alerts -->
                         <a href="/warranty-alerts" class="@GetFooterNavClass("/warranty-alerts") relative">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -458,7 +458,7 @@
                             }
                             <span class="text-xs mt-1">Alerts</span>
                         </a>
-                    </AuthorizeView>
+                    </PermissionView>
                     <AuthorizeView Roles="Employee">
                         <!-- My reports -->
                         <a href="/my-tickets" class="@GetFooterNavClass("/my-tickets")">

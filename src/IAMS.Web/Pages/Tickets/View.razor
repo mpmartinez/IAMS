@@ -114,11 +114,11 @@ else
                             <textarea @bind="_commentBody" rows="3" placeholder="Write a reply or internal note..."
                                       class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
                             <div class="flex flex-col sm:flex-row gap-2 sm:justify-end">
-                                <AuthorizeView Roles="Admin,Staff">
+                                <PermissionView Permission="iams:tickets:manage">
                                     <Button Variant="outline" OnClick="() => SubmitComment(true)" Loading="@_submittingInternal" Disabled="@(string.IsNullOrWhiteSpace(_commentBody) || _submittingReply)">
                                         Add Internal Note
                                     </Button>
-                                </AuthorizeView>
+                                </PermissionView>
                                 <Button Variant="primary" OnClick="() => SubmitComment(false)" Loading="@_submittingReply" Disabled="@(string.IsNullOrWhiteSpace(_commentBody) || _submittingInternal)">
                                     @(_isStaff ? "Reply to Requester" : "Send Reply")
                                 </Button>
@@ -153,7 +153,7 @@ else
                     </Card>
                 }
 
-                <AuthorizeView Roles="Admin,Staff">
+                <PermissionView Permission="iams:tickets:manage">
                     <Card>
                         <CardHeader>
                             <CardTitle>Actions</CardTitle>
@@ -204,7 +204,7 @@ else
                         </div>
                         </CardContent>
                     </Card>
-                </AuthorizeView>
+                </PermissionView>
 
                 <Card>
                     <CardHeader>
@@ -325,7 +325,9 @@ else
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
-        _isStaff = authState.User.IsInRole("Admin") || authState.User.IsInRole("Staff");
+        // SuperAdmin bypasses authorisation on the API, so it must bypass here too or the UI
+        // would show requester-facing affordances to a role that can in fact manage the queue.
+        _isStaff = authState.User.IsInRole("SuperAdmin") || authState.User.HasClaim("permission", "iams:tickets:queue");
 
         await LoadTicket();
     }

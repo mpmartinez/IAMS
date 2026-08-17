@@ -1,7 +1,7 @@
 @page "/assets/new"
 @page "/assets/{Id:int}/edit"
 @using IAMS.Web.Components.UI
-@attribute [Authorize(Roles = "Admin,Staff")]
+@attribute [Authorize]
 @implements IDisposable
 @inject ApiClient Api
 @inject NavigationManager Navigation
@@ -11,6 +11,7 @@
 
 <PageTitle>@(IsNew ? "Add Asset" : "Edit Asset") - IAMS</PageTitle>
 
+<PermissionView Permission="@(IsNew ? "iams:assets:create" : "iams:assets:edit")">
 <div class="max-w-3xl mx-auto space-y-4 sm:space-y-6">
     <!-- Header -->
     <div class="flex items-center gap-3 sm:gap-4">
@@ -407,6 +408,7 @@
         </div>
     }
 </div>
+</PermissionView>
 
 @code {
     [Parameter] public int? Id { get; set; }

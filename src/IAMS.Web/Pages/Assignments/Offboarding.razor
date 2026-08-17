@@ -1,12 +1,13 @@
 @page "/users/{UserId}/offboarding"
 @using IAMS.Web.Components.UI
-@attribute [Authorize(Roles = "Admin,Staff")]
+@attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Navigation
 @inject SnackbarService Snackbar
 
 <PageTitle>Offboarding - IAMS</PageTitle>
 
+<PermissionView Permission="iams:assignments:return">
 <div class="max-w-4xl mx-auto space-y-6">
     <!-- Header -->
     <div class="flex items-center gap-4">
@@ -243,6 +244,7 @@
         </div>
     </div>
 }
+</PermissionView>
 
 @code {
     [Parameter] public string UserId { get; set; } = "";

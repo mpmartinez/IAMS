@@ -1,12 +1,13 @@
 @page "/users"
 @using IAMS.Web.Components.UI
-@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Navigation
 @inject SnackbarService Snackbar
 
 <PageTitle>Users - IAMS</PageTitle>
 
+<PermissionView Permission="iams:users:view">
 <div class="space-y-6">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -173,18 +174,17 @@
                 <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Role *</label>
                     <select @bind="_modalModel.Role" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 text-sm">
-                        @* This list is hand-maintained and drifts from Roles.TenantAssignable
-                           on the API - Employee was added there and missed here, so the role
-                           existed but could not be granted to anyone. Staff stays first so it
-                           remains the default for a new user. *@
-                        <option value="Staff">Staff</option>
-                        <option value="Employee">Employee</option>
-                        <option value="Management">Management</option>
-                        <option value="Admin">Admin</option>
-                        <option value="Auditor">Auditor</option>
-                        <AuthorizeView Roles="SuperAdmin" Context="superAdmin">
-                            <option value="SuperAdmin">SuperAdmin</option>
-                        </AuthorizeView>
+                        @if (_assignableRoles is null)
+                        {
+                            <option value="@_modalModel.Role">@_modalModel.Role</option>
+                        }
+                        else
+                        {
+                            @foreach (var role in _assignableRoles)
+                            {
+                                <option value="@role.Name">@role.Name</option>
+                            }
+                        }
                     </select>
                 </div>
                 @if (_isEditing)
@@ -245,12 +245,14 @@
         </div>
     </div>
 }
+</PermissionView>
 
 @code {
     private bool _loading = true;
     private string _search = "";
     private int _page = 1;
     private PagedResponse<UserDto>? _users;
+    private List<AssignableRoleDto>? _assignableRoles;
 
     // Modal state
     private bool _showModal;
@@ -267,6 +269,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _assignableRoles = await Api.GetAssignableRolesAsync();
         await LoadUsers();
     }
 
