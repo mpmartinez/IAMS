@@ -170,7 +170,7 @@ public class TicketAttachmentsController(
     /// Delete an attachment
     /// </summary>
     [HttpDelete("{attachmentId:int}")]
-    [Authorize(Policy = "Staff")]
+    [Authorize(Policy = "CanManageTicketQueue")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAttachment(
         int ticketId, int attachmentId, CancellationToken ct)
     {

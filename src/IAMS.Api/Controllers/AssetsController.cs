@@ -20,7 +20,7 @@ public class AssetsController(
     // at a time through scan/{assetTag}, which is what filing a ticket from a QR sticker
     // requires - see the redaction in MapToScanDto.
     [HttpGet]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewAssets")]
     public async Task<ActionResult<PagedResponse<AssetDto>>> GetAssets(
         [FromQuery] string? search = null,
         [FromQuery] string? deviceType = null,
@@ -69,7 +69,7 @@ public class AssetsController(
     }
 
     [HttpGet("{id:int}")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewAssets")]
     public async Task<ActionResult<ApiResponse<AssetDto>>> GetAsset(int id)
     {
         var asset = await db.Assets
@@ -240,7 +240,7 @@ public class AssetsController(
     /// Bulk-import assets from an .xlsx file generated from the IAMS upload template.
     /// </summary>
     [HttpPost("import")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanCreateAssets")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanImportAssets")]
     [RequestSizeLimit(10 * 1024 * 1024)]
     [Consumes("multipart/form-data")]
     public async Task<ActionResult<ApiResponse<ImportAssetsResultDto>>> ImportAssets(IFormFile file, CancellationToken ct)

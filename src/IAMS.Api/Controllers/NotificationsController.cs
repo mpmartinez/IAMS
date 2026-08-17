@@ -141,7 +141,7 @@ public class NotificationsController : ControllerBase
     /// Create a test notification (Admin only - for testing)
     /// </summary>
     [HttpPost("test")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanSendTestNotifications")]
     public async Task<ActionResult<ApiResponse<NotificationDto>>> CreateTestNotification([FromBody] CreateTestNotificationRequest request)
     {
         // Validate link - must start with "/" or be null/empty

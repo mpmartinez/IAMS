@@ -72,7 +72,7 @@ public class AttachmentsController(
     /// Upload a new attachment
     /// </summary>
     [HttpPost]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanManageAttachments")]
     [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB to account for multipart overhead
     [Consumes("multipart/form-data")]
     public async Task<ActionResult<ApiResponse<AttachmentDto>>> UploadAttachment(
@@ -169,7 +169,7 @@ public class AttachmentsController(
     /// Delete an attachment
     /// </summary>
     [HttpDelete("{attachmentId:int}")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanManageAttachments")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAttachment(int assetId, int attachmentId)
     {
         var attachment = await db.Attachments

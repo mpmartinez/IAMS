@@ -20,7 +20,7 @@ public class UsersController(
     AppDbContext db) : ControllerBase
 {
     [HttpGet]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewUsers")]
     public async Task<ActionResult<PagedResponse<UserDto>>> GetUsers(
         [FromQuery] string? search = null,
         [FromQuery] int page = 1,
@@ -70,7 +70,7 @@ public class UsersController(
     }
 
     [HttpPost]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanManageUsers")]
     public async Task<ActionResult<ApiResponse<UserDto>>> CreateUser(CreateUserDto dto)
     {
         var tenantId = tenantProvider.GetRequiredTenantId();
@@ -126,7 +126,7 @@ public class UsersController(
     }
 
     [HttpGet("{id}")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewUsers")]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetUser(string id)
     {
         var user = await userManager.Users
@@ -145,7 +145,7 @@ public class UsersController(
     }
 
     [HttpPut("{id}")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanManageUsers")]
     public async Task<ActionResult<ApiResponse<UserDto>>> UpdateUser(string id, UpdateUserDto dto)
     {
         var user = await userManager.Users
@@ -212,7 +212,7 @@ public class UsersController(
     }
 
     [HttpDelete("{id}")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanManageUsers")]
     public async Task<IActionResult> DeleteUser(string id)
     {
         var user = await userManager.FindByIdAsync(id);

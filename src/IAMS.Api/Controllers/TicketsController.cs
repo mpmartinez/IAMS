@@ -39,7 +39,7 @@ public class TicketsController : ControllerBase
     private bool IsStaff => User.IsInRole("Admin") || User.IsInRole("Staff");
 
     [HttpGet]
-    [Authorize(Policy = "Staff")]
+    [Authorize(Policy = "CanViewTicketQueue")]
     public async Task<ActionResult<ApiResponse<PagedResponse<TicketListItemDto>>>> List(
         [FromQuery] string? type,
         [FromQuery] string? category,
@@ -69,7 +69,7 @@ public class TicketsController : ControllerBase
     }
 
     [HttpGet("summary")]
-    [Authorize(Policy = "Staff")]
+    [Authorize(Policy = "CanViewTicketQueue")]
     public async Task<ActionResult<ApiResponse<TicketSummaryDto>>> Summary(CancellationToken ct)
     {
         var summary = await _tickets.GetSummaryAsync(ct);
@@ -156,7 +156,7 @@ public class TicketsController : ControllerBase
     }
 
     [HttpPost("{id:int}/assign")]
-    [Authorize(Policy = "Staff")]
+    [Authorize(Policy = "CanManageTicketQueue")]
     public async Task<ActionResult<ApiResponse<object>>> Assign(
         int id, [FromBody] AssignTicketRequest request, CancellationToken ct)
     {
@@ -168,7 +168,7 @@ public class TicketsController : ControllerBase
     }
 
     [HttpPost("{id:int}/status")]
-    [Authorize(Policy = "Staff")]
+    [Authorize(Policy = "CanManageTicketQueue")]
     public async Task<ActionResult<ApiResponse<object>>> ChangeStatus(
         int id, [FromBody] ChangeTicketStatusRequest request, CancellationToken ct)
     {
@@ -180,7 +180,7 @@ public class TicketsController : ControllerBase
     }
 
     [HttpPost("{id:int}/resolve")]
-    [Authorize(Policy = "Staff")]
+    [Authorize(Policy = "CanManageTicketQueue")]
     public async Task<ActionResult<ApiResponse<object>>> Resolve(
         int id, [FromBody] ResolveTicketRequest request, CancellationToken ct)
     {

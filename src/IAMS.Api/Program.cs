@@ -1,8 +1,10 @@
 using System.Text;
+using IAMS.Api.Authorization;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -109,34 +111,40 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Authorization policies
+// Authorization policies.
+//
+// Every policy below resolves to a permission the tenant can retune at /admin/roles. The two
+// SuperAdmin policies stay role-based: they guard platform-level endpoints (tenants, shared
+// reference data) that no tenant may grant itself.
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("Admin", policy => policy.RequireRole("Admin"))
-    .AddPolicy("Staff", policy => policy.RequireRole("Admin", "Staff"))
-    .AddPolicy("Auditor", policy => policy.RequireRole("Admin", "Auditor"))
-    .AddPolicy("CanManageAssets", policy => policy.RequireRole("Admin", "Staff"))
-    .AddPolicy("CanViewReports", policy => policy.RequireRole("Admin", "Auditor"))
-    .AddPolicy("CanViewUsersList", policy => policy.RequireRole("Admin", "Staff"))
-    .AddPolicy("CanCreateAssets", policy => policy.RequireRole("Admin", "Staff"))
-    .AddPolicy("CanEditAssets", policy => policy.RequireRole("Admin", "Staff"))
-    .AddPolicy("CanDeleteAssets", policy => policy.RequireRole("Admin"))
-    .AddPolicy("CanAssignAssets", policy => policy.RequireRole("Admin", "Staff"))
-    .AddPolicy("CanReturnAssets", policy => policy.RequireRole("Admin", "Staff"))
-    .AddPolicy("CanViewAssignments", policy => policy.RequireRole("Admin", "Staff", "Auditor"))
-    // Every authenticated role, including Employee: covers the ticket endpoints an office
-    // user must reach to file and follow their own tickets (POST /api/tickets,
-    // GET /api/tickets/mine, per-ticket read/comment). Queue-wide operations stay behind
-    // the narrower "Staff" policy.
-    .AddPolicy("CanFileTickets", policy => policy.RequireRole("SuperAdmin", "Admin", "Management", "Staff", "Auditor", "Employee"))
-    // Multi-tenant policies
-    .AddPolicy("SuperAdmin", policy => policy.RequireRole("SuperAdmin"))
-    .AddPolicy("TenantAdmin", policy => policy.RequireAssertion(context =>
-        context.User.IsInRole("SuperAdmin") ||
-        context.User.HasClaim(c => c.Type == "is_tenant_admin" && c.Value == "true")))
-    .AddPolicy("CanManageTenants", policy => policy.RequireRole("SuperAdmin"))
-    .AddPolicy("CanManageOrgSettings", policy => policy.RequireAssertion(context =>
-        context.User.IsInRole("SuperAdmin") ||
-        context.User.HasClaim(c => c.Type == "is_tenant_admin" && c.Value == "true")));
+    .RequirePermission("CanCreateAssets", Permissions.AssetsCreate)
+    .RequirePermission("CanEditAssets", Permissions.AssetsEdit)
+    .RequirePermission("CanDeleteAssets", Permissions.AssetsDelete)
+    .RequirePermission("CanManageAssets", Permissions.AssetsEdit)
+    .RequirePermission("CanImportAssets", Permissions.AssetsImport)
+    .RequirePermission("CanViewAssets", Permissions.AssetsView)
+    .RequirePermission("Admin", Permissions.AssetsDebug)
+    .RequirePermission("CanViewReports", Permissions.ReportsView)
+    .RequirePermission("CanAssignAssets", Permissions.AssignmentsAssign)
+    .RequirePermission("CanReturnAssets", Permissions.AssignmentsReturn)
+    .RequirePermission("CanViewAssignments", Permissions.AssignmentsView)
+    .RequirePermission("CanFileTickets", Permissions.TicketsFile)
+    .RequirePermission("CanViewTicketQueue", Permissions.TicketsQueue)
+    .RequirePermission("CanManageTicketQueue", Permissions.TicketsManage)
+    .RequirePermission("CanViewUsers", Permissions.UsersView)
+    .RequirePermission("CanManageUsers", Permissions.UsersManage)
+    .RequirePermission("CanViewUsersList", Permissions.UsersRead)
+    .RequirePermission("CanViewRoles", Permissions.RolesView)
+    .RequirePermission("CanManageRoles", Permissions.RolesManage)
+    .RequirePermission("CanManageAttachments", Permissions.AttachmentsManage)
+    .RequirePermission("CanManageWarrantyAlerts", Permissions.WarrantyManage)
+    .RequirePermission("CanDeleteWarrantyAlerts", Permissions.WarrantyDelete)
+    .RequirePermission("CanSendTestNotifications", Permissions.NotificationsTest)
+    // Platform-level: not tenant-tunable.
+    .AddPolicy("SuperAdmin", policy => policy.RequireRole(Roles.SuperAdmin))
+    .AddPolicy("CanManageTenants", policy => policy.RequireRole(Roles.SuperAdmin));
 
 // Services
 builder.Services.AddHttpContextAccessor();

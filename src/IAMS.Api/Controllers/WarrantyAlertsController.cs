@@ -97,7 +97,7 @@ public class WarrantyAlertsController(AppDbContext db) : ControllerBase
     /// Acknowledge an alert
     /// </summary>
     [HttpPost("{id:int}/acknowledge")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanManageWarrantyAlerts")]
     public async Task<ActionResult<ApiResponse<WarrantyAlertDto>>> AcknowledgeAlert(int id)
     {
         var alert = await db.WarrantyAlerts
@@ -127,7 +127,7 @@ public class WarrantyAlertsController(AppDbContext db) : ControllerBase
     /// Acknowledge multiple alerts at once
     /// </summary>
     [HttpPost("acknowledge-bulk")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin,Staff")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanManageWarrantyAlerts")]
     public async Task<ActionResult<ApiResponse<object>>> AcknowledgeAlerts([FromBody] List<int> alertIds)
     {
         if (alertIds == null || alertIds.Count == 0)
@@ -155,7 +155,7 @@ public class WarrantyAlertsController(AppDbContext db) : ControllerBase
     /// Delete an acknowledged alert
     /// </summary>
     [HttpDelete("{id:int}")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanDeleteWarrantyAlerts")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAlert(int id)
     {
         var alert = await db.WarrantyAlerts.FindAsync(id);
