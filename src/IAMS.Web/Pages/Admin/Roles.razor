@@ -236,7 +236,11 @@
     private bool _deleting;
 
     private string EditorTitle => _editing is null ? "New Role" : _editing.Name;
-    private bool NameLocked => _editing?.IsBuiltIn == true || _readOnly;
+
+    // UpdateRoleDto deliberately has no Name property (see its comment in RoleDto.cs) - a rename
+    // typed here would be silently discarded by Save, which sends only description and
+    // permissions. Name is editable only when creating a role.
+    private bool NameLocked => _editing is not null || _readOnly;
 
     protected override async Task OnInitializedAsync()
     {
