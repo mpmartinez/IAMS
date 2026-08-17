@@ -79,15 +79,21 @@
                                 <td class="py-3 px-4 text-sm text-slate-600 dark:text-slate-300">@role.UserCount</td>
                                 <td class="py-3 px-4">
                                     <div class="flex items-center justify-end gap-1">
-                                        <PermissionView Permission="iams:roles:manage">
-                                            <Button Variant="ghost" Size="sm" OnClick="() => OpenEdit(role)">
-                                                @(role.Name == "SuperAdmin" ? "View" : "Edit")
-                                            </Button>
-                                            @if (!role.IsBuiltIn)
-                                            {
+                                        <!-- iams:roles:view's catalog description promises seeing "what [roles] grant" - gating
+                                             this button on iams:roles:manage as well left a view-only holder with nothing that
+                                             actually does what their permission is named for. Everyone who reached this page (the
+                                             wrapping PermissionView above already requires at least iams:roles:view) can open the
+                                             editor; OpenEdit decides read-only vs editable via _canManage. Only New Role and
+                                             Delete - genuine writes - stay gated on iams:roles:manage. -->
+                                        <Button Variant="ghost" Size="sm" OnClick="() => OpenEdit(role)">
+                                            @(role.Name == "SuperAdmin" || !_canManage ? "View" : "Edit")
+                                        </Button>
+                                        @if (!role.IsBuiltIn)
+                                        {
+                                            <PermissionView Permission="iams:roles:manage">
                                                 <Button Variant="ghost" Size="sm" OnClick="() => ConfirmDelete(role)">Delete</Button>
-                                            }
-                                        </PermissionView>
+                                            </PermissionView>
+                                        }
                                     </div>
                                 </td>
                             </tr>
@@ -113,7 +119,9 @@
             @if (_readOnly)
             {
                 <Alert Variant="warning" Title="Not editable">
-                    SuperAdmin bypasses every permission check, so its grants cannot be changed.
+                    @(_editing?.Name == "SuperAdmin"
+                        ? "SuperAdmin bypasses every permission check, so its grants cannot be changed."
+                        : "You can see what this role grants, but changing it needs the roles-management permission.")
                 </Alert>
             }
 
@@ -221,6 +229,7 @@
     private List<PermissionGroupDto>? _groups;
     private HashSet<string> _grantable = [];
     private int _totalPermissions;
+    private bool _canManage;
 
     private bool _showEditor;
     private bool _readOnly;
@@ -262,6 +271,8 @@
             return;
         }
 
+        _canManage = await PermissionChecker.HasPermissionAsync("iams:roles:manage");
+
         _groups = await Api.GetPermissionGroupsAsync();
         _totalPermissions = _groups?.Sum(g => g.Permissions.Count) ?? 0;
 
@@ -294,7 +305,10 @@
     private void OpenEdit(RoleDto role)
     {
         _editing = role;
-        _readOnly = role.Name == "SuperAdmin";
+        // SuperAdmin is unconditionally read-only (its grants can't be changed at all); beyond
+        // that, a iams:roles:view-only holder gets the same editor in read-only mode rather than
+        // no editor at all - see the comment above the row's Edit/View button.
+        _readOnly = role.Name == "SuperAdmin" || !_canManage;
         _formName = role.Name;
         _formDescription = role.Description ?? "";
         _selected = role.Permissions.ToHashSet();
