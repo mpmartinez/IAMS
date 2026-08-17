@@ -26,13 +26,13 @@
 }
 else if (_asset is null)
 {
-    <IAMS.Web.Components.UI.Card Class="p-6">
+    <Card Class="p-6">
         <EmptyState Title="Asset not found" Description="The asset you're looking for doesn't exist or has been deleted.">
             <a href="/assets" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
                 Back to Assets
             </a>
         </EmptyState>
-    </IAMS.Web.Components.UI.Card>
+    </Card>
 }
 else
 {
@@ -48,7 +48,7 @@ else
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-3 flex-wrap">
                         <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white truncate">@_asset.DisplayName</h1>
-                        <IAMS.Web.Components.UI.Badge Variant="@_asset.Status" Pulse="@(_asset.Status == "InUse")">@_asset.Status</IAMS.Web.Components.UI.Badge>
+                        <Badge Variant="@_asset.Status" Pulse="@(_asset.Status == "InUse")">@_asset.Status</Badge>
                     </div>
                     <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 font-mono">@_asset.AssetTag</p>
                 </div>
@@ -77,7 +77,7 @@ else
             <!-- Main Info -->
             <div class="lg:col-span-2 space-y-4 sm:space-y-6">
                 <!-- Device Info -->
-                <IAMS.Web.Components.UI.Card>
+                <Card>
                     <CardHeader>
                         <CardTitle>Device Information</CardTitle>
                     </CardHeader>
@@ -91,10 +91,10 @@ else
                             <DetailItem Label="Location" Value="@(_asset.Location ?? "—")" />
                         </div>
                     </CardContent>
-                </IAMS.Web.Components.UI.Card>
+                </Card>
 
                 <!-- Assignment -->
-                <IAMS.Web.Components.UI.Card>
+                <Card>
                     <div class="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
                         <CardTitle>Assignment</CardTitle>
                         <AuthorizeView Roles="Admin,Staff">
@@ -130,10 +130,10 @@ else
                             }
                         </div>
                     </CardContent>
-                </IAMS.Web.Components.UI.Card>
+                </Card>
 
                 <!-- Assignment History -->
-                <IAMS.Web.Components.UI.Card>
+                <Card>
                     <div class="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
                         <CardTitle>Assignment History</CardTitle>
                         @if (_assignmentHistory?.Count > 3)
@@ -215,15 +215,15 @@ else
                             </div>
                         }
                     </CardContent>
-                </IAMS.Web.Components.UI.Card>
+                </Card>
 
                 <!-- Purchase & Warranty -->
-                <IAMS.Web.Components.UI.Card>
+                <Card>
                     <div class="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
                         <CardTitle>Purchase & Warranty</CardTitle>
                         @if (_asset.WarrantyStatus != WarrantyStatus.None)
                         {
-                            <IAMS.Web.Components.UI.Badge Variant="@GetWarrantyBadgeVariant()" Pulse="@(_asset.WarrantyStatus == WarrantyStatus.Expiring)">@GetWarrantyBadgeText()</IAMS.Web.Components.UI.Badge>
+                            <Badge Variant="@GetWarrantyBadgeVariant()" Pulse="@(_asset.WarrantyStatus == WarrantyStatus.Expiring)">@GetWarrantyBadgeText()</Badge>
                         }
                     </div>
                     <CardContent>
@@ -254,22 +254,22 @@ else
                             </div>
                         </div>
                     </CardContent>
-                </IAMS.Web.Components.UI.Card>
+                </Card>
 
                 @if (!string.IsNullOrEmpty(_asset.Notes))
                 {
-                    <IAMS.Web.Components.UI.Card>
+                    <Card>
                         <CardHeader>
                             <CardTitle>Notes</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <p class="text-slate-600 dark:text-slate-300 whitespace-pre-wrap text-sm">@_asset.Notes</p>
                         </CardContent>
-                    </IAMS.Web.Components.UI.Card>
+                    </Card>
                 }
 
                 <!-- Attachments -->
-                <IAMS.Web.Components.UI.Card>
+                <Card>
                     <div class="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
                         <CardTitle>Attachments</CardTitle>
                         <AuthorizeView Roles="Admin,Staff">
@@ -336,12 +336,12 @@ else
                             }
                         }
                     </CardContent>
-                </IAMS.Web.Components.UI.Card>
+                </Card>
             </div>
 
             <!-- Sidebar -->
             <div class="space-y-4 sm:space-y-6">
-                <IAMS.Web.Components.UI.Card>
+                <Card>
                     <CardHeader>
                         <CardTitle>Quick Actions</CardTitle>
                     </CardHeader>
@@ -369,9 +369,9 @@ else
                             </button>
                         </div>
                     </CardContent>
-                </IAMS.Web.Components.UI.Card>
+                </Card>
 
-                <IAMS.Web.Components.UI.Card>
+                <Card>
                     <CardHeader>
                         <CardTitle>Metadata</CardTitle>
                     </CardHeader>
@@ -394,7 +394,7 @@ else
                         </div>
                     </div>
                     </CardContent>
-                </IAMS.Web.Components.UI.Card>
+                </Card>
             </div>
         </div>
     </div>
@@ -407,8 +407,8 @@ else
             </p>
         </ChildContent>
         <FooterContent>
-            <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="() => _showDeleteModal = false">Cancel</IAMS.Web.Components.UI.Button>
-            <IAMS.Web.Components.UI.Button Variant="destructive" OnClick="DeleteAsset" Loading="@_deleting">Delete</IAMS.Web.Components.UI.Button>
+            <Button Variant="ghost" OnClick="() => _showDeleteModal = false">Cancel</Button>
+            <Button Variant="destructive" OnClick="DeleteAsset" Loading="@_deleting">Delete</Button>
         </FooterContent>
     </Modal>
 
@@ -440,8 +440,8 @@ else
             </div>
         </ChildContent>
         <FooterContent>
-            <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="HideAssignModal">Cancel</IAMS.Web.Components.UI.Button>
-            <IAMS.Web.Components.UI.Button OnClick="AssignAsset" Loading="@_assigning" Disabled="@string.IsNullOrEmpty(_assignUserId)">Assign</IAMS.Web.Components.UI.Button>
+            <Button Variant="ghost" OnClick="HideAssignModal">Cancel</Button>
+            <Button OnClick="AssignAsset" Loading="@_assigning" Disabled="@string.IsNullOrEmpty(_assignUserId)">Assign</Button>
         </FooterContent>
     </Modal>
 
@@ -472,8 +472,8 @@ else
             </div>
         </ChildContent>
         <FooterContent>
-            <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="HideReturnModal">Cancel</IAMS.Web.Components.UI.Button>
-            <IAMS.Web.Components.UI.Button OnClick="ReturnAsset" Loading="@_returning">Return</IAMS.Web.Components.UI.Button>
+            <Button Variant="ghost" OnClick="HideReturnModal">Cancel</Button>
+            <Button OnClick="ReturnAsset" Loading="@_returning">Return</Button>
         </FooterContent>
     </Modal>
 
@@ -517,8 +517,8 @@ else
             </div>
         </ChildContent>
         <FooterContent>
-            <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="HideTransferModal">Cancel</IAMS.Web.Components.UI.Button>
-            <IAMS.Web.Components.UI.Button OnClick="TransferAsset" Loading="@_transferring" Disabled="@string.IsNullOrEmpty(_transferUserId)">Transfer</IAMS.Web.Components.UI.Button>
+            <Button Variant="ghost" OnClick="HideTransferModal">Cancel</Button>
+            <Button OnClick="TransferAsset" Loading="@_transferring" Disabled="@string.IsNullOrEmpty(_transferUserId)">Transfer</Button>
         </FooterContent>
     </Modal>
 
@@ -535,7 +535,7 @@ else
                         </div>
                         <div class="text-right">
                             <p class="text-lg font-mono font-semibold text-slate-900 dark:text-white">@_asset.AssetTag</p>
-                            <IAMS.Web.Components.UI.Badge Variant="@_asset.Status">@_asset.Status</IAMS.Web.Components.UI.Badge>
+                            <Badge Variant="@_asset.Status">@_asset.Status</Badge>
                         </div>
                     </div>
                 </div>
@@ -619,13 +619,13 @@ else
             </div>
         </ChildContent>
         <FooterContent>
-            <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="() => _showReportModal = false">Close</IAMS.Web.Components.UI.Button>
-            <IAMS.Web.Components.UI.Button OnClick="PrintReport">
+            <Button Variant="ghost" OnClick="() => _showReportModal = false">Close</Button>
+            <Button OnClick="PrintReport">
                 <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
                 Print Report
-            </IAMS.Web.Components.UI.Button>
+            </Button>
         </FooterContent>
     </Modal>
 
@@ -664,13 +664,13 @@ else
             </div>
         </ChildContent>
         <FooterContent>
-            <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="() => _showLabelModal = false">Close</IAMS.Web.Components.UI.Button>
-            <IAMS.Web.Components.UI.Button OnClick="PrintLabelContent" Disabled="@(_loadingQrCode || string.IsNullOrEmpty(_qrCodeDataUrl))">
+            <Button Variant="ghost" OnClick="() => _showLabelModal = false">Close</Button>
+            <Button OnClick="PrintLabelContent" Disabled="@(_loadingQrCode || string.IsNullOrEmpty(_qrCodeDataUrl))">
                 <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
                 Print Label
-            </IAMS.Web.Components.UI.Button>
+            </Button>
         </FooterContent>
     </Modal>
 
@@ -711,13 +711,13 @@ else
             </div>
         </ChildContent>
         <FooterContent>
-            <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="() => _showAttachmentModal = false">Close</IAMS.Web.Components.UI.Button>
-            <IAMS.Web.Components.UI.Button OnClick="DownloadAttachment" Disabled="@(_viewingAttachmentUrl is null)">
+            <Button Variant="ghost" OnClick="() => _showAttachmentModal = false">Close</Button>
+            <Button OnClick="DownloadAttachment" Disabled="@(_viewingAttachmentUrl is null)">
                 <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
                 Download
-            </IAMS.Web.Components.UI.Button>
+            </Button>
         </FooterContent>
     </Modal>
 }

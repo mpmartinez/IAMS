@@ -48,7 +48,7 @@
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
-                                <IAMS.Web.Components.UI.Badge Variant="@ticket.Type">@GetTypeLabel(ticket.Type)</IAMS.Web.Components.UI.Badge>
+                                <Badge Variant="@ticket.Type">@GetTypeLabel(ticket.Type)</Badge>
                                 <span class="text-xs text-slate-400 dark:text-slate-500 font-mono">@ticket.Reference</span>
                             </div>
                             <p class="font-medium text-slate-900 dark:text-white mt-1.5 truncate">@ticket.Title</p>
@@ -58,7 +58,7 @@
                             }
                             <p class="text-xs text-slate-400 dark:text-slate-500 mt-1.5">Submitted @GetAge(ticket.CreatedAt)</p>
                         </div>
-                        <IAMS.Web.Components.UI.Badge Variant="@ticket.Status">@GetStatusLabel(ticket.Status)</IAMS.Web.Components.UI.Badge>
+                        <Badge Variant="@ticket.Status">@GetStatusLabel(ticket.Status)</Badge>
                     </div>
                 </div>
             }
@@ -66,7 +66,7 @@
     }
     else
     {
-        <IAMS.Web.Components.UI.Card Class="p-6">
+        <Card Class="p-6">
             <EmptyState Title="No reports yet" Description="Problems and requests you send to IT will show up here.">
                 <a href="/report" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -75,7 +75,7 @@
                     Report a Problem
                 </a>
             </EmptyState>
-        </IAMS.Web.Components.UI.Card>
+        </Card>
     }
 </div>
 

@@ -32,7 +32,7 @@
     </div>
 
     <!-- Users Table -->
-    <IAMS.Web.Components.UI.Card Class="p-6">
+    <Card Class="p-6">
         @if (_loading)
         {
             <div class="space-y-4">
@@ -132,7 +132,7 @@
                 </div>
             }
         }
-    </IAMS.Web.Components.UI.Card>
+    </Card>
 </div>
 
 <!-- Add/Edit User Modal -->
@@ -209,9 +209,9 @@
                 <button @onclick="CloseModal" class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
                     Cancel
                 </button>
-                <IAMS.Web.Components.UI.Button OnClick="SaveUser" Loading="@_saving">
+                <Button OnClick="SaveUser" Loading="@_saving">
                     @(_isEditing ? "Save Changes" : "Create User")
-                </IAMS.Web.Components.UI.Button>
+                </Button>
             </div>
         </div>
     </div>
@@ -237,9 +237,9 @@
                     <button @onclick="CloseDeleteModal" class="flex-1 px-4 py-2.5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
                         Cancel
                     </button>
-                    <IAMS.Web.Components.UI.Button Variant="destructive" OnClick="ConfirmDelete" Loading="@_deleting" Class="flex-1">
+                    <Button Variant="destructive" OnClick="ConfirmDelete" Loading="@_deleting" Class="flex-1">
                         Deactivate
-                    </IAMS.Web.Components.UI.Button>
+                    </Button>
                 </div>
             </div>
         </div>

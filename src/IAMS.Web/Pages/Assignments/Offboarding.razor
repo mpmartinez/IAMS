@@ -23,7 +23,7 @@
 
     @if (_loading)
     {
-        <IAMS.Web.Components.UI.Card Class="p-6">
+        <Card Class="p-6">
             <div class="space-y-4">
                 @for (int i = 0; i < 4; i++)
                 {
@@ -37,13 +37,13 @@
                     </div>
                 }
             </div>
-        </IAMS.Web.Components.UI.Card>
+        </Card>
     }
     else if (_offboarding is null)
     {
-        <IAMS.Web.Components.UI.Card Class="p-6">
+        <Card Class="p-6">
             <EmptyState Title="User not found" Description="The user you're looking for doesn't exist." />
-        </IAMS.Web.Components.UI.Card>
+        </Card>
     }
     else
     {
@@ -105,7 +105,7 @@
             </div>
 
             <!-- Unreturned Assets -->
-            <IAMS.Web.Components.UI.Card Class="p-6">
+            <Card Class="p-6">
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-3">
                         <input type="checkbox" @bind="_selectAll" @bind:after="ToggleSelectAll" class="w-5 h-5 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500" />
@@ -174,12 +174,12 @@
                         </div>
                     }
                 </div>
-            </IAMS.Web.Components.UI.Card>
+            </Card>
         }
         else
         {
             <!-- All Clear -->
-            <IAMS.Web.Components.UI.Card Class="p-6">
+            <Card Class="p-6">
                 <div class="text-center py-12">
                     <div class="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
                         <svg class="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -189,7 +189,7 @@
                     <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">All Assets Returned</h3>
                     <p class="text-slate-500 dark:text-slate-400">This user has no unreturned assets. They're ready for offboarding.</p>
                 </div>
-            </IAMS.Web.Components.UI.Card>
+            </Card>
         }
     }
 </div>

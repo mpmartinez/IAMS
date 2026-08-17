@@ -24,20 +24,20 @@
 
     @if (_loading)
     {
-        <IAMS.Web.Components.UI.Card Class="p-6">
+        <Card Class="p-6">
             <div class="space-y-4">
                 @for (int i = 0; i < 8; i++)
                 {
                     <div class="h-12 rounded-xl skeleton"></div>
                 }
             </div>
-        </IAMS.Web.Components.UI.Card>
+        </Card>
     }
     else
     {
         <EditForm id="asset-form" Model="@_model" OnValidSubmit="HandleSubmit">
             <!-- Device Information -->
-            <IAMS.Web.Components.UI.Card>
+            <Card>
                 <CardHeader>
                     <CardTitle>Device Information</CardTitle>
                 </CardHeader>
@@ -45,7 +45,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div class="sm:col-span-2">
                         <FormField LabelText="Device Type *">
-                            <IAMS.Web.Components.UI.Select @bind-Value="_model.DeviceType" Placeholder="Select device type">
+                            <Select @bind-Value="_model.DeviceType" Placeholder="Select device type">
                                 @if (_deviceTypes is not null)
                                 {
                                     @foreach (var dt in _deviceTypes)
@@ -53,7 +53,7 @@
                                         <option value="@dt">@dt</option>
                                     }
                                 }
-                            </IAMS.Web.Components.UI.Select>
+                            </Select>
                         </FormField>
                     </div>
                     <div>
@@ -76,23 +76,23 @@
                         </div>
                     </div>
                     <FormField LabelText="Manufacturer">
-                        <IAMS.Web.Components.UI.Input @bind-Value="_model.Manufacturer" Placeholder="Apple, Dell, HP..." />
+                        <Input @bind-Value="_model.Manufacturer" Placeholder="Apple, Dell, HP..." />
                     </FormField>
                     <FormField LabelText="Model">
-                        <IAMS.Web.Components.UI.Input @bind-Value="_model.Model" Placeholder="MacBook Pro 16&quot;, XPS 15..." />
+                        <Input @bind-Value="_model.Model" Placeholder="MacBook Pro 16&quot;, XPS 15..." />
                     </FormField>
                     <FormField LabelText="Model Year">
-                        <IAMS.Web.Components.UI.Input Type="number" @bind-Value="_model.ModelYear" Placeholder="2024" />
+                        <Input Type="number" @bind-Value="_model.ModelYear" Placeholder="2024" />
                     </FormField>
                     <FormField LabelText="Location">
-                        <IAMS.Web.Components.UI.Input @bind-Value="_model.Location" Placeholder="Office - Floor 2" />
+                        <Input @bind-Value="_model.Location" Placeholder="Office - Floor 2" />
                     </FormField>
                     <FormField LabelText="Name (Optional)">
-                        <IAMS.Web.Components.UI.Input @bind-Value="_model.Name" Placeholder="Custom display name" />
+                        <Input @bind-Value="_model.Name" Placeholder="Custom display name" />
                     </FormField>
                 </div>
                 </CardContent>
-            </IAMS.Web.Components.UI.Card>
+            </Card>
 
             <!-- Apple Auto-fill Suggestion -->
             @if (_appleDeviceInfo is not null && _showAutoFillSuggestion)
@@ -140,14 +140,14 @@
             }
 
             <!-- Status & Assignment -->
-            <IAMS.Web.Components.UI.Card>
+            <Card>
                 <CardHeader>
                     <CardTitle>Status & Assignment</CardTitle>
                 </CardHeader>
                 <CardContent>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <FormField LabelText="Status *">
-                        <IAMS.Web.Components.UI.Select @bind-Value="_model.Status" Placeholder="Select status">
+                        <Select @bind-Value="_model.Status" Placeholder="Select status">
                             @if (_statuses is not null)
                             {
                                 @foreach (var stat in _statuses)
@@ -155,10 +155,10 @@
                                     <option value="@stat">@stat</option>
                                 }
                             }
-                        </IAMS.Web.Components.UI.Select>
+                        </Select>
                     </FormField>
                     <FormField LabelText="Assigned To">
-                        <IAMS.Web.Components.UI.Select @bind-Value="_model.AssignedToUserId" Placeholder="Unassigned">
+                        <Select @bind-Value="_model.AssignedToUserId" Placeholder="Unassigned">
                             @if (_users is not null)
                             {
                                 @foreach (var user in _users)
@@ -166,24 +166,24 @@
                                     <option value="@user.Id">@user.FullName @(user.Department is not null ? $"({user.Department})" : "")</option>
                                 }
                             }
-                        </IAMS.Web.Components.UI.Select>
+                        </Select>
                     </FormField>
                 </div>
                 </CardContent>
-            </IAMS.Web.Components.UI.Card>
+            </Card>
 
             <!-- Purchase Information -->
-            <IAMS.Web.Components.UI.Card>
+            <Card>
                 <CardHeader>
                     <CardTitle>Purchase Information</CardTitle>
                 </CardHeader>
                 <CardContent>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <FormField LabelText="Purchase Price">
-                        <IAMS.Web.Components.UI.Input Type="number" @bind-Value="_model.PurchasePrice" Placeholder="2499.00" />
+                        <Input Type="number" @bind-Value="_model.PurchasePrice" Placeholder="2499.00" />
                     </FormField>
                     <FormField LabelText="Currency">
-                        <IAMS.Web.Components.UI.Select @bind-Value="_model.Currency" Placeholder="Select currency">
+                        <Select @bind-Value="_model.Currency" Placeholder="Select currency">
                             @if (_currencies is not null)
                             {
                                 @foreach (var cur in _currencies)
@@ -191,17 +191,17 @@
                                     <option value="@cur">@cur</option>
                                 }
                             }
-                        </IAMS.Web.Components.UI.Select>
+                        </Select>
                     </FormField>
                     <FormField LabelText="Purchase Date">
-                        <IAMS.Web.Components.UI.Input Type="date" @bind-Value="_model.PurchaseDate" />
+                        <Input Type="date" @bind-Value="_model.PurchaseDate" />
                     </FormField>
                 </div>
                 </CardContent>
-            </IAMS.Web.Components.UI.Card>
+            </Card>
 
             <!-- Warranty Information -->
-            <IAMS.Web.Components.UI.Card>
+            <Card>
                 <CardHeader>
                     <CardTitle>Warranty Information</CardTitle>
                 </CardHeader>
@@ -209,21 +209,21 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div class="sm:col-span-2">
                         <FormField LabelText="Warranty Provider">
-                            <IAMS.Web.Components.UI.Input @bind-Value="_model.WarrantyProvider" Placeholder="Apple Care+, Dell ProSupport..." />
+                            <Input @bind-Value="_model.WarrantyProvider" Placeholder="Apple Care+, Dell ProSupport..." />
                         </FormField>
                     </div>
                     <FormField LabelText="Warranty Start Date">
-                        <IAMS.Web.Components.UI.Input Type="date" @bind-Value="_model.WarrantyStartDate" />
+                        <Input Type="date" @bind-Value="_model.WarrantyStartDate" />
                     </FormField>
                     <FormField LabelText="Warranty End Date">
-                        <IAMS.Web.Components.UI.Input Type="date" @bind-Value="_model.WarrantyEndDate" />
+                        <Input Type="date" @bind-Value="_model.WarrantyEndDate" />
                     </FormField>
                 </div>
                 </CardContent>
-            </IAMS.Web.Components.UI.Card>
+            </Card>
 
             <!-- Notes -->
-            <IAMS.Web.Components.UI.Card>
+            <Card>
                 <CardHeader>
                     <CardTitle>Additional Notes</CardTitle>
                 </CardHeader>
@@ -235,13 +235,13 @@
                               class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 resize-none text-sm"></textarea>
                 </div>
                 </CardContent>
-            </IAMS.Web.Components.UI.Card>
+            </Card>
         </EditForm>
 
         <!-- Attachments Section (only for existing assets) -->
         @if (!IsNew)
         {
-            <IAMS.Web.Components.UI.Card>
+            <Card>
                 <div class="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
                     <CardTitle>Attachments</CardTitle>
                     <button type="button" @onclick="ShowUploadModal" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
@@ -331,7 +331,7 @@
                         </div>
                     }
                 </CardContent>
-            </IAMS.Web.Components.UI.Card>
+            </Card>
 
             <!-- Upload Modal -->
             <Modal IsOpen="@_showUploadModal" Title="Upload Attachment" OnClose="HideUploadModal">
@@ -343,7 +343,7 @@
                                     Error="@_uploadFileError" />
 
                         <FormField LabelText="Category *">
-                            <IAMS.Web.Components.UI.Select @bind-Value="_uploadCategory" Placeholder="Select category">
+                            <Select @bind-Value="_uploadCategory" Placeholder="Select category">
                                 @if (_categories is not null)
                                 {
                                     @foreach (var cat in _categories)
@@ -351,7 +351,7 @@
                                         <option value="@cat">@cat</option>
                                     }
                                 }
-                            </IAMS.Web.Components.UI.Select>
+                            </Select>
                         </FormField>
 
                         <div>
@@ -369,8 +369,8 @@
                     </div>
                 </ChildContent>
                 <FooterContent>
-                    <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="HideUploadModal">Cancel</IAMS.Web.Components.UI.Button>
-                    <IAMS.Web.Components.UI.Button OnClick="UploadFile" Loading="@_uploading" Disabled="@(_uploadFile is null || string.IsNullOrEmpty(_uploadCategory))">Upload</IAMS.Web.Components.UI.Button>
+                    <Button Variant="ghost" OnClick="HideUploadModal">Cancel</Button>
+                    <Button OnClick="UploadFile" Loading="@_uploading" Disabled="@(_uploadFile is null || string.IsNullOrEmpty(_uploadCategory))">Upload</Button>
                 </FooterContent>
             </Modal>
 
@@ -382,8 +382,8 @@
                     </p>
                 </ChildContent>
                 <FooterContent>
-                    <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="() => _showDeleteAttachmentModal = false">Cancel</IAMS.Web.Components.UI.Button>
-                    <IAMS.Web.Components.UI.Button Variant="destructive" OnClick="DeleteAttachment" Loading="@_deletingAttachment">Delete</IAMS.Web.Components.UI.Button>
+                    <Button Variant="ghost" OnClick="() => _showDeleteAttachmentModal = false">Cancel</Button>
+                    <Button Variant="destructive" OnClick="DeleteAttachment" Loading="@_deletingAttachment">Delete</Button>
                 </FooterContent>
             </Modal>
         }
@@ -401,9 +401,9 @@
             <a href="@(IsNew ? "/assets" : $"/assets/{Id}")" class="w-full sm:w-auto px-6 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 text-center">
                 Cancel
             </a>
-            <IAMS.Web.Components.UI.Button Type="submit" form="asset-form" Loading="@_saving" Class="w-full sm:w-auto">
+            <Button Type="submit" form="asset-form" Loading="@_saving" Class="w-full sm:w-auto">
                 @(IsNew ? "Create Asset" : "Save Changes")
-            </IAMS.Web.Components.UI.Button>
+            </Button>
         </div>
     }
 </div>

@@ -187,7 +187,7 @@
                                     </div>
                                 </td>
                                 <td class="px-4 py-3 hidden sm:table-cell">
-                                    <IAMS.Web.Components.UI.Badge Variant="@ticket.Type">@GetTypeLabel(ticket.Type)</IAMS.Web.Components.UI.Badge>
+                                    <Badge Variant="@ticket.Type">@GetTypeLabel(ticket.Type)</Badge>
                                 </td>
                                 <td class="px-4 py-3 hidden lg:table-cell">
                                     <span class="text-sm text-slate-600 dark:text-slate-300 font-mono">@(ticket.AssetTag ?? "-")</span>
@@ -196,10 +196,10 @@
                                     <span class="text-sm text-slate-600 dark:text-slate-300">@(ticket.RequesterName ?? "-")</span>
                                 </td>
                                 <td class="px-4 py-3">
-                                    <IAMS.Web.Components.UI.Badge Variant="@ticket.Priority">@ticket.Priority</IAMS.Web.Components.UI.Badge>
+                                    <Badge Variant="@ticket.Priority">@ticket.Priority</Badge>
                                 </td>
                                 <td class="px-4 py-3">
-                                    <IAMS.Web.Components.UI.Badge Variant="@ticket.Status">@GetStatusLabel(ticket.Status)</IAMS.Web.Components.UI.Badge>
+                                    <Badge Variant="@ticket.Status">@GetStatusLabel(ticket.Status)</Badge>
                                 </td>
                                 <td class="px-4 py-3 hidden md:table-cell">
                                     <span class="text-sm text-slate-600 dark:text-slate-300">@(ticket.AssignedToName ?? "Unassigned")</span>
@@ -240,7 +240,7 @@
     }
     else
     {
-        <IAMS.Web.Components.UI.Card Class="p-6">
+        <Card Class="p-6">
             <EmptyState Title="No tickets found" Description="@(_hasFilters ? "Try adjusting your filters." : "No tickets have been raised yet.")">
                 @if (_hasFilters)
                 {
@@ -249,7 +249,7 @@
                     </button>
                 }
             </EmptyState>
-        </IAMS.Web.Components.UI.Card>
+        </Card>
     }
 </div>
 
@@ -258,15 +258,15 @@
     <ChildContent>
         <div class="space-y-4">
             <FormField LabelText="Type">
-                <IAMS.Web.Components.UI.Select Value="@_newType" ValueChanged="OnNewTypeChanged">
+                <Select Value="@_newType" ValueChanged="OnNewTypeChanged">
                     <option value="Incident">Incident</option>
                     <option value="Request">Request</option>
                     <option value="SecurityEvent">Security Event</option>
-                </IAMS.Web.Components.UI.Select>
+                </Select>
             </FormField>
 
             <FormField LabelText="Title">
-                <IAMS.Web.Components.UI.Input Value="@_newTitle" ValueChanged="v => _newTitle = v" Placeholder="Short summary of the issue" />
+                <Input Value="@_newTitle" ValueChanged="v => _newTitle = v" Placeholder="Short summary of the issue" />
             </FormField>
 
             <div class="space-y-1.5">
@@ -276,12 +276,12 @@
             </div>
 
             <FormField LabelText="Priority">
-                <IAMS.Web.Components.UI.Select Value="@_newPriority" ValueChanged="v => _newPriority = v">
+                <Select Value="@_newPriority" ValueChanged="v => _newPriority = v">
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
                     <option value="High">High</option>
                     <option value="Critical">Critical</option>
-                </IAMS.Web.Components.UI.Select>
+                </Select>
             </FormField>
 
             @if (_newType != "Request")
@@ -303,7 +303,7 @@
                     }
                     else
                     {
-                        <IAMS.Web.Components.UI.Input Value="@_assetSearch" ValueChanged="OnAssetSearchChanged" Placeholder="Search by tag or name..." />
+                        <Input Value="@_assetSearch" ValueChanged="OnAssetSearchChanged" Placeholder="Search by tag or name..." />
 
                         @if (_assetResults.Count > 0)
                         {
@@ -335,8 +335,8 @@
         </div>
     </ChildContent>
     <FooterContent>
-        <IAMS.Web.Components.UI.Button Variant="ghost" OnClick="HideCreateModal">Cancel</IAMS.Web.Components.UI.Button>
-        <IAMS.Web.Components.UI.Button OnClick="SubmitCreate" Loading="@_creating" Disabled="@string.IsNullOrWhiteSpace(_newTitle)">Create Ticket</IAMS.Web.Components.UI.Button>
+        <Button Variant="ghost" OnClick="HideCreateModal">Cancel</Button>
+        <Button OnClick="SubmitCreate" Loading="@_creating" Disabled="@string.IsNullOrWhiteSpace(_newTitle)">Create Ticket</Button>
     </FooterContent>
 </Modal>
 
