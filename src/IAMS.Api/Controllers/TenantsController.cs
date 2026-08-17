@@ -15,7 +15,7 @@ namespace IAMS.Api.Controllers;
 public class TenantsController(
     AppDbContext db,
     UserManager<ApplicationUser> userManager,
-    RoleManager<IdentityRole> roleManager,
+    RoleManager<ApplicationRole> roleManager,
     ISubscriptionService subscriptionService) : ControllerBase
 {
     [HttpGet]
@@ -128,7 +128,7 @@ public class TenantsController(
         // Create Admin role if not exists
         if (!await roleManager.RoleExistsAsync("Admin"))
         {
-            await roleManager.CreateAsync(new IdentityRole("Admin"));
+            await roleManager.CreateAsync(new ApplicationRole("Admin") { IsBuiltIn = true });
         }
 
         // Create tenant admin user

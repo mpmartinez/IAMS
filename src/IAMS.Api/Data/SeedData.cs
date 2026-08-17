@@ -12,14 +12,27 @@ public static class SeedData
     public static async Task Initialize(
         AppDbContext db,
         UserManager<ApplicationUser> userManager,
-        RoleManager<IdentityRole> roleManager)
+        RoleManager<ApplicationRole> roleManager)
     {
-        // Create roles including SuperAdmin
+        // Create roles including SuperAdmin, and keep their built-in metadata current.
         foreach (var role in Roles.All)
         {
-            if (!await roleManager.RoleExistsAsync(role))
+            var existing = await roleManager.FindByNameAsync(role);
+            if (existing is null)
             {
-                await roleManager.CreateAsync(new IdentityRole(role));
+                await roleManager.CreateAsync(new ApplicationRole(role)
+                {
+                    IsBuiltIn = true,
+                    TenantId = null,
+                    Description = Roles.DescriptionFor(role)
+                });
+            }
+            else if (!existing.IsBuiltIn || existing.Description is null)
+            {
+                existing.IsBuiltIn = true;
+                existing.TenantId = null;
+                existing.Description = Roles.DescriptionFor(role);
+                await roleManager.UpdateAsync(existing);
             }
         }
 

@@ -32,7 +32,7 @@ public class SubscriptionServiceMeteringTests
 
     private static async Task<string> EnsureEmployeeRoleAsync(AppDbContext db)
     {
-        var role = new IdentityRole(Roles.Employee) { NormalizedName = "EMPLOYEE" };
+        var role = new ApplicationRole(Roles.Employee) { NormalizedName = "EMPLOYEE" };
         db.Roles.Add(role);
         await db.SaveChangesAsync();
         return role.Id;
@@ -95,7 +95,7 @@ public class SubscriptionServiceMeteringTests
             await db.SaveChangesAsync();
 
             var employeeRoleId = await EnsureEmployeeRoleAsync(db);
-            var staffRole = new IdentityRole(Roles.Staff) { NormalizedName = "STAFF" };
+            var staffRole = new ApplicationRole(Roles.Staff) { NormalizedName = "STAFF" };
             db.Roles.Add(staffRole);
             await db.SaveChangesAsync();
 

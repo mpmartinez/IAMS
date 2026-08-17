@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace IAMS.Api.Data;
 
-public class AppDbContext : IdentityDbContext<ApplicationUser>
+public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, string>
 {
     private readonly ITenantProvider? _tenantProvider;
 
@@ -33,6 +33,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<LookupValue> LookupValues => Set<LookupValue>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -462,6 +463,36 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 _tenantProvider == null ||
                 _tenantProvider.IsSuperAdmin() ||
                 e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure ApplicationRole. Built-in roles have a null TenantId and are shared; custom
+        // roles belong to exactly one tenant.
+        modelBuilder.Entity<ApplicationRole>(entity =>
+        {
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.HasIndex(e => e.TenantId);
+        });
+
+        // Configure RolePermission. No query filter by design - see the class comment.
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.RoleId).HasMaxLength(450).IsRequired();
+            entity.Property(e => e.Permission).HasMaxLength(100).IsRequired();
+
+            entity.HasIndex(e => new { e.RoleId, e.TenantId, e.Permission }).IsUnique();
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.Role)
+                .WithMany()
+                .HasForeignKey(e => e.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Configure LookupValue. Deliberately global: no TenantId, no ITenantEntity, no query
