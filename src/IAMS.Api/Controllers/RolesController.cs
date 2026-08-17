@@ -18,7 +18,8 @@ namespace IAMS.Api.Controllers;
 public class RolesController(
     AppDbContext db,
     RoleManager<ApplicationRole> roleManager,
-    ITenantProvider tenantProvider) : ControllerBase
+    ITenantProvider tenantProvider,
+    ILogger<RolesController> logger) : ControllerBase
 {
     /// <summary>
     /// The permissions this actor may hand to a role. Without this cap anyone holding
@@ -165,11 +166,12 @@ public class RolesController(
             await ReplaceGrants(role.Id, tenantId, accepted);
             await transaction.CommitAsync();
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex)
         {
             // Covers DbUpdateConcurrencyException too (it derives from DbUpdateException) - e.g.
             // two concurrent creates of the same role name racing past the FindByNameAsync check
             // above and tripping the unique index together.
+            logger.LogWarning(ex, "CreateRole for tenant {TenantId} hit a DbUpdateException.", tenantId);
             await transaction.RollbackAsync();
             return Conflict(ApiResponse<RoleDto>.Fail(
                 "This role could not be saved because of a conflicting change. Reload and try again."));
@@ -210,7 +212,7 @@ public class RolesController(
         // every permission check anyway, so they can always fix it back up.
         if (!isSuperAdmin)
         {
-            var lockoutError = await WouldOrphanRoleManagement(tenantId, role.Id, accepted);
+            var lockoutError = await RoleManagementLockoutGuard.ForRoleGrantChangeAsync(db, tenantId, role.Id, accepted);
             if (lockoutError is not null) return BadRequest(ApiResponse<RoleDto>.Fail(lockoutError));
         }
 
@@ -228,13 +230,14 @@ public class RolesController(
 
             await transaction.CommitAsync();
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex)
         {
             // Covers DbUpdateConcurrencyException too. Two concurrent PUTs on the same role can
             // both delete-then-reinsert its grants, or trip the (RoleId, TenantId, Permission)
             // unique index against each other; either way this used to surface as an unhandled
             // 500. Ask the caller to reload and retry rather than implementing full optimistic
             // concurrency.
+            logger.LogWarning(ex, "UpdateRole {RoleId} for tenant {TenantId} hit a DbUpdateException.", id, tenantId);
             return Conflict(ApiResponse<RoleDto>.Fail(
                 "This role was changed by someone else. Reload and try again."));
         }
@@ -250,35 +253,6 @@ public class RolesController(
             UserCount = counts.GetValueOrDefault(role.Id),
             Permissions = accepted
         }));
-    }
-
-    /// <summary>
-    /// True (with an explanatory message) if applying `accepted` to `roleId` would remove
-    /// iams:roles:manage from a role that currently holds it, and no OTHER role in the tenant
-    /// that still has at least one holder would carry it afterwards. A role nobody holds does not
-    /// count as coverage - it grants nobody anything today.
-    /// </summary>
-    private async Task<string?> WouldOrphanRoleManagement(Guid tenantId, string roleId, List<string> accepted)
-    {
-        if (accepted.Contains(Permissions.RolesManage)) return null; // not being removed
-
-        var currentlyHasIt = await db.RolePermissions.AnyAsync(rp =>
-            rp.RoleId == roleId && rp.TenantId == tenantId && rp.Permission == Permissions.RolesManage);
-        if (!currentlyHasIt) return null; // nothing to lose
-
-        var otherRolesWithGrant = await db.RolePermissions
-            .Where(rp => rp.TenantId == tenantId && rp.Permission == Permissions.RolesManage && rp.RoleId != roleId)
-            .Select(rp => rp.RoleId)
-            .Distinct()
-            .ToListAsync();
-
-        var stillCovered = otherRolesWithGrant.Count > 0
-            && (await UserCountsByRole(tenantId, otherRolesWithGrant)).Values.Any(count => count > 0);
-
-        return stillCovered
-            ? null
-            : "At least one role held by a user in this tenant must retain \"Manage roles\", " +
-              "or nobody would be able to manage roles in this tenant again.";
     }
 
     [HttpDelete("{id}")]

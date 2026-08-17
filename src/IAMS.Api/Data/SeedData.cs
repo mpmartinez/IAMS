@@ -282,61 +282,69 @@ public static class SeedData
     }
 
     /// <summary>
-    /// Ensures every built-in role holds its default grants in this tenant.
+    /// Ensures every built-in role holds its default grants in this tenant, exactly once per
+    /// tenant.
     ///
-    /// Additive and idempotent on purpose: it inserts what is missing and never deletes. A tenant
-    /// that unticks a permission must keep it unticked across restarts, so "missing row" is a
-    /// legitimate customisation, not drift to repair.
+    /// Gated on Tenant.RolePermissionsSeededAt rather than "does this role have any grant row",
+    /// which used to be the provisioned/not-provisioned test here. That heuristic could not tell
+    /// "never provisioned" apart from "provisioned, then a role deliberately emptied to zero
+    /// grants" - and the gap was exploitable: empty a built-in role's grants, assign it to
+    /// yourself (an empty set is a trivial subset of anything), then let the next restart's call
+    /// here see "no grant rows" and reprovision every default permission back onto the role you
+    /// now hold. The timestamp marker removes the ambiguity: a non-null value means this tenant
+    /// has been provisioned, full stop, and a role with zero grants in it is a deliberate
+    /// revocation to leave alone - never drift to repair.
     ///
-    /// Known limitation: because a role with any grant counts as provisioned, a permission added
-    /// to the catalog in a later release does not reach tenants that already exist - an admin must
-    /// tick it on each one. Fixing that needs a marker distinguishing "never provisioned" from
-    /// "provisioned then revoked"; per-key insertion is not the fix, since it would resurrect every
-    /// permission a tenant deliberately revoked on the next restart.
+    /// Still additive, not corrective, once it does provision: a tenant that unticks a permission
+    /// keeps it unticked across restarts. And the tenant-level marker still means a permission
+    /// added to the catalog in a later release does not reach tenants that were already
+    /// provisioned before that release shipped - an admin must tick it on each one by hand. That
+    /// limitation is unrelated to the escalation this method used to enable and remains
+    /// unaddressed here.
     /// </summary>
     public static async Task EnsureRolePermissionsAsync(AppDbContext db, Guid tenantId)
     {
+        var tenant = await db.Tenants.IgnoreQueryFilters().FirstOrDefaultAsync(t => t.Id == tenantId);
+        if (tenant is null) return;
+        if (tenant.RolePermissionsSeededAt is not null) return; // already provisioned; nothing to do, ever
+
         var builtInRoles = await db.Roles
             .Where(r => r.IsBuiltIn && r.Name != null)
             .Select(r => new { r.Id, r.Name })
             .ToListAsync();
 
+        // Built-in roles aren't seeded yet (shouldn't happen once SeedData.Initialize has run,
+        // since it creates them before ever calling this) - nothing to provision from, and the
+        // marker is deliberately left unset so a later call, once roles exist, still provisions.
         if (builtInRoles.Count == 0) return;
 
-        var roleIds = builtInRoles.Select(r => r.Id).ToList();
-
-        // One round trip for everything already granted in this tenant.
-        var existing = (await db.RolePermissions
-                .Where(rp => rp.TenantId == tenantId && roleIds.Contains(rp.RoleId))
-                .Select(rp => new { rp.RoleId, rp.Permission })
-                .ToListAsync())
-            .Select(x => (x.RoleId, x.Permission))
-            .ToHashSet();
-
-        // A tenant that has any grant for a role has already been provisioned; leaving it alone
-        // is what stops a revoked permission from reappearing.
-        var provisioned = existing.Select(e => e.RoleId).ToHashSet();
-
-        var toAdd = new List<RolePermission>();
-        foreach (var role in builtInRoles)
+        // Backfill concern: a tenant provisioned by the OLD per-role heuristic already has grant
+        // rows, but this new marker is still null on it (the column didn't exist before). If this
+        // ran the normal "insert every default" path here, whatever that tenant deliberately
+        // revoked under the old logic would reappear. So: if any grant row already exists for
+        // this tenant, treat it as already provisioned - stamp the marker and insert nothing.
+        var alreadyHasGrants = await db.RolePermissions.AnyAsync(rp => rp.TenantId == tenantId);
+        if (!alreadyHasGrants)
         {
-            if (provisioned.Contains(role.Id)) continue;
-
-            foreach (var permission in Permissions.DefaultsFor(role.Name!))
+            var toAdd = new List<RolePermission>();
+            foreach (var role in builtInRoles)
             {
-                toAdd.Add(new RolePermission
+                foreach (var permission in Permissions.DefaultsFor(role.Name!))
                 {
-                    Id = Guid.NewGuid(),
-                    RoleId = role.Id,
-                    TenantId = tenantId,
-                    Permission = permission
-                });
+                    toAdd.Add(new RolePermission
+                    {
+                        Id = Guid.NewGuid(),
+                        RoleId = role.Id,
+                        TenantId = tenantId,
+                        Permission = permission
+                    });
+                }
             }
+
+            db.RolePermissions.AddRange(toAdd);
         }
 
-        if (toAdd.Count == 0) return;
-
-        db.RolePermissions.AddRange(toAdd);
+        tenant.RolePermissionsSeededAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
     }
 }

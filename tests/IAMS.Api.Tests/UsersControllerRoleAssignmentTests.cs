@@ -245,4 +245,126 @@ public class UsersControllerRoleAssignmentTests
             Assert.Contains("HelpdeskTier1", roles);
         }
     }
+
+    // ---------------------------------------------------------------------------------------
+    // CRITICAL fix: an emptied built-in role is no longer trivially assignable. Step 2 of the
+    // exploit chain - PUT /api/roles/{admin-id} { "permissions": [] } then assign that
+    // now-zero-grant Admin role to yourself - relied on an empty grant set being treated as
+    // "nothing to worry about".
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task UpdateUser_RejectsAssigningABuiltInRoleWhoseGrantsWereEmptied()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            // Admin exists as a built-in role but holds zero grants in this tenant - as if
+            // PUT /api/roles/{admin-id} { "permissions": [] } had just run.
+            await SeedBuiltInRoleWithGrantsAsync(db, tenantId, Roles.Admin, []);
+
+            var userManager = CreateUserManager(db);
+            var actor = new ApplicationUser
+            {
+                Id = "actor-2", UserName = "actor2@test.local", Email = "actor2@test.local",
+                FullName = "Actor Two", TenantId = tenantId
+            };
+            Assert.True((await userManager.CreateAsync(actor)).Succeeded);
+
+            // Enough to have reached this point in the real exploit (users:manage + roles:manage),
+            // but Admin currently grants nothing, so the subset check has nothing to compare against
+            // - which is exactly why the guard needs its own check for a zero-grant built-in role.
+            var principal = TestPrincipals.With(Permissions.UsersManage, Permissions.RolesManage);
+            var controller = BuildController(db, tenantId, principal, userManager);
+
+            var result = await controller.UpdateUser("actor-2", new UpdateUserDto { Role = Roles.Admin });
+
+            var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var body = Assert.IsType<ApiResponse<UserDto>>(bad.Value);
+            Assert.False(body.Success);
+
+            var roles = await userManager.GetRolesAsync(actor);
+            Assert.DoesNotContain(Roles.Admin, roles);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // IMPORTANT: the iams:roles:manage lockout guard was only enforced in RolesController.
+    // UsersController.UpdateUser (move the last holder to another role) and DeleteUser
+    // (deactivate the last holder) could each break the same invariant with no check at all.
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task UpdateUser_MovingTheLastRolesManageHolderToAnotherRole_IsRejected()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var managerRole = await SeedCustomRoleAsync(db, tenantId, "RoleManager", [Permissions.RolesManage]);
+            await SeedCustomRoleAsync(db, tenantId, "Basic", [Permissions.AssetsView]);
+
+            var userManager = CreateUserManager(db);
+            var target = new ApplicationUser
+            {
+                Id = "manager-1", UserName = "manager1@test.local", Email = "manager1@test.local",
+                FullName = "Role Manager", TenantId = tenantId
+            };
+            Assert.True((await userManager.CreateAsync(target)).Succeeded);
+            Assert.True((await userManager.AddToRoleAsync(target, managerRole.Name!)).Succeeded);
+
+            var principal = TestPrincipals.With(
+                Permissions.UsersManage, Permissions.RolesManage, Permissions.AssetsView);
+            var controller = BuildController(db, tenantId, principal, userManager);
+
+            var result = await controller.UpdateUser("manager-1", new UpdateUserDto { Role = "Basic" });
+
+            var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var body = Assert.IsType<ApiResponse<UserDto>>(bad.Value);
+            Assert.False(body.Success);
+
+            var roles = await userManager.GetRolesAsync(target);
+            Assert.Contains("RoleManager", roles);
+            Assert.DoesNotContain("Basic", roles);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteUser_DeactivatingTheLastRolesManageHolder_IsRejected()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var managerRole = await SeedCustomRoleAsync(db, tenantId, "RoleManager2", [Permissions.RolesManage]);
+
+            var userManager = CreateUserManager(db);
+            var target = new ApplicationUser
+            {
+                Id = "manager-2", UserName = "manager2@test.local", Email = "manager2@test.local",
+                FullName = "Role Manager Two", TenantId = tenantId
+            };
+            Assert.True((await userManager.CreateAsync(target)).Succeeded);
+            Assert.True((await userManager.AddToRoleAsync(target, managerRole.Name!)).Succeeded);
+
+            var principal = TestPrincipals.With(Permissions.UsersManage, Permissions.RolesManage);
+            var controller = BuildController(db, tenantId, principal, userManager);
+
+            var result = await controller.DeleteUser("manager-2");
+
+            var bad = Assert.IsType<BadRequestObjectResult>(result);
+            var body = Assert.IsType<ApiResponse<object>>(bad.Value);
+            Assert.False(body.Success);
+
+            var reloaded = await userManager.FindByIdAsync("manager-2");
+            Assert.True(reloaded!.IsActive);
+        }
+    }
 }

@@ -39,7 +39,9 @@ public class RolesControllerGuardrailTests
     private static RolesController BuildController(
         AppDbContext db, Guid tenantId, ClaimsPrincipal principal, bool isSuperAdmin = false)
     {
-        var controller = new RolesController(db, CreateRoleManager(db), new FakeTenantProvider(tenantId, isSuperAdmin));
+        var controller = new RolesController(
+            db, CreateRoleManager(db), new FakeTenantProvider(tenantId, isSuperAdmin),
+            NullLogger<RolesController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = principal }
@@ -83,6 +85,18 @@ public class RolesControllerGuardrailTests
     private static async Task GrantRoleToUserAsync(AppDbContext db, Guid tenantId, string roleId, string userId)
     {
         await TestDb.SeedUserAsync(db, tenantId, userId, "Role Holder");
+        db.UserRoles.Add(new Microsoft.AspNetCore.Identity.IdentityUserRole<string>
+        {
+            UserId = userId,
+            RoleId = roleId
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task GrantRoleToInactiveUserAsync(AppDbContext db, Guid tenantId, string roleId, string userId)
+    {
+        var user = await TestDb.SeedUserAsync(db, tenantId, userId, "Inactive Role Holder");
+        user.IsActive = false;
         db.UserRoles.Add(new Microsoft.AspNetCore.Identity.IdentityUserRole<string>
         {
             UserId = userId,
@@ -357,6 +371,97 @@ public class RolesControllerGuardrailTests
                 .Where(rp => rp.RoleId == role.Id && rp.TenantId == tenantId)
                 .Select(rp => rp.Permission).ToListAsync();
             Assert.Equal([Permissions.AssetsView], grants);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // IMPORTANT: the iams:roles:manage lockout guard, previously untested (it could be deleted
+    // entirely and the suite stayed green). RolesController.UpdateRole is one of two places that
+    // can strip the tenant's last active role-management coverage - UsersController's paths are
+    // covered in UsersControllerRoleAssignmentTests.
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task UpdateRole_StrippingRolesManageFromTheOnlyCoveringRole_IsRejected()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var role = await SeedCustomRoleAsync(db, tenantId, "RoleManagerOnly", Permissions.RolesManage);
+            await GrantRoleToUserAsync(db, tenantId, role.Id, "holder-1");
+
+            var controller = BuildController(db, tenantId, BuildPrincipal(Permissions.RolesManage));
+
+            var result = await controller.UpdateRole(role.Id, new UpdateRoleDto { Permissions = [] });
+
+            var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var body = Assert.IsType<ApiResponse<RoleDto>>(bad.Value);
+            Assert.False(body.Success);
+
+            var grants = await db.RolePermissions
+                .Where(rp => rp.RoleId == role.Id && rp.TenantId == tenantId)
+                .Select(rp => rp.Permission).ToListAsync();
+            Assert.Equal([Permissions.RolesManage], grants);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateRole_StrippingRolesManage_IsAllowed_WhenAnotherUserHeldRoleStillHasIt()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var roleA = await SeedCustomRoleAsync(db, tenantId, "RoleManagerA", Permissions.RolesManage);
+            var roleB = await SeedCustomRoleAsync(db, tenantId, "RoleManagerB", Permissions.RolesManage);
+            await GrantRoleToUserAsync(db, tenantId, roleA.Id, "holder-a");
+            await GrantRoleToUserAsync(db, tenantId, roleB.Id, "holder-b");
+
+            var controller = BuildController(db, tenantId, BuildPrincipal(Permissions.RolesManage));
+
+            var result = await controller.UpdateRole(roleA.Id, new UpdateRoleDto { Permissions = [] });
+
+            Assert.IsType<OkObjectResult>(result.Result);
+            var grants = await db.RolePermissions
+                .Where(rp => rp.RoleId == roleA.Id && rp.TenantId == tenantId)
+                .ToListAsync();
+            Assert.Empty(grants);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateRole_StrippingRolesManage_IsRejected_WhenTheOnlyOtherHolderIsInactive()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var roleA = await SeedCustomRoleAsync(db, tenantId, "RoleManagerA2", Permissions.RolesManage);
+            var roleB = await SeedCustomRoleAsync(db, tenantId, "RoleManagerB2", Permissions.RolesManage);
+            await GrantRoleToUserAsync(db, tenantId, roleA.Id, "holder-a2");
+            // The only OTHER role holding the grant is held solely by an inactive user - AuthController
+            // blocks inactive users from logging in, so this role's coverage cannot actually be used.
+            await GrantRoleToInactiveUserAsync(db, tenantId, roleB.Id, "holder-b2-inactive");
+
+            var controller = BuildController(db, tenantId, BuildPrincipal(Permissions.RolesManage));
+
+            var result = await controller.UpdateRole(roleA.Id, new UpdateRoleDto { Permissions = [] });
+
+            var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var body = Assert.IsType<ApiResponse<RoleDto>>(bad.Value);
+            Assert.False(body.Success);
+
+            var grants = await db.RolePermissions
+                .Where(rp => rp.RoleId == roleA.Id && rp.TenantId == tenantId)
+                .Select(rp => rp.Permission).ToListAsync();
+            Assert.Equal([Permissions.RolesManage], grants);
         }
     }
 }

@@ -30,6 +30,16 @@ public class Tenant
     public DateTime? UpdatedAt { get; set; }
     public string? CreatedByUserId { get; set; }
 
+    /// <summary>
+    /// When SeedData.EnsureRolePermissionsAsync last provisioned this tenant's built-in role
+    /// grants. Null means "never provisioned" - the tenant is still eligible for the initial
+    /// backfill. Non-null means provisioning has already happened, so a role holding zero grants
+    /// is a deliberate revocation, not a state to repair. See the doc comment on
+    /// EnsureRolePermissionsAsync for why a per-role "has any grant row" check could not tell the
+    /// two apart.
+    /// </summary>
+    public DateTime? RolePermissionsSeededAt { get; set; }
+
     // Navigation
     public ICollection<ApplicationUser> Users { get; set; } = [];
 }

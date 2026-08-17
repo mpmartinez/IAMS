@@ -170,6 +170,7 @@ public class UsersController(
         if (!actorIsSuperAdmin && existingRoles.Contains(Roles.SuperAdmin))
             return Forbid();
 
+        ApplicationRole? targetRole = null;
         if (dto.Role is not null)
         {
             // The target user's own tenant, not the actor's: a SuperAdmin can edit a user in a
@@ -179,6 +180,32 @@ public class UsersController(
                 db, permissionResolver, User, actorIsSuperAdmin, user.TenantId, dto.Role);
             if (!assignment.Success)
                 return BadRequest(ApiResponse<UserDto>.Fail(assignment.Error!));
+            targetRole = assignment.Role;
+        }
+
+        // Two ways this request can strip the tenant's last active role-management coverage:
+        // moving this user off every role that grants iams:roles:manage, or deactivating them
+        // outright. RolesController.UpdateRole guards the third way (editing a role's own
+        // grants) - this is the same invariant, checked here for the paths only UsersController
+        // can trigger. SuperAdmin actors are exempt, same as everywhere else this invariant is
+        // enforced: they bypass every permission check anyway, so they can always fix it back up.
+        if (!actorIsSuperAdmin)
+        {
+            if (targetRole is not null && !existingRoles.Contains(dto.Role!))
+            {
+                var lockoutError = await RoleManagementLockoutGuard.ForUserRoleChangeAsync(
+                    db, user.TenantId, user.Id, targetRole.Id);
+                if (lockoutError is not null)
+                    return BadRequest(ApiResponse<UserDto>.Fail(lockoutError));
+            }
+
+            if (dto.IsActive == false && user.IsActive)
+            {
+                var lockoutError = await RoleManagementLockoutGuard.ForUserDeactivationAsync(
+                    db, user.TenantId, user.Id);
+                if (lockoutError is not null)
+                    return BadRequest(ApiResponse<UserDto>.Fail(lockoutError));
+            }
         }
 
         if (dto.Email is not null && dto.Email != user.Email)
@@ -237,8 +264,19 @@ public class UsersController(
 
         // Verify tenant access
         var tenantId = tenantProvider.GetCurrentTenantId();
-        if (!tenantProvider.IsSuperAdmin() && tenantId.HasValue && user.TenantId != tenantId.Value)
+        var actorIsSuperAdmin = tenantProvider.IsSuperAdmin();
+        if (!actorIsSuperAdmin && tenantId.HasValue && user.TenantId != tenantId.Value)
             return NotFound();
+
+        // Same invariant UpdateUser enforces on its deactivation path: a soft delete must not
+        // remove the tenant's last active role-management coverage.
+        if (!actorIsSuperAdmin && user.IsActive)
+        {
+            var lockoutError = await RoleManagementLockoutGuard.ForUserDeactivationAsync(
+                db, user.TenantId, user.Id);
+            if (lockoutError is not null)
+                return BadRequest(ApiResponse<object>.Fail(lockoutError));
+        }
 
         // Soft delete
         user.IsActive = false;

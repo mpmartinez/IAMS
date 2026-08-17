@@ -39,7 +39,9 @@ public class RolesControllerCoverageTests
     private static RolesController BuildController(
         AppDbContext db, Guid tenantId, ClaimsPrincipal principal, bool isSuperAdmin = false)
     {
-        var controller = new RolesController(db, CreateRoleManager(db), new FakeTenantProvider(tenantId, isSuperAdmin));
+        var controller = new RolesController(
+            db, CreateRoleManager(db), new FakeTenantProvider(tenantId, isSuperAdmin),
+            NullLogger<RolesController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = principal }

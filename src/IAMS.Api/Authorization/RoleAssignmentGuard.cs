@@ -67,6 +67,23 @@ public static class RoleAssignmentGuard
         if (actorIsSuperAdmin) return Result.Ok(role);
 
         var roleGrants = await permissionResolver.GetPermissionsAsync([roleName], tenantId, ct);
+
+        // An empty resolved grant set is not "harmless" just because an empty set is trivially a
+        // subset of anything below - it is step 2 of a three-step escalation: PUT /api/roles/{id}
+        // with {"permissions": []} (Validate only caps additions, so emptying passes), then
+        // assign that now-zero-grant role to yourself, then let SeedData's startup
+        // re-provisioning treat the tenant as "never provisioned" and silently restore every
+        // default grant to it. Built-in roles ship with non-empty defaults (see
+        // Permissions.DefaultsFor) and are never legitimately empty, so refuse to assign one that
+        // resolves to zero grants. Custom roles are excluded from this check: a tenant admin may
+        // deliberately create or edit a custom role down to zero permissions as a placeholder, and
+        // that role isn't reachable by SeedData's re-provisioning at all (it only touches
+        // IsBuiltIn roles), so it carries none of this chain's risk.
+        if (role.IsBuiltIn && roleGrants.Count == 0)
+            return Result.Fail(
+                $"The \"{roleName}\" role has no permissions configured in this tenant and cannot be " +
+                "assigned to anyone. Set its permissions first.");
+
         var grantable = RolesController.GrantableKeys(actor, actorIsSuperAdmin);
         var overreach = roleGrants.Where(p => !grantable.Contains(p)).ToList();
         if (overreach.Count > 0)
