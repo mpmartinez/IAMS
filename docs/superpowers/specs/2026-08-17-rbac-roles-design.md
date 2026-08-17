@@ -40,17 +40,22 @@ Rationale: a permission is only real if some policy checks it. A DB-stored catal
 the policies exactly the way the Users dropdown drifted from `Roles.TenantAssignable`. Code is the
 single source of truth for what permissions exist; the database owns who has them.
 
+Keys follow the `iams:resource:action` convention **already present in the codebase** — see
+`PermissionView` usages at `MainLayout.razor:75` and `Pages/Assets/View.razor:65`, and the comments at
+`AssetsController.cs:84,155,224,287` and `UsersController.cs:235`. Adopting the existing convention
+rather than introducing a second one is the whole point of this document.
+
 | Group | Keys |
 |---|---|
-| Assets | `assets.view`, `assets.create`, `assets.edit`, `assets.delete`, `assets.import`, `assets.tags.debug` |
-| Assignments | `assignments.view`, `assignments.assign`, `assignments.return` |
-| Tickets | `tickets.file`, `tickets.queue.view`, `tickets.queue.manage` |
-| Reports | `reports.view` |
-| Users | `users.view`, `users.manage`, `users.list` |
-| Roles | `roles.view`, `roles.manage` |
-| Attachments | `attachments.manage` |
-| Warranty | `warranty.manage`, `warranty.delete` |
-| Notifications | `notifications.test` |
+| Assets | `iams:assets:view`, `iams:assets:create`, `iams:assets:edit`, `iams:assets:delete`, `iams:assets:import`, `iams:assets:debug` |
+| Assignments | `iams:assignments:view`, `iams:assignments:assign`, `iams:assignments:return` |
+| Tickets | `iams:tickets:file`, `iams:tickets:queue`, `iams:tickets:manage` |
+| Reports | `iams:reports:view` |
+| Users | `iams:users:view`, `iams:users:manage`, `iams:users:read` |
+| Roles | `iams:roles:view`, `iams:roles:manage` |
+| Attachments | `iams:attachments:manage` |
+| Warranty | `iams:warranty:manage`, `iams:warranty:delete` |
+| Notifications | `iams:notifications:test` |
 
 Platform-level endpoints stay on `RequireRole("SuperAdmin")` and are deliberately absent from the
 catalog: `TenantsController` (whole controller) and `LookupsController` write actions. They are not
@@ -106,29 +111,31 @@ SuperAdmin keeps its existing bypass and is not permission-resolved.
 `PermissionRequirement` plus an `AuthorizationHandler` that succeeds when either:
 
 - the user is in role `SuperAdmin` (existing bypass, unchanged), or
-- the user holds a `perm` claim whose value equals the required key.
+- the user holds a `permission` claim whose value equals the required key.
+
+The claim type is `permission`, matching what `PermissionView.razor:33` already reads.
 
 ### Policies redefined (no controller edits)
 
 | Policy | Now requires |
 |---|---|
-| `CanCreateAssets` | `assets.create` |
-| `CanEditAssets` | `assets.edit` |
-| `CanDeleteAssets` | `assets.delete` |
-| `CanManageAssets` | `assets.edit` |
-| `CanViewReports` | `reports.view` |
-| `CanAssignAssets` | `assignments.assign` |
-| `CanReturnAssets` | `assignments.return` |
-| `CanViewAssignments` | `assignments.view` |
-| `CanFileTickets` | `tickets.file` |
-| `CanViewUsersList` | `users.list` |
-| `Admin` | `assets.tags.debug` (its only call site, `AssetsController.cs:459`) |
+| `CanCreateAssets` | `iams:assets:create` |
+| `CanEditAssets` | `iams:assets:edit` |
+| `CanDeleteAssets` | `iams:assets:delete` |
+| `CanManageAssets` | `iams:assets:edit` |
+| `CanViewReports` | `iams:reports:view` |
+| `CanAssignAssets` | `iams:assignments:assign` |
+| `CanReturnAssets` | `iams:assignments:return` |
+| `CanViewAssignments` | `iams:assignments:view` |
+| `CanFileTickets` | `iams:tickets:file` |
+| `CanViewUsersList` | `iams:users:read` |
+| `Admin` | `iams:assets:debug` (its only call site, `AssetsController.cs:459`) |
 
 ### Import split out
 
 `AssetsController.cs:243` (bulk `.xlsx` import) currently shares `CanCreateAssets` with single-asset
-creation. It moves to `assets.import` so a tenant can allow one without the other. Defaults grant
-`assets.import` to exactly the roles that hold `assets.create`, so no one loses access.
+creation. It moves to `iams:assets:import` so a tenant can allow one without the other. Defaults grant
+`iams:assets:import` to exactly the roles that hold `iams:assets:create`, so no one loses access.
 
 ### `Staff` policy retired
 
@@ -137,9 +144,9 @@ creation. It moves to `assets.import` so a tenant can allow one without the othe
 permission would weld "can see assets" to "can work the ticket queue", making the two permanently
 inseparable for every tenant. The policy is removed and its eight call sites set explicitly:
 
-- `AssetsController.cs:23`, `:72` → `assets.view`
-- `TicketsController.cs:42`, `:72` → `tickets.queue.view`
-- `TicketsController.cs:159`, `:171`, `:183`, `TicketAttachmentsController.cs:173` → `tickets.queue.manage`
+- `AssetsController.cs:23`, `:72` → `iams:assets:view`
+- `TicketsController.cs:42`, `:72` → `iams:tickets:queue`
+- `TicketsController.cs:159`, `:171`, `:183`, `TicketAttachmentsController.cs:173` → `iams:tickets:manage`
 
 ### Role attributes converted
 
@@ -147,12 +154,12 @@ Ten `[Authorize(..., Roles = "...")]` attributes become policies:
 
 | Site | Policy requires |
 |---|---|
-| `UsersController.cs:23`, `:129` | `users.view` |
-| `UsersController.cs:73`, `:148`, `:215` | `users.manage` |
-| `AttachmentsController.cs:75`, `:172` | `attachments.manage` |
-| `WarrantyAlertsController.cs:100`, `:130` | `warranty.manage` |
-| `WarrantyAlertsController.cs:158` | `warranty.delete` |
-| `NotificationsController.cs:144` | `notifications.test` |
+| `UsersController.cs:23`, `:129` | `iams:users:view` |
+| `UsersController.cs:73`, `:148`, `:215` | `iams:users:manage` |
+| `AttachmentsController.cs:75`, `:172` | `iams:attachments:manage` |
+| `WarrantyAlertsController.cs:100`, `:130` | `iams:warranty:manage` |
+| `WarrantyAlertsController.cs:158` | `iams:warranty:delete` |
+| `NotificationsController.cs:144` | `iams:notifications:test` |
 
 ### Left alone
 
@@ -161,8 +168,20 @@ here but not touched; removing them is unrelated cleanup.
 
 ## Token and Staleness
 
-`TokenService.GenerateTokenAsync` resolves the user's permissions and emits one `perm` claim per
+`TokenService.GenerateTokenAsync` resolves the user's permissions and emits one `permission` claim per
 permission. At most 22 short claims, roughly 400 bytes of token growth.
+
+`AuthStateProvider.GetAuthenticationStateAsync` must copy those `permission` claims out of the JWT
+into the `ClaimsIdentity` it builds, alongside the role claims it already copies at lines 59-72.
+Without that step the API would enforce permissions the UI cannot see.
+
+**Query-filter trap.** `RolePermission` must **not** get a global query filter, and every read must
+filter `TenantId` explicitly. `TokenService` runs during login, when the HTTP context is still
+unauthenticated, so `TenantProvider.GetCurrentTenantId()` returns null and `IsSuperAdmin()` returns
+false. EF evaluates the filter's provider call eagerly into a query parameter, so the
+`_tenantProvider == null` guard does not short-circuit (see the comment in `tests/IAMS.Api.Tests/TestDb.cs:21-26`).
+A filtered `RolePermission` would therefore match zero rows at login and hand every user an empty
+permission set.
 
 Staleness is handled differently by blast radius:
 
@@ -216,14 +235,24 @@ New page, gated on `roles.view`. Follows the `Pages/Admin/Lookups.razor` pattern
 The role `<select>` is fed from `GET /api/roles/assignable`, removing the hand-maintained option list
 and its drift comment at line 176.
 
-### `PermissionView` component
+### `PermissionView` component (already exists — must be fixed)
 
-```razor
-<PermissionView Permission="assets.view">...</PermissionView>
-```
+`src/IAMS.Web/Shared/PermissionView.razor` already exists and already reads a `permission` claim. It is
+**modified, not created**.
 
-Reads `perm` claims from the existing authentication state, so it needs no extra call and continues to
-work offline in the PWA. Replaces the hard-coded role lists in `MainLayout.razor` nav entries and in
+Today nothing emits a `permission` claim, so the check on line 33 always fails and the component falls
+through to `user.IsInRole("Admin")` on line 38. Two consequences:
+
+- The Reports nav link (`MainLayout.razor:75`, `iams:reports:view`) is Admin-only today, even though
+  `CanViewReports` also grants Auditor. Auditors cannot see a link to a page they may open.
+- The asset delete button (`Pages/Assets/View.razor:65`, `iams:assets:delete`) is Admin-only, which
+  matches `CanDeleteAssets` by coincidence rather than design.
+
+The `IsInRole("Admin")` fallback must be **removed** once real claims are emitted. Left in place it
+would grant every Admin every permission regardless of what their tenant configured, which defeats the
+feature. Both existing call sites keep working unchanged, because the keys they use are in the catalog.
+
+The component then replaces the hard-coded role lists in `MainLayout.razor` nav entries and in
 page-level `[Authorize(Roles = "...")]` attributes.
 
 ## Testing
@@ -250,6 +279,20 @@ In `tests/IAMS.Api.Tests`, using the existing SQLite-backed `TestDb` and `FakeTe
 7. `PermissionView`, `MainLayout` and page guard conversion.
 8. `/admin/roles` page.
 9. `Users.razor` dropdown from the API.
+
+## Pre-existing State Discovered During Planning
+
+The repo already contains a half-built version of this feature, which this design absorbs rather than
+duplicates:
+
+- `src/IAMS.Web/Shared/PermissionView.razor` — reads a `permission` claim nothing emits.
+- Two live call sites using `iams:reports:view` and `iams:assets:delete`.
+- Comments at `AssetsController.cs:84,155,224,287` and `UsersController.cs:235` naming
+  `iams:assets:create`, `iams:assets:edit`, `iams:assets:delete`, `iams:reports:view`,
+  `iams:users:read`.
+
+The catalog above uses exactly this naming so the existing artifacts become correct instead of being
+superseded.
 
 ## Notes
 
