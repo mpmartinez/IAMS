@@ -1,3 +1,4 @@
+using IAMS.Api.Authorization;
 using IAMS.Api.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -273,5 +274,69 @@ public static class SeedData
             defaultTenant.CurrentAssetCount = assets.Length;
             await db.SaveChangesAsync();
         }
+
+        // Backfill grants for every tenant, including ones created before this feature existed.
+        var tenantIds = await db.Tenants.IgnoreQueryFilters().Select(t => t.Id).ToListAsync();
+        foreach (var id in tenantIds)
+            await EnsureRolePermissionsAsync(db, id);
+    }
+
+    /// <summary>
+    /// Ensures every built-in role holds its default grants in this tenant.
+    ///
+    /// Additive and idempotent on purpose: it inserts what is missing and never deletes. A tenant
+    /// that unticks a permission must keep it unticked across restarts, so "missing row" is a
+    /// legitimate customisation, not drift to repair.
+    ///
+    /// Known limitation: because a role with any grant counts as provisioned, a permission added
+    /// to the catalog in a later release does not reach tenants that already exist - an admin must
+    /// tick it on each one. Fixing that needs a marker distinguishing "never provisioned" from
+    /// "provisioned then revoked"; per-key insertion is not the fix, since it would resurrect every
+    /// permission a tenant deliberately revoked on the next restart.
+    /// </summary>
+    public static async Task EnsureRolePermissionsAsync(AppDbContext db, Guid tenantId)
+    {
+        var builtInRoles = await db.Roles
+            .Where(r => r.IsBuiltIn && r.Name != null)
+            .Select(r => new { r.Id, r.Name })
+            .ToListAsync();
+
+        if (builtInRoles.Count == 0) return;
+
+        var roleIds = builtInRoles.Select(r => r.Id).ToList();
+
+        // One round trip for everything already granted in this tenant.
+        var existing = (await db.RolePermissions
+                .Where(rp => rp.TenantId == tenantId && roleIds.Contains(rp.RoleId))
+                .Select(rp => new { rp.RoleId, rp.Permission })
+                .ToListAsync())
+            .Select(x => (x.RoleId, x.Permission))
+            .ToHashSet();
+
+        // A tenant that has any grant for a role has already been provisioned; leaving it alone
+        // is what stops a revoked permission from reappearing.
+        var provisioned = existing.Select(e => e.RoleId).ToHashSet();
+
+        var toAdd = new List<RolePermission>();
+        foreach (var role in builtInRoles)
+        {
+            if (provisioned.Contains(role.Id)) continue;
+
+            foreach (var permission in Permissions.DefaultsFor(role.Name!))
+            {
+                toAdd.Add(new RolePermission
+                {
+                    Id = Guid.NewGuid(),
+                    RoleId = role.Id,
+                    TenantId = tenantId,
+                    Permission = permission
+                });
+            }
+        }
+
+        if (toAdd.Count == 0) return;
+
+        db.RolePermissions.AddRange(toAdd);
+        await db.SaveChangesAsync();
     }
 }
