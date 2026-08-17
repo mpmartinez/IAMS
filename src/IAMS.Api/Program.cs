@@ -233,8 +233,38 @@ using (var scope = app.Services.CreateScope())
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
 
-    db.Database.Migrate();
-    await SeedData.Initialize(db, userManager, roleManager);
+    // With more than one replica booting together, two instances can both see "not migrated /
+    // not seeded" and race: EnsureRolePermissionsAsync is check-then-act on
+    // Tenant.RolePermissionsSeededAt, so the loser's insert trips the unique index and
+    // DbUpdateException escapes SeedData.Initialize, and that instance never reaches app.Run() -
+    // a crash-loop. A Postgres session-level advisory lock around the whole migrate+seed block
+    // serializes replicas: the second one blocks here until the first finishes and commits, then
+    // finds the marker already set and does nothing.
+    //
+    // Deliberately held here, not inside SeedData itself - SeedData.EnsureRolePermissionsAsync is
+    // also called directly by the test suite (SQLite, no advisory locks) and by
+    // TenantsController when a single tenant is created at runtime, neither of which need or can
+    // use this.
+    const long MigrateAndSeedLockKey = 851917;
+
+    await db.Database.OpenConnectionAsync();
+    try
+    {
+        await db.Database.ExecuteSqlRawAsync($"SELECT pg_advisory_lock({MigrateAndSeedLockKey})");
+        try
+        {
+            await db.Database.MigrateAsync();
+            await SeedData.Initialize(db, userManager, roleManager);
+        }
+        finally
+        {
+            await db.Database.ExecuteSqlRawAsync($"SELECT pg_advisory_unlock({MigrateAndSeedLockKey})");
+        }
+    }
+    finally
+    {
+        await db.Database.CloseConnectionAsync();
+    }
 }
 
 if (app.Environment.IsDevelopment())
