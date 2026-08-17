@@ -4,10 +4,11 @@
 @inject ApiClient Api
 @inject NavigationManager Navigation
 @inject SnackbarService Snackbar
+@inject PermissionChecker PermissionChecker
 
 <PageTitle>Offboarding - IAMS</PageTitle>
 
-<PermissionView Permission="iams:assignments:return">
+<PermissionView Permission="iams:assignments:return" ShowDeniedMessage="true">
 <div class="max-w-4xl mx-auto space-y-6">
     <!-- Header -->
     <div class="flex items-center gap-4">
@@ -260,13 +261,34 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Matches the page's PermissionView gate above. OnInitializedAsync runs regardless of
+        // what PermissionView renders, so without this check a denied user's browser would still
+        // fire GetOffboardingSummaryAsync (which throws on the resulting 403) behind a
+        // blank/denied page.
+        if (!await PermissionChecker.HasPermissionAsync("iams:assignments:return"))
+        {
+            _loading = false;
+            return;
+        }
+
         await LoadData();
     }
 
     private async Task LoadData()
     {
         _loading = true;
-        _offboarding = await Api.GetOffboardingSummaryAsync(UserId);
+        try
+        {
+            // GetOffboardingSummaryAsync hits an endpoint gated on iams:assignments:view, which
+            // is a different permission from this page's iams:assignments:return gate. A role
+            // holding return-but-not-view would otherwise 403 here; fail soft into the existing
+            // "user not found"-style empty state below rather than throwing an unhandled error.
+            _offboarding = await Api.GetOffboardingSummaryAsync(UserId);
+        }
+        catch
+        {
+            _offboarding = null;
+        }
         _loading = false;
     }
 

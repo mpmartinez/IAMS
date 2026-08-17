@@ -11,7 +11,7 @@
 
 <PageTitle>@(IsNew ? "Add Asset" : "Edit Asset") - IAMS</PageTitle>
 
-<PermissionView Permission="@(IsNew ? "iams:assets:create" : "iams:assets:edit")">
+<PermissionView Permission="@(IsNew ? "iams:assets:create" : "iams:assets:edit")" ShowDeniedMessage="true">
 <div class="max-w-3xl mx-auto space-y-4 sm:space-y-6">
     <!-- Header -->
     <div class="flex items-center gap-3 sm:gap-4">
@@ -457,7 +457,19 @@
         // built-in fallback covers a failed fetch - an empty dropdown is worse than one
         // showing the defaults.
         _currencies = await Api.GetCurrenciesAsync() is { Length: > 0 } fetched ? fetched : ["PHP", "USD"];
-        _users = await Api.GetUserListAsync();
+
+        // GetUserListAsync hits an endpoint gated on iams:users:read, a different permission from
+        // this page's create/edit gate. A role holding only asset create/edit would otherwise 403
+        // here; fail soft and leave the "Assigned To" list empty rather than throwing an
+        // unhandled error over an otherwise-usable form.
+        try
+        {
+            _users = await Api.GetUserListAsync();
+        }
+        catch
+        {
+            _users = null;
+        }
 
         if (!IsNew)
         {

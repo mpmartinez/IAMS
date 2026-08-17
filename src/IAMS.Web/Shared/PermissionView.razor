@@ -1,14 +1,46 @@
-@using Microsoft.AspNetCore.Components.Authorization
-@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject PermissionChecker PermissionChecker
 
 @if (_hasPermission)
 {
     @ChildContent
 }
+else if (ShowDeniedMessage)
+{
+    @(NotPermitted ?? DefaultNotPermitted)
+}
 
 @code {
     [Parameter] public string Permission { get; set; } = "";
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Opt in for page-level gates that wrap a whole page's content: renders
+    /// <see cref="NotPermitted"/> (or <see cref="DefaultNotPermitted"/>) when the permission
+    /// check fails, instead of nothing.
+    ///
+    /// Left false (the default) for the far more common inline usage - gating a single control
+    /// such as a button or a table cell in the middle of a page the user IS allowed to see. Those
+    /// must stay silent on denial: rendering an error message in place of a hidden button would
+    /// punch a hole in an otherwise-normal page. Only page-level callers, which wrap the entire
+    /// routable page and have no other content around them, should set this to true.
+    /// </summary>
+    [Parameter] public bool ShowDeniedMessage { get; set; }
+
+    /// <summary>
+    /// Optional override for the denied message. Only rendered when <see cref="ShowDeniedMessage"/>
+    /// is true. Defaults to <see cref="DefaultNotPermitted"/>, which matches the wording and visual
+    /// treatment of App.razor's "not authenticated" NotAuthorized fragment so both denial states
+    /// look like the same app.
+    /// </summary>
+    [Parameter] public RenderFragment? NotPermitted { get; set; }
+
+    private static readonly RenderFragment DefaultNotPermitted = builder =>
+    {
+        builder.OpenElement(0, "p");
+        builder.AddAttribute(1, "class", "text-center py-8 text-slate-600");
+        builder.AddContent(2, "You are not authorized to view this page.");
+        builder.CloseElement();
+    };
 
     private bool _hasPermission;
 
@@ -24,17 +56,6 @@
 
     private async Task CheckPermission()
     {
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-
-        if (user.Identity?.IsAuthenticated != true)
-        {
-            _hasPermission = false;
-            return;
-        }
-
-        // SuperAdmin bypasses authorisation on the API, so it must bypass here too or the UI
-        // would hide controls that would in fact work.
-        _hasPermission = user.IsInRole("SuperAdmin") || user.HasClaim("permission", Permission);
+        _hasPermission = await PermissionChecker.HasPermissionAsync(Permission);
     }
 }

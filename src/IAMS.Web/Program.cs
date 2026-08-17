@@ -15,6 +15,7 @@ builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuthenticationStateProvider, AuthStateProvider>();
 builder.Services.AddAuthorizationCore();
+builder.Services.AddScoped<PermissionChecker>();
 
 // API Client
 builder.Services.AddScoped<ApiClient>();

@@ -4,10 +4,11 @@
 @inject ApiClient Api
 @inject NavigationManager Navigation
 @inject SnackbarService Snackbar
+@inject PermissionChecker PermissionChecker
 
 <PageTitle>Users - IAMS</PageTitle>
 
-<PermissionView Permission="iams:users:view">
+<PermissionView Permission="iams:users:view" ShowDeniedMessage="true">
 <div class="space-y-6">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -15,12 +16,17 @@
             <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Users</h1>
             <p class="text-slate-500 dark:text-slate-400 mt-1">Manage system users and roles</p>
         </div>
-        <button @onclick="OpenAddModal" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            Add User
-        </button>
+        <PermissionView Permission="iams:users:manage">
+            @if (_assignableRoles is not null)
+            {
+                <button @onclick="OpenAddModal" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add User
+                </button>
+            }
+        </PermissionView>
     </div>
 
     <!-- Search -->
@@ -96,18 +102,20 @@
                                     }
                                 </td>
                                 <td class="py-4 px-4">
-                                    <div class="flex items-center justify-end gap-2">
-                                        <button @onclick="() => OpenEditModal(user)" class="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors" title="Edit">
-                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                        </button>
-                                        <button @onclick="() => OpenDeleteModal(user)" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Deactivate">
-                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </button>
-                                    </div>
+                                    <PermissionView Permission="iams:users:manage">
+                                        <div class="flex items-center justify-end gap-2">
+                                            <button @onclick="() => OpenEditModal(user)" class="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors" title="Edit">
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                            </button>
+                                            <button @onclick="() => OpenDeleteModal(user)" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Deactivate">
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </PermissionView>
                                 </td>
                             </tr>
                         }
@@ -269,8 +277,30 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _assignableRoles = await Api.GetAssignableRolesAsync();
+        if (!await PermissionChecker.HasPermissionAsync("iams:users:view"))
+        {
+            _loading = false;
+            return;
+        }
+
+        // Load the primary content first. GetAssignableRolesAsync hits an endpoint gated on
+        // iams:users:manage - a separate permission from this page's iams:users:view gate - so a
+        // view-only role would otherwise 403 here and, because GetFromJsonAsync throws on a
+        // non-success status, never reach LoadUsers() at all.
         await LoadUsers();
+
+        try
+        {
+            _assignableRoles = await Api.GetAssignableRolesAsync();
+        }
+        catch
+        {
+            // View-only roles (or a transient failure) leave this null. The Add User control is
+            // gated on iams:users:manage and hidden when the list didn't load (see markup below),
+            // and the Edit modal's role <select> already falls back to showing the user's current
+            // role as its only option when _assignableRoles is null.
+            _assignableRoles = null;
+        }
     }
 
     private async Task LoadUsers()

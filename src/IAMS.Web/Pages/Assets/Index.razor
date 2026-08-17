@@ -3,10 +3,11 @@
 @attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Navigation
+@inject PermissionChecker PermissionChecker
 
 <PageTitle>Assets - IAMS</PageTitle>
 
-<PermissionView Permission="iams:assets:view">
+<PermissionView Permission="iams:assets:view" ShowDeniedMessage="true">
 <div class="space-y-4 sm:space-y-6">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -315,6 +316,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Matches the page's PermissionView gate above. OnInitializedAsync runs regardless of
+        // what PermissionView renders, so without this check a denied user's browser would still
+        // fire GetAssetsAsync (which throws on the resulting 403) behind a blank/denied page.
+        if (!await PermissionChecker.HasPermissionAsync("iams:assets:view"))
+        {
+            _loading = false;
+            return;
+        }
+
         _deviceTypes = await Api.GetDeviceTypesAsync();
         _statuses = await Api.GetStatusesAsync();
         await LoadAssets();

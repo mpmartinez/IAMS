@@ -7,6 +7,7 @@
 @inject NotificationService Notifications
 @inject ThemeService Theme
 @inject IJSRuntime JS
+@inject PermissionChecker PermissionChecker
 @using IAMS.Web.Components
 @implements IAsyncDisposable
 
@@ -57,15 +58,18 @@
                     <NavItem Href="/categories" Icon="tag" Label="Categories" OnNavigation="CloseMobileMenu" />
                 </PermissionView>
 
-                <PermissionView Permission="iams:users:view">
+                @if (_showAdminGroup)
+                {
                     <div class="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
                         <p class="px-3 mb-2 text-xs font-medium text-slate-400 uppercase tracking-wider">Admin</p>
-                        <NavItem Href="/users" Icon="users" Label="Users" OnNavigation="CloseMobileMenu" />
+                        <PermissionView Permission="iams:users:view">
+                            <NavItem Href="/users" Icon="users" Label="Users" OnNavigation="CloseMobileMenu" />
+                        </PermissionView>
                         <PermissionView Permission="iams:roles:view">
                             <NavItem Href="/admin/roles" Icon="users" Label="Roles" OnNavigation="CloseMobileMenu" />
                         </PermissionView>
                     </div>
-                </PermissionView>
+                }
 
                 <AuthorizeView Roles="SuperAdmin">
                     <div class="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
@@ -490,6 +494,7 @@
 
 @code {
     private bool _mobileMenuOpen;
+    private bool _showAdminGroup;
     private int _alertCount;
     private bool _showChangePassword;
     private SyncStatus? _syncStatus;
@@ -512,6 +517,12 @@
 
         // Subscribe to authentication failure events
         Api.OnAuthenticationFailed += OnAuthenticationFailedAsync;
+
+        // The "Admin" heading should show whenever either link under it would show - a role
+        // holding only iams:roles:view (and not iams:users:view) still needs somewhere to reach
+        // /admin/roles, and a bare heading with no links under it would look broken.
+        _showAdminGroup = await PermissionChecker.HasPermissionAsync("iams:users:view")
+            || await PermissionChecker.HasPermissionAsync("iams:roles:view");
 
         await LoadAlertCount();
 
