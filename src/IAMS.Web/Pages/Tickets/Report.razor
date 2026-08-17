@@ -51,7 +51,7 @@
         }
 
         <div class="space-y-3">
-            <button @onclick='() => SelectType(Incident)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
+            <button @onclick='() => SelectChoice(Incident, CategoryHardware)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
                 <div class="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
                     <svg class="w-7 h-7 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -66,7 +66,22 @@
                 </svg>
             </button>
 
-            <button @onclick='() => SelectType(Request)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
+            <button @onclick='() => SelectChoice(Incident, CategorySoftware)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
+                <div class="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+                    <svg class="w-7 h-7 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <p class="text-base font-semibold text-slate-900 dark:text-white">Software or system problem</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">An app or system isn't working</p>
+                </div>
+                <svg class="w-5 h-5 text-slate-300 dark:text-slate-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
+
+            <button @onclick='() => SelectChoice(Request, CategoryHardware)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
                 <div class="w-14 h-14 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
                     <svg class="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -81,7 +96,22 @@
                 </svg>
             </button>
 
-            <button @onclick='() => SelectType(SecurityEvent)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
+            <button @onclick='() => SelectChoice(Request, CategoryAccess)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
+                <div class="w-14 h-14 rounded-2xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
+                    <svg class="w-7 h-7 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <p class="text-base font-semibold text-slate-900 dark:text-white">Request access or account</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Password reset, or access to a system</p>
+                </div>
+                <svg class="w-5 h-5 text-slate-300 dark:text-slate-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
+
+            <button @onclick='() => SelectChoice(SecurityEvent, CategorySecurity)' class="w-full flex items-center gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-700 hover:shadow-lg transition-all duration-200 btn-press text-left">
                 <div class="w-14 h-14 rounded-2xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
                     <svg class="w-7 h-7 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01" />
@@ -128,7 +158,7 @@
                 </div>
             }
 
-            @if (_type != Request)
+            @if (AssetPickerApplies)
             {
                 <div class="space-y-1.5">
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -290,6 +320,13 @@
     private const string Request = "Request";
     private const string SecurityEvent = "SecurityEvent";
 
+    private const string CategoryHardware = "Hardware";
+    private const string CategorySoftware = "Software";
+    private const string CategoryAccess = "Access";
+    private const string CategorySecurity = "Security";
+
+    private string? _category;
+
     // Mirrors IAMS.Api.Entities.TicketAttachmentCategories.Other, for the same reason as above.
     private const string TicketAttachmentCategoryOther = "Other";
 
@@ -377,11 +414,24 @@
         }
     }
 
-    private void SelectType(string type)
+    /// <summary>
+    /// Each choice carries both a type and a category. Type drives behaviour - Request is what
+    /// fulfilment acts on, SecurityEvent forces the priority floor - while category is what an
+    /// IT officer reports on, and is the reason software and access requests are visible at all.
+    /// </summary>
+    private void SelectChoice(string type, string category)
     {
         _type = type;
+        _category = category;
         _error = null;
     }
+
+    /// <summary>
+    /// Anything but a Request can name an asset. A software fault still happens on a
+    /// particular machine, and a lost-device report is entirely about which device - only a
+    /// request for equipment has nothing to point at yet, because the thing does not exist.
+    /// </summary>
+    private bool AssetPickerApplies => _type != Request;
 
     private void ClearAsset()
     {
@@ -525,9 +575,10 @@
         var request = new CreateTicketRequest
         {
             Type = _type!,
+            Category = _category!,
             Title = _title.Trim(),
             Description = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
-            AssetId = _type == Request ? null : _linkedAssetId
+            AssetId = AssetPickerApplies ? _linkedAssetId : null
         };
 
         var (success, ticket, error) = await Api.CreateTicketAsync(request);
@@ -594,6 +645,7 @@
     {
         _created = null;
         _type = null;
+        _category = null;
         _title = "";
         _description = "";
         _error = null;
