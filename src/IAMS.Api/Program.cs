@@ -152,6 +152,7 @@ builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<ITicketNumberAllocator, TicketNumberAllocator>();
 builder.Services.AddScoped<ITicketService, TicketService>();
 builder.Services.AddScoped<ILookupService, LookupService>();
+builder.Services.AddScoped<IPermissionResolver, PermissionResolver>();
 
 // Background Services
 builder.Services.AddHostedService<WarrantyCheckService>();
