@@ -61,6 +61,9 @@
                     <div class="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
                         <p class="px-3 mb-2 text-xs font-medium text-slate-400 uppercase tracking-wider">Admin</p>
                         <NavItem Href="/users" Icon="users" Label="Users" OnNavigation="CloseMobileMenu" />
+                        <PermissionView Permission="iams:roles:view">
+                            <NavItem Href="/admin/roles" Icon="users" Label="Roles" OnNavigation="CloseMobileMenu" />
+                        </PermissionView>
                     </div>
                 </AuthorizeView>
 
