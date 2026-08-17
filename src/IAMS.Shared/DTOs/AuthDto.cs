@@ -38,3 +38,12 @@ public record ResetPasswordDto
     public required string Token { get; init; }
     public required string NewPassword { get; init; }
 }
+
+// Deliberately narrower than UpdateUserDto: Role, Email, IsActive and TenantId are absent from
+// this contract, so a crafted payload has nothing to bind to and a user cannot escalate
+// themselves through the self-service endpoint. Do not widen it to share UpdateUserDto.
+public record UpdateProfileDto
+{
+    public required string FullName { get; init; }
+    public string? Department { get; init; }
+}
