@@ -81,19 +81,22 @@ public partial class TicketService : ITicketService
     private readonly ITicketNumberAllocator _numbers;
     private readonly ITenantProvider _tenants;
     private readonly ILogger<TicketService> _logger;
+    private readonly ILookupService _lookups;
 
-    // The logger is optional so the many tests that construct this service directly stay
-    // readable; every composition-root path resolves a real one from DI.
+    // The logger and lookup service are optional so the many tests that construct this
+    // service directly stay readable; every composition-root path resolves real ones from DI.
     public TicketService(
         AppDbContext db,
         ITicketNumberAllocator numbers,
         ITenantProvider tenants,
-        ILogger<TicketService>? logger = null)
+        ILogger<TicketService>? logger = null,
+        ILookupService? lookups = null)
     {
         _db = db;
         _numbers = numbers;
         _tenants = tenants;
         _logger = logger ?? NullLogger<TicketService>.Instance;
+        _lookups = lookups ?? new LookupService(db);
     }
 
     // Raises `priority` to `floor` when it ranks lower, but never lowers a priority that
@@ -105,10 +108,13 @@ public partial class TicketService : ITicketService
         string type, string category, string title, string? description, string priority,
         int? assetId, string requesterUserId, CancellationToken ct = default)
     {
+        // Locked - TicketTypes.Request/SecurityEvent are branched on below and in
+        // TicketService.Fulfilment.cs, so this keeps validating against the constant.
         if (!TicketTypes.IsValid(type))
             return ServiceResult<Ticket>.Fail($"'{type}' is not a valid ticket type.");
 
-        if (!TicketCategory.IsValid(category))
+        // Editable lookup data, not the TicketCategory constant.
+        if (!await _lookups.IsActiveValueAsync(LookupTypes.TicketCategory, category, ct))
             return ServiceResult<Ticket>.Fail($"'{category}' is not a valid ticket category.");
 
         if (string.IsNullOrWhiteSpace(title))
@@ -118,6 +124,8 @@ public partial class TicketService : ITicketService
         if (trimmedTitle.Length > MaxTitleLength)
             return ServiceResult<Ticket>.Fail($"Title cannot exceed {MaxTitleLength} characters.");
 
+        // Locked - the priorities are rank-ordered (PriorityRank above) and High is the
+        // security-event floor, so this keeps validating against the constant.
         if (!TicketPriority.IsValid(priority))
             return ServiceResult<Ticket>.Fail($"'{priority}' is not a valid priority.");
 

@@ -51,6 +51,11 @@ public static class AssetStatus
     public const string Maintenance = "Maintenance";
     public const string Retired = "Retired";
     public const string Lost = "Lost";
+
+    // Locked lookup type (see LookupTypes) - code branches on these exact values, so this
+    // list exists for display/seeding purposes only. Validation sites keep their own literal
+    // array rather than reading this, matching how they validated before lookups existed.
+    public static readonly string[] All = [Available, InUse, Maintenance, Retired, Lost];
 }
 
 public static class DeviceTypes

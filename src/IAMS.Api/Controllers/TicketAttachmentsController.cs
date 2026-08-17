@@ -16,7 +16,8 @@ public class TicketAttachmentsController(
     AppDbContext db,
     IFileStorageService fileStorage,
     ISubscriptionService subscriptionService,
-    ITenantProvider tenantProvider) : ControllerBase
+    ITenantProvider tenantProvider,
+    ILookupService lookups) : ControllerBase
 {
     private string CurrentUserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
     private bool IsStaff => User.IsInRole("Admin") || User.IsInRole("Staff");
@@ -89,10 +90,9 @@ public class TicketAttachmentsController(
         if (!IsStaff && ticket.RequesterUserId != CurrentUserId)
             return Forbid();
 
-        // Validate category
-        if (!TicketAttachmentCategories.IsValid(category))
-            return BadRequest(ApiResponse<TicketAttachmentDto>.Fail(
-                $"Invalid category. Must be one of: {string.Join(", ", TicketAttachmentCategories.All)}"));
+        // Validate category - editable lookup data, not the TicketAttachmentCategories constant.
+        if (!await lookups.IsActiveValueAsync(LookupTypes.TicketAttachmentCategory, category))
+            return BadRequest(ApiResponse<TicketAttachmentDto>.Fail($"'{category}' is not a valid attachment category."));
 
         // Validate file
         if (file is null || file.Length == 0)
@@ -199,7 +199,8 @@ public class TicketAttachmentsController(
     /// </summary>
     [HttpGet("/api/tickets/attachment-categories")]
     [AllowAnonymous]
-    public ActionResult<string[]> GetCategories() => Ok(TicketAttachmentCategories.All);
+    public async Task<ActionResult<string[]>> GetCategories(CancellationToken ct) =>
+        Ok(await lookups.GetActiveValuesAsync(LookupTypes.TicketAttachmentCategory, ct));
 
     private static TicketAttachmentDto MapToDto(TicketAttachment a) => new()
     {

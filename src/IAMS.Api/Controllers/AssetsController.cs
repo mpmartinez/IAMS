@@ -12,7 +12,8 @@ namespace IAMS.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-public class AssetsController(AppDbContext db, IQrCodeService qrCodeService, IAssetImportService importService) : ControllerBase
+public class AssetsController(
+    AppDbContext db, IQrCodeService qrCodeService, IAssetImportService importService, ILookupService lookups) : ControllerBase
 {
     // Staff only. The register carries purchase prices and full assignment history, so
     // browsing it is not something every employee needs. Employees reach exactly one asset
@@ -91,18 +92,20 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService, IAs
                 .Select(e => e.ErrorMessage)
                 .ToList()));
 
-        // Validate device type
-        if (!DeviceTypes.All.Contains(dto.DeviceType))
-            return BadRequest(ApiResponse<AssetDto>.Fail($"Invalid device type. Must be one of: {string.Join(", ", DeviceTypes.All)}"));
+        // Validate device type - editable lookup data, not the DeviceTypes constant.
+        if (!await lookups.IsActiveValueAsync(LookupTypes.DeviceType, dto.DeviceType))
+            return BadRequest(ApiResponse<AssetDto>.Fail($"'{dto.DeviceType}' is not a valid device type."));
 
-        // Validate status
+        // Validate status - locked: AssetStatus.Available/Maintenance/Lost are branched on
+        // elsewhere (fulfilment, resolve-restore, return processing), so this keeps validating
+        // against the constant rather than admin-editable data.
         var validStatuses = new[] { AssetStatus.Available, AssetStatus.InUse, AssetStatus.Maintenance, AssetStatus.Retired, AssetStatus.Lost };
         if (!validStatuses.Contains(dto.Status))
             return BadRequest(ApiResponse<AssetDto>.Fail($"Invalid status. Must be one of: {string.Join(", ", validStatuses)}"));
 
-        // Validate currency
-        if (!Currencies.All.Contains(dto.Currency))
-            return BadRequest(ApiResponse<AssetDto>.Fail($"Invalid currency. Must be one of: {string.Join(", ", Currencies.All)}"));
+        // Validate currency - editable lookup data, not the Currencies constant.
+        if (!await lookups.IsActiveValueAsync(LookupTypes.Currency, dto.Currency))
+            return BadRequest(ApiResponse<AssetDto>.Fail($"'{dto.Currency}' is not a valid currency."));
 
         // Validate warranty dates
         if (dto.WarrantyStartDate.HasValue && dto.WarrantyEndDate.HasValue && dto.WarrantyStartDate > dto.WarrantyEndDate)
@@ -164,18 +167,18 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService, IAs
         if (asset is null)
             return NotFound(ApiResponse<AssetDto>.Fail("Asset not found"));
 
-        // Validate device type if provided
-        if (dto.DeviceType is not null && !DeviceTypes.All.Contains(dto.DeviceType))
-            return BadRequest(ApiResponse<AssetDto>.Fail($"Invalid device type. Must be one of: {string.Join(", ", DeviceTypes.All)}"));
+        // Validate device type if provided - editable lookup data, not the DeviceTypes constant.
+        if (dto.DeviceType is not null && !await lookups.IsActiveValueAsync(LookupTypes.DeviceType, dto.DeviceType))
+            return BadRequest(ApiResponse<AssetDto>.Fail($"'{dto.DeviceType}' is not a valid device type."));
 
-        // Validate status if provided
+        // Validate status if provided - locked, see the same check in CreateAsset.
         var validStatuses = new[] { AssetStatus.Available, AssetStatus.InUse, AssetStatus.Maintenance, AssetStatus.Retired, AssetStatus.Lost };
         if (dto.Status is not null && !validStatuses.Contains(dto.Status))
             return BadRequest(ApiResponse<AssetDto>.Fail($"Invalid status. Must be one of: {string.Join(", ", validStatuses)}"));
 
-        // Validate currency if provided
-        if (dto.Currency is not null && !Currencies.All.Contains(dto.Currency))
-            return BadRequest(ApiResponse<AssetDto>.Fail($"Invalid currency. Must be one of: {string.Join(", ", Currencies.All)}"));
+        // Validate currency if provided - editable lookup data, not the Currencies constant.
+        if (dto.Currency is not null && !await lookups.IsActiveValueAsync(LookupTypes.Currency, dto.Currency))
+            return BadRequest(ApiResponse<AssetDto>.Fail($"'{dto.Currency}' is not a valid currency."));
 
         // Validate warranty dates
         var startDate = dto.WarrantyStartDate ?? asset.WarrantyStartDate;
@@ -266,8 +269,11 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService, IAs
 
     [HttpGet("device-types")]
     [AllowAnonymous]
-    public ActionResult<string[]> GetDeviceTypes() => Ok(DeviceTypes.All);
+    public async Task<ActionResult<string[]>> GetDeviceTypes(CancellationToken ct) =>
+        Ok(await lookups.GetActiveValuesAsync(LookupTypes.DeviceType, ct));
 
+    // Locked - still the AssetStatus constant, not admin-editable data. See the status check
+    // in CreateAsset/UpdateAsset.
     [HttpGet("statuses")]
     [AllowAnonymous]
     public ActionResult<string[]> GetStatuses() =>
@@ -275,7 +281,8 @@ public class AssetsController(AppDbContext db, IQrCodeService qrCodeService, IAs
 
     [HttpGet("currencies")]
     [AllowAnonymous]
-    public ActionResult<string[]> GetCurrencies() => Ok(Currencies.All);
+    public async Task<ActionResult<string[]>> GetCurrencies(CancellationToken ct) =>
+        Ok(await lookups.GetActiveValuesAsync(LookupTypes.Currency, ct));
 
     // Users with iams:reports:view permission can view reports
     [HttpGet("reports/summary")]

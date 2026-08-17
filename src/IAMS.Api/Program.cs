@@ -151,6 +151,7 @@ builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<ITicketNumberAllocator, TicketNumberAllocator>();
 builder.Services.AddScoped<ITicketService, TicketService>();
+builder.Services.AddScoped<ILookupService, LookupService>();
 
 // Background Services
 builder.Services.AddHostedService<WarrantyCheckService>();

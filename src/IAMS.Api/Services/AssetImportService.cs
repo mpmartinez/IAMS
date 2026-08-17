@@ -11,7 +11,7 @@ public interface IAssetImportService
     Task<ImportAssetsResultDto> ImportAsync(Stream xlsxStream, CancellationToken ct = default);
 }
 
-public class AssetImportService(AppDbContext db, ILogger<AssetImportService> logger) : IAssetImportService
+public class AssetImportService(AppDbContext db, ILogger<AssetImportService> logger, ILookupService lookups) : IAssetImportService
 {
     private static readonly string[] ExpectedHeaders =
     [
@@ -110,20 +110,24 @@ public class AssetImportService(AppDbContext db, ILogger<AssetImportService> log
         var deviceType = ReadString(row, headerMap, "DeviceType");
         if (string.IsNullOrWhiteSpace(deviceType))
             throw new ImportRowException("DeviceType is required.");
-        if (!DeviceTypes.All.Contains(deviceType))
-            throw new ImportRowException($"Invalid DeviceType '{deviceType}'. Allowed: {string.Join(", ", DeviceTypes.All)}.");
+        // Editable lookup data, not the DeviceTypes constant.
+        if (!await lookups.IsActiveValueAsync(LookupTypes.DeviceType, deviceType, ct))
+            throw new ImportRowException($"Invalid DeviceType '{deviceType}'.");
 
         var status = ReadString(row, headerMap, "Status");
         if (string.IsNullOrWhiteSpace(status))
             throw new ImportRowException("Status is required.");
+        // Locked - AssetStatus is branched on elsewhere, so this keeps validating against the
+        // constant rather than admin-editable data.
         if (!ValidStatuses.Contains(status))
             throw new ImportRowException($"Invalid Status '{status}'. Allowed: {string.Join(", ", ValidStatuses)}.");
 
         var currency = ReadString(row, headerMap, "Currency");
         if (string.IsNullOrWhiteSpace(currency))
             currency = "USD";
-        if (!Currencies.All.Contains(currency))
-            throw new ImportRowException($"Invalid Currency '{currency}'. Allowed: {string.Join(", ", Currencies.All)}.");
+        // Editable lookup data, not the Currencies constant.
+        if (!await lookups.IsActiveValueAsync(LookupTypes.Currency, currency, ct))
+            throw new ImportRowException($"Invalid Currency '{currency}'.");
 
         var modelYear = ReadInt(row, headerMap, "ModelYear");
         if (modelYear is < 1900 or > 2100)

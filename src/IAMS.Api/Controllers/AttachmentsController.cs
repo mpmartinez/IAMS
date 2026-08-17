@@ -15,7 +15,8 @@ namespace IAMS.Api.Controllers;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AttachmentsController(
     AppDbContext db,
-    IFileStorageService fileStorage) : ControllerBase
+    IFileStorageService fileStorage,
+    ILookupService lookups) : ControllerBase
 {
     private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
 
@@ -84,10 +85,9 @@ public class AttachmentsController(
         if (asset is null)
             return NotFound(ApiResponse<AttachmentDto>.Fail("Asset not found"));
 
-        // Validate category
-        if (!AttachmentCategories.All.Contains(category))
-            return BadRequest(ApiResponse<AttachmentDto>.Fail(
-                $"Invalid category. Must be one of: {string.Join(", ", AttachmentCategories.All)}"));
+        // Validate category - editable lookup data, not the AttachmentCategories constant.
+        if (!await lookups.IsActiveValueAsync(LookupTypes.AttachmentCategory, category))
+            return BadRequest(ApiResponse<AttachmentDto>.Fail($"'{category}' is not a valid attachment category."));
 
         // Validate file
         if (file is null || file.Length == 0)
@@ -193,7 +193,8 @@ public class AttachmentsController(
     /// </summary>
     [HttpGet("/api/attachments/categories")]
     [AllowAnonymous]
-    public ActionResult<string[]> GetCategories() => Ok(AttachmentCategories.All);
+    public async Task<ActionResult<string[]>> GetCategories(CancellationToken ct) =>
+        Ok(await lookups.GetActiveValuesAsync(LookupTypes.AttachmentCategory, ct));
 
     private static AttachmentDto MapToDto(Attachment a) => new()
     {

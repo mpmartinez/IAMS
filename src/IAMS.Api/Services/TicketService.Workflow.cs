@@ -52,6 +52,8 @@ public partial class TicketService
     public async Task<ServiceResult> ChangeStatusAsync(
         int id, string status, CancellationToken ct = default)
     {
+        // Locked - TicketWorkflow.CanTransition is a hardcoded transition table over these
+        // exact values, so this keeps validating against the constant.
         if (!TicketStatus.IsValid(status))
             return ServiceResult.Fail($"'{status}' is not a valid status.");
 

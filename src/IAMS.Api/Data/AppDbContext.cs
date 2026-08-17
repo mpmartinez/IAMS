@@ -32,6 +32,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<LookupValue> LookupValues => Set<LookupValue>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -461,6 +462,23 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 _tenantProvider == null ||
                 _tenantProvider.IsSuperAdmin() ||
                 e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure LookupValue. Deliberately global: no TenantId, no ITenantEntity, no query
+        // filter. One shared vocabulary across every tenant, managed centrally by a
+        // SuperAdmin - see LookupsController.
+        modelBuilder.Entity<LookupValue>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.LookupType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Value).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Label).HasMaxLength(100).IsRequired();
+
+            entity.HasIndex(e => e.LookupType);
+            entity.HasIndex(e => new { e.LookupType, e.Value }).IsUnique();
+
+            entity.HasData(LookupValueSeed.Rows);
         });
 
         // Normalise every DateTime to UTC on the way to the database.
