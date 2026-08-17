@@ -62,7 +62,11 @@ public class TicketCommentsController : ControllerBase
         if (ticket is null)
             return NotFound(ApiResponse<TicketCommentDto>.Fail("Ticket not found."));
 
-        if (!CanViewQueue && ticket.RequesterUserId != CurrentUserId)
+        // Writing to someone else's ticket needs manage rights, not just read access to the
+        // queue - TicketsQueue's catalog description promises read-only access ("see every ticket
+        // in the tenant, not just your own"), so gating this write on it would hand comment rights
+        // on other people's tickets to any role built from that description alone.
+        if (!CanManageQueue && ticket.RequesterUserId != CurrentUserId)
             return Forbid();
 
         // Only staff with manage rights may write a note the requester cannot see.

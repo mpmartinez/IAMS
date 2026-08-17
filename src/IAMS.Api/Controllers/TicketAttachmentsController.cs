@@ -21,7 +21,15 @@ public class TicketAttachmentsController(
     ILookupService lookups) : ControllerBase
 {
     private string CurrentUserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+    /// Read access to the ticket queue: seeing any ticket's attachments, not just your own.
     private bool CanViewQueue => User.HasPermission(Permissions.TicketsQueue);
+
+    /// Write access to other people's tickets: uploading an attachment to a ticket you didn't
+    /// file. TicketsQueue's catalog description promises read-only access ("see every ticket in
+    /// the tenant, not just your own") - gating a write on it would hand upload rights on other
+    /// people's tickets to any role built from that description alone.
+    private bool CanManageQueue => User.HasPermission(Permissions.TicketsManage);
 
     /// <summary>
     /// Get all attachments for a ticket
@@ -89,7 +97,7 @@ public class TicketAttachmentsController(
         if (ticket is null)
             return NotFound(ApiResponse<TicketAttachmentDto>.Fail("Ticket not found"));
 
-        if (!CanViewQueue && ticket.RequesterUserId != CurrentUserId)
+        if (!CanManageQueue && ticket.RequesterUserId != CurrentUserId)
             return Forbid();
 
         // Validate category - editable lookup data, not the TicketAttachmentCategories constant.
