@@ -9,7 +9,8 @@ public sealed record PermissionDescriptor(string Key, string Group, string Label
 /// <summary>
 /// The set of permissions that exist. Deliberately code-owned: a permission is only real if some
 /// policy checks it, so a database-backed catalog would drift from the policies the way the Users
-/// role dropdown drifted from Roles.TenantAssignable. The database owns the grants, not the catalog.
+/// role dropdown drifted from the old hard-coded assignable-role list. The database owns the
+/// grants, not the catalog.
 /// </summary>
 public static class Permissions
 {

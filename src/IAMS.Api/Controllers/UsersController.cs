@@ -1,3 +1,4 @@
+using IAMS.Api.Authorization;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Api.Services;
@@ -18,6 +19,7 @@ public class UsersController(
     ITenantProvider tenantProvider,
     ISubscriptionService subscriptionService,
     TokenService tokenService,
+    IPermissionResolver permissionResolver,
     AppDbContext db) : ControllerBase
 {
     [HttpGet]
@@ -78,9 +80,10 @@ public class UsersController(
         var actorIsSuperAdmin = tenantProvider.IsSuperAdmin();
 
         var role = dto.Role ?? Roles.Staff;
-        if (!Roles.CanAssign(role, actorIsSuperAdmin))
-            return BadRequest(ApiResponse<UserDto>.Fail(
-                $"Invalid role. Must be one of: {Roles.AssignableList(actorIsSuperAdmin)}"));
+        var assignment = await RoleAssignmentGuard.CheckAsync(
+            db, permissionResolver, User, actorIsSuperAdmin, tenantId, role);
+        if (!assignment.Success)
+            return BadRequest(ApiResponse<UserDto>.Fail(assignment.Error!));
 
         // Check subscription limits
         if (!await subscriptionService.CanCreateUserAsync(tenantId))
@@ -167,9 +170,16 @@ public class UsersController(
         if (!actorIsSuperAdmin && existingRoles.Contains(Roles.SuperAdmin))
             return Forbid();
 
-        if (dto.Role is not null && !Roles.CanAssign(dto.Role, actorIsSuperAdmin))
-            return BadRequest(ApiResponse<UserDto>.Fail(
-                $"Invalid role. Must be one of: {Roles.AssignableList(actorIsSuperAdmin)}"));
+        if (dto.Role is not null)
+        {
+            // The target user's own tenant, not the actor's: a SuperAdmin can edit a user in a
+            // different tenant, and it is that tenant's custom roles and grants that govern what
+            // this role name means and what it hands out.
+            var assignment = await RoleAssignmentGuard.CheckAsync(
+                db, permissionResolver, User, actorIsSuperAdmin, user.TenantId, dto.Role);
+            if (!assignment.Success)
+                return BadRequest(ApiResponse<UserDto>.Fail(assignment.Error!));
+        }
 
         if (dto.Email is not null && dto.Email != user.Email)
         {

@@ -27,7 +27,11 @@ public class RolesController(
     /// </summary>
     public static IReadOnlyList<string> GrantableKeys(ClaimsPrincipal actor, bool isSuperAdmin)
     {
-        if (isSuperAdmin) return Permissions.Keys;
+        // Permissions.Keys is a shared, process-wide static string[]. Returning it directly would
+        // let a caller cast back to string[] and mutate the catalog for every tenant and every
+        // request that follows. Array.AsReadOnly wraps it without copying but genuinely blocks
+        // that cast.
+        if (isSuperAdmin) return Array.AsReadOnly(Permissions.Keys);
 
         return actor.FindAll(Permissions.ClaimType)
             .Select(c => c.Value)
@@ -110,7 +114,7 @@ public class RolesController(
 
         var roles = await VisibleRoles(tenantId)
             // SuperAdmin short-circuits tenant isolation, so only an existing SuperAdmin may hand
-            // it out - same rule as Roles.TenantAssignable.
+            // it out.
             .Where(r => isSuperAdmin || r.Name != Roles.SuperAdmin)
             .OrderByDescending(r => r.IsBuiltIn)
             .ThenBy(r => r.Name)
@@ -143,12 +147,33 @@ public class RolesController(
             Description = dto.Description?.Trim()
         };
 
-        var created = await roleManager.CreateAsync(role);
-        if (!created.Succeeded)
-            return BadRequest(ApiResponse<RoleDto>.Fail(
-                string.Join(", ", created.Errors.Select(e => e.Description))));
+        // Role creation and its initial grants must land together. Without a transaction, a
+        // failure between the two steps leaves a grant-less role behind and a 500 to the caller;
+        // retrying then trips the duplicate-name check above, and the admin is stuck until
+        // someone deletes the orphan manually.
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        try
+        {
+            var created = await roleManager.CreateAsync(role);
+            if (!created.Succeeded)
+            {
+                await transaction.RollbackAsync();
+                return BadRequest(ApiResponse<RoleDto>.Fail(
+                    string.Join(", ", created.Errors.Select(e => e.Description))));
+            }
 
-        await ReplaceGrants(role.Id, tenantId, accepted);
+            await ReplaceGrants(role.Id, tenantId, accepted);
+            await transaction.CommitAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Covers DbUpdateConcurrencyException too (it derives from DbUpdateException) - e.g.
+            // two concurrent creates of the same role name racing past the FindByNameAsync check
+            // above and tripping the unique index together.
+            await transaction.RollbackAsync();
+            return Conflict(ApiResponse<RoleDto>.Fail(
+                "This role could not be saved because of a conflicting change. Reload and try again."));
+        }
 
         return Ok(ApiResponse<RoleDto>.Ok(new RoleDto
         {
@@ -166,6 +191,7 @@ public class RolesController(
     public async Task<ActionResult<ApiResponse<RoleDto>>> UpdateRole(string id, UpdateRoleDto dto)
     {
         var tenantId = tenantProvider.GetRequiredTenantId();
+        var isSuperAdmin = tenantProvider.IsSuperAdmin();
 
         var role = await VisibleRoles(tenantId).FirstOrDefaultAsync(r => r.Id == id);
         if (role is null) return NotFound();
@@ -178,13 +204,40 @@ public class RolesController(
         var rejected = Validate(dto.Permissions, out var accepted);
         if (rejected is not null) return BadRequest(ApiResponse<RoleDto>.Fail(rejected));
 
-        if (!role.IsBuiltIn && dto.Description is not null)
+        // A roles:manage holder could otherwise strip that permission from every role in the
+        // tenant - including this one - and lock the whole tenant out of role management,
+        // recoverable only by a platform SuperAdmin. SuperAdmin actors are exempt: they bypass
+        // every permission check anyway, so they can always fix it back up.
+        if (!isSuperAdmin)
         {
-            role.Description = dto.Description.Trim();
-            await roleManager.UpdateAsync(role);
+            var lockoutError = await WouldOrphanRoleManagement(tenantId, role.Id, accepted);
+            if (lockoutError is not null) return BadRequest(ApiResponse<RoleDto>.Fail(lockoutError));
         }
 
-        await ReplaceGrants(role.Id, tenantId, accepted);
+        try
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync();
+
+            if (!role.IsBuiltIn && dto.Description is not null)
+            {
+                role.Description = dto.Description.Trim();
+                await roleManager.UpdateAsync(role);
+            }
+
+            await ReplaceGrants(role.Id, tenantId, accepted);
+
+            await transaction.CommitAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Covers DbUpdateConcurrencyException too. Two concurrent PUTs on the same role can
+            // both delete-then-reinsert its grants, or trip the (RoleId, TenantId, Permission)
+            // unique index against each other; either way this used to surface as an unhandled
+            // 500. Ask the caller to reload and retry rather than implementing full optimistic
+            // concurrency.
+            return Conflict(ApiResponse<RoleDto>.Fail(
+                "This role was changed by someone else. Reload and try again."));
+        }
 
         var counts = await UserCountsByRole(tenantId, [role.Id]);
 
@@ -197,6 +250,35 @@ public class RolesController(
             UserCount = counts.GetValueOrDefault(role.Id),
             Permissions = accepted
         }));
+    }
+
+    /// <summary>
+    /// True (with an explanatory message) if applying `accepted` to `roleId` would remove
+    /// iams:roles:manage from a role that currently holds it, and no OTHER role in the tenant
+    /// that still has at least one holder would carry it afterwards. A role nobody holds does not
+    /// count as coverage - it grants nobody anything today.
+    /// </summary>
+    private async Task<string?> WouldOrphanRoleManagement(Guid tenantId, string roleId, List<string> accepted)
+    {
+        if (accepted.Contains(Permissions.RolesManage)) return null; // not being removed
+
+        var currentlyHasIt = await db.RolePermissions.AnyAsync(rp =>
+            rp.RoleId == roleId && rp.TenantId == tenantId && rp.Permission == Permissions.RolesManage);
+        if (!currentlyHasIt) return null; // nothing to lose
+
+        var otherRolesWithGrant = await db.RolePermissions
+            .Where(rp => rp.TenantId == tenantId && rp.Permission == Permissions.RolesManage && rp.RoleId != roleId)
+            .Select(rp => rp.RoleId)
+            .Distinct()
+            .ToListAsync();
+
+        var stillCovered = otherRolesWithGrant.Count > 0
+            && (await UserCountsByRole(tenantId, otherRolesWithGrant)).Values.Any(count => count > 0);
+
+        return stillCovered
+            ? null
+            : "At least one role held by a user in this tenant must retain \"Manage roles\", " +
+              "or nobody would be able to manage roles in this tenant again.";
     }
 
     [HttpDelete("{id}")]
@@ -216,13 +298,27 @@ public class RolesController(
             return Conflict(ApiResponse<object>.Fail(
                 $"{holders} user{(holders == 1 ? "" : "s")} still hold this role. Move them to another role first."));
 
+        // The grant delete and the role delete must succeed or fail together. Without a
+        // transaction and a checked result, a failed role delete (IdentityResult discarded) left
+        // the caller told "gone" while the role still existed with zero grants - a silent
+        // permission wipe reported as success.
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
         var grants = await db.RolePermissions
             .Where(rp => rp.RoleId == role.Id && rp.TenantId == tenantId)
             .ToListAsync();
         db.RolePermissions.RemoveRange(grants);
         await db.SaveChangesAsync();
 
-        await roleManager.DeleteAsync(role);
+        var deleted = await roleManager.DeleteAsync(role);
+        if (!deleted.Succeeded)
+        {
+            await transaction.RollbackAsync();
+            return BadRequest(ApiResponse<object>.Fail(
+                string.Join(", ", deleted.Errors.Select(e => e.Description))));
+        }
+
+        await transaction.CommitAsync();
         return NoContent();
     }
 
