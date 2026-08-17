@@ -1,5 +1,4 @@
 using IAMS.Api.Authorization;
-using IAMS.Api.Controllers;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 
@@ -12,7 +11,7 @@ public class RolesApiTests
     {
         var actor = TestPrincipals.With(Permissions.RolesManage, Permissions.AssetsView);
 
-        var grantable = RolesController.GrantableKeys(actor, isSuperAdmin: false);
+        var grantable = ClaimsPrincipalExtensions.GrantableKeys(actor, isSuperAdmin: false);
 
         Assert.Contains(Permissions.AssetsView, grantable);
         Assert.DoesNotContain(Permissions.AssetsDelete, grantable);
@@ -23,7 +22,7 @@ public class RolesApiTests
     {
         var actor = TestPrincipals.With();
 
-        var grantable = RolesController.GrantableKeys(actor, isSuperAdmin: true);
+        var grantable = ClaimsPrincipalExtensions.GrantableKeys(actor, isSuperAdmin: true);
 
         Assert.Equal(Permissions.Keys.OrderBy(k => k), grantable.OrderBy(k => k));
     }
@@ -33,7 +32,7 @@ public class RolesApiTests
     {
         var actor = TestPrincipals.With("iams:not:real", Permissions.AssetsView);
 
-        var grantable = RolesController.GrantableKeys(actor, isSuperAdmin: false);
+        var grantable = ClaimsPrincipalExtensions.GrantableKeys(actor, isSuperAdmin: false);
 
         Assert.Equal([Permissions.AssetsView], grantable);
     }

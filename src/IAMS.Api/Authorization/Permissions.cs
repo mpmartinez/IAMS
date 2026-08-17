@@ -95,8 +95,8 @@ public static class Permissions
         // Keys is a shared, process-wide static string[]. Returning it directly would let a
         // caller cast the IReadOnlyList<string> back to string[] and mutate the catalog for
         // every tenant and every request that follows - Array.AsReadOnly wraps it without
-        // copying but genuinely blocks that cast, matching what RolesController.GrantableKeys
-        // already does for the same array.
+        // copying but genuinely blocks that cast, matching what
+        // ClaimsPrincipalExtensions.GrantableKeys already does for the same array.
         //
         // SuperAdmin bypasses authorisation entirely. It holds everything so the matrix shows
         // the truth rather than an empty grid.

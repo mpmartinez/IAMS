@@ -21,26 +21,6 @@ public class RolesController(
     ITenantProvider tenantProvider,
     ILogger<RolesController> logger) : ControllerBase
 {
-    /// <summary>
-    /// The permissions this actor may hand to a role. Without this cap anyone holding
-    /// iams:roles:manage could mint a role with every permission and assign it to themselves,
-    /// which would make every other permission decorative.
-    /// </summary>
-    public static IReadOnlyList<string> GrantableKeys(ClaimsPrincipal actor, bool isSuperAdmin)
-    {
-        // Permissions.Keys is a shared, process-wide static string[]. Returning it directly would
-        // let a caller cast back to string[] and mutate the catalog for every tenant and every
-        // request that follows. Array.AsReadOnly wraps it without copying but genuinely blocks
-        // that cast.
-        if (isSuperAdmin) return Array.AsReadOnly(Permissions.Keys);
-
-        return actor.FindAll(Permissions.ClaimType)
-            .Select(c => c.Value)
-            .Where(Permissions.IsValid)
-            .Distinct()
-            .ToList();
-    }
-
     [HttpGet("~/api/permissions")]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewRoles")]
     public ActionResult<ApiResponse<List<PermissionGroupDto>>> GetPermissions()
@@ -347,7 +327,7 @@ public class RolesController(
             return $"Unknown permission{(unknown.Count == 1 ? "" : "s")}: {string.Join(", ", unknown)}";
         }
 
-        var grantable = GrantableKeys(User, tenantProvider.IsSuperAdmin());
+        var grantable = ClaimsPrincipalExtensions.GrantableKeys(User, tenantProvider.IsSuperAdmin());
 
         if (existing is null)
         {

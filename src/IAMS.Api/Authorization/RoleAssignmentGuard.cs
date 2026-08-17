@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using IAMS.Api.Controllers;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using IAMS.Api.Services;
@@ -13,7 +12,7 @@ namespace IAMS.Api.Authorization;
 /// Replaces name-whitelisting (the old Roles.CanAssign, now deleted) with a grant-subset check:
 /// an actor may hand out any role - built-in or a tenant's own custom role - as long as that
 /// role's grants are wholly contained in what the actor may themselves confer (see
-/// <see cref="RolesController.GrantableKeys"/>). Without this, a holder of iams:users:manage
+/// <see cref="ClaimsPrincipalExtensions.GrantableKeys"/>). Without this, a holder of iams:users:manage
 /// alone could assign themselves (or anyone) a role such as Admin that carries every permission
 /// there is - total privilege escalation in one request. It also fixes the flip side: a custom
 /// role created through POST /api/roles was never assignable to anyone, because the old
@@ -63,7 +62,7 @@ public static class RoleAssignmentGuard
         }
 
         // SuperAdmin bypasses every permission check, so it also bypasses this one - the same
-        // way RolesController.GrantableKeys does for creating/editing roles.
+        // way ClaimsPrincipalExtensions.GrantableKeys does for creating/editing roles.
         if (actorIsSuperAdmin) return Result.Ok(role);
 
         var roleGrants = await permissionResolver.GetPermissionsAsync([roleName], tenantId, ct);
@@ -84,7 +83,7 @@ public static class RoleAssignmentGuard
                 $"The \"{roleName}\" role has no permissions configured in this tenant and cannot be " +
                 "assigned to anyone. Set its permissions first.");
 
-        var grantable = RolesController.GrantableKeys(actor, actorIsSuperAdmin);
+        var grantable = ClaimsPrincipalExtensions.GrantableKeys(actor, actorIsSuperAdmin);
         var overreach = roleGrants.Where(p => !grantable.Contains(p)).ToList();
         if (overreach.Count > 0)
             return Result.Fail(

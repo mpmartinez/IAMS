@@ -260,8 +260,8 @@
 
         // Mirror the server's escalation guard: an admin may only grant what they hold, so
         // anything else renders disabled rather than failing on save. See
-        // IAMS.Api.Controllers.RolesController.GrantableKeys - this is the client-side echo of
-        // that same rule.
+        // IAMS.Api.Authorization.ClaimsPrincipalExtensions.GrantableKeys - this is the client-side
+        // echo of that same rule.
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         _grantable = user.IsInRole("SuperAdmin")
