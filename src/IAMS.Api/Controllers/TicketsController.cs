@@ -192,11 +192,19 @@ public class TicketsController : ControllerBase
             : BadRequest(ApiResponse<object>.Fail(result.Message!));
     }
 
+    // Fulfil both resolves a ticket (queue-management territory) and issues an asset to the
+    // requester (assignment territory). CanManageAssets alone let a holder of iams:assets:edit -
+    // and nothing else - do both, so revoking iams:assignments:assign from a role did not actually
+    // stop it handing out assets through this endpoint. Require ticket-queue management via the
+    // policy and check AssignmentsAssign explicitly in the body.
     [HttpPost("{id:int}/fulfil")]
-    [Authorize(Policy = "CanManageAssets")]
+    [Authorize(Policy = "CanManageTicketQueue")]
     public async Task<ActionResult<ApiResponse<object>>> Fulfil(
         int id, [FromBody] FulfilTicketRequest request, CancellationToken ct)
     {
+        if (!User.HasPermission(Permissions.AssignmentsAssign))
+            return Forbid();
+
         var result = await _tickets.FulfilAsync(id, request.AssetId, request.Resolution, CurrentUserId, ct);
 
         return result.Success
