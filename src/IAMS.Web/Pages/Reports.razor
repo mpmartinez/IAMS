@@ -4,9 +4,11 @@
 @inject AuthService AuthService
 @inject IJSRuntime JS
 @inject IConfiguration Configuration
+@inject PermissionChecker PermissionChecker
 
 <PageTitle>Reports - IAMS</PageTitle>
 
+<PermissionView Permission="iams:reports:view" ShowDeniedMessage="true">
 <div class="space-y-6">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -273,6 +275,7 @@
         </div>
     }
 </div>
+</PermissionView>
 
 @code {
     private string[]? _deviceTypes;
@@ -293,6 +296,11 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Blazor runs a component's lifecycle regardless of what the wrapping PermissionView
+        // decides to render, so a denied user would otherwise still fire every load below.
+        if (!await PermissionChecker.HasPermissionAsync("iams:reports:view"))
+            return;
+
         await LoadFilters();
         await LoadAssetValueSummary();
     }
