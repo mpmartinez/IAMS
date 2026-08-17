@@ -134,14 +134,33 @@
                                 @foreach (var permission in group.Permissions)
                                 {
                                     var key = permission.Key;
-                                    var blocked = _readOnly || !_grantable.Contains(key);
-                                    <label class="flex items-start gap-2.5 @(blocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer")">
+                                    var notGrantable = !_readOnly && !_grantable.Contains(key);
+                                    var blocked = _readOnly || notGrantable;
+                                    // A disabled-but-checked box here is not merely dimmed - the actor
+                                    // cannot grant this key themselves, so whatever the role already had
+                                    // is kept unchanged on save (see RolesController.Validate). Distinct
+                                    // from "you don't have this and can't add it": make that explicit
+                                    // rather than let it read as an editable-looking control that just
+                                    // happens to be off-limits right now.
+                                    var preserved = notGrantable && _selected.Contains(key);
+                                    var title = preserved
+                                        ? "You do not hold this permission, so it is kept as-is and cannot be changed here."
+                                        : notGrantable
+                                            ? "You do not hold this permission, so you cannot grant it."
+                                            : null;
+                                    <label class="flex items-start gap-2.5 @(blocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer")" title="@title">
                                         <input type="checkbox" disabled="@blocked"
                                                checked="@_selected.Contains(key)"
                                                @onchange="e => Toggle(key, (bool)(e.Value ?? false))"
                                                class="mt-0.5 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500" />
                                         <span>
-                                            <span class="block text-sm text-slate-900 dark:text-white">@permission.Label</span>
+                                            <span class="block text-sm text-slate-900 dark:text-white">
+                                                @permission.Label
+                                                @if (preserved)
+                                                {
+                                                    <span class="ml-1 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">(kept)</span>
+                                                }
+                                            </span>
                                             <span class="block text-xs text-slate-500 dark:text-slate-400">@permission.Description</span>
                                         </span>
                                     </label>

@@ -138,7 +138,7 @@ public class RolesController(
         if (await roleManager.FindByNameAsync(name) is not null)
             return BadRequest(ApiResponse<RoleDto>.Fail($"A role named \"{name}\" already exists."));
 
-        var rejected = Validate(dto.Permissions, out var accepted);
+        var rejected = Validate(dto.Permissions, out var accepted, existing: null);
         if (rejected is not null) return BadRequest(ApiResponse<RoleDto>.Fail(rejected));
 
         var role = new ApplicationRole(name)
@@ -203,7 +203,12 @@ public class RolesController(
         if (role.Name == Roles.SuperAdmin)
             return BadRequest(ApiResponse<RoleDto>.Fail("The SuperAdmin role cannot be edited."));
 
-        var rejected = Validate(dto.Permissions, out var accepted);
+        var existingGrants = await db.RolePermissions
+            .Where(rp => rp.RoleId == role.Id && rp.TenantId == tenantId)
+            .Select(rp => rp.Permission)
+            .ToListAsync();
+
+        var rejected = Validate(dto.Permissions, out var accepted, existingGrants);
         if (rejected is not null) return BadRequest(ApiResponse<RoleDto>.Fail(rejected));
 
         // A roles:manage holder could otherwise strip that permission from every role in the
@@ -301,20 +306,63 @@ public class RolesController(
     private IQueryable<ApplicationRole> VisibleRoles(Guid tenantId) =>
         db.Roles.Where(r => r.TenantId == null || r.TenantId == tenantId);
 
+    /// <summary>
     /// Returns an error message, or null and the accepted key list.
-    private string? Validate(List<string> requested, out List<string> accepted)
+    ///
+    /// <paramref name="existing"/> is null for a brand-new role (CreateRole - nothing to
+    /// preserve yet, so any permission outside the actor's own grantable set is a flat rejection)
+    /// and the role's current grants for an edit (UpdateRole).
+    ///
+    /// For an edit, this is delta-based rather than whole-set validation:
+    /// <c>accepted = (existing ∩ ¬grantable) ∪ (requested ∩ grantable)</c> - every key the actor
+    /// cannot grant is preserved regardless of what was submitted, and the actor's changes apply
+    /// only within their own grantable set. Two escalation-adjacent bugs this closes:
+    ///
+    /// - DEAD END: a role richer than the actor's own grants disabled-but-checked boxes in the UI
+    ///   for keys the actor cannot touch. Whole-set validation rejected the entire save because
+    ///   those keys came back in the submitted list even though the actor never changed them. The
+    ///   delta approach ignores what came back for a key outside the actor's grantable set and
+    ///   just keeps what the role already had, so the save succeeds.
+    /// - DESTRUCTION: the same whole-set check let an actor submit a strict subset of a role's
+    ///   permissions - including keys they themselves lack - and that subset became the new
+    ///   truth, silently stripping permissions nobody asked to remove and that the actor was
+    ///   never entitled to touch. The delta approach makes that impossible: a key outside the
+    ///   actor's grantable set is preserved from the role's existing state no matter what the
+    ///   request body contains.
+    /// </summary>
+    private string? Validate(List<string> requested, out List<string> accepted, List<string>? existing)
     {
-        accepted = requested.Distinct().ToList();
+        var requestedDistinct = requested.Distinct().ToList();
 
-        var unknown = accepted.Where(p => !Permissions.IsValid(p)).ToList();
+        var unknown = requestedDistinct.Where(p => !Permissions.IsValid(p)).ToList();
         if (unknown.Count > 0)
+        {
+            accepted = [];
             return $"Unknown permission{(unknown.Count == 1 ? "" : "s")}: {string.Join(", ", unknown)}";
+        }
 
         var grantable = GrantableKeys(User, tenantProvider.IsSuperAdmin());
-        var overreach = accepted.Where(p => !grantable.Contains(p)).ToList();
-        if (overreach.Count > 0)
-            return $"You cannot grant a permission you do not hold yourself: {string.Join(", ", overreach)}";
 
+        if (existing is null)
+        {
+            // Nothing to preserve yet - a brand-new role can only be minted with permissions the
+            // actor holds themselves. (Via the UI this never fires: the create form starts blank
+            // and unheld keys render disabled, so nothing outside the actor's grantable set is
+            // ever checked in the first place.)
+            var overreach = requestedDistinct.Where(p => !grantable.Contains(p)).ToList();
+            if (overreach.Count > 0)
+            {
+                accepted = [];
+                return $"You cannot grant a permission you do not hold yourself: {string.Join(", ", overreach)}";
+            }
+
+            accepted = requestedDistinct;
+            return null;
+        }
+
+        var preserved = existing.Where(p => !grantable.Contains(p));
+        var applied = requestedDistinct.Where(grantable.Contains);
+        accepted = preserved.Union(applied).ToList();
         return null;
     }
 

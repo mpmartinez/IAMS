@@ -138,8 +138,12 @@ public class RolesControllerGuardrailTests
     }
 
     [Fact]
-    public async Task UpdateRole_RejectsAPermissionTheActorDoesNotHold_AndLeavesGrantsUnchanged()
+    public async Task UpdateRole_SilentlyDropsAPermissionTheActorDoesNotHold_AndLeavesGrantsUnchanged()
     {
+        // Whole-set validation used to reject this outright. Delta-based validation (see
+        // RolesController.Validate) instead applies the actor's change only within their own
+        // grantable set: AssetsDelete was never in the role and the actor cannot grant it, so it
+        // is simply dropped rather than added - the save succeeds and nothing changes.
         var tenantId = Guid.NewGuid();
         var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
         using (db)
@@ -155,13 +159,91 @@ public class RolesControllerGuardrailTests
                 Permissions = [Permissions.RolesManage, Permissions.AssetsDelete]
             });
 
-            Assert.IsType<BadRequestObjectResult>(result.Result);
+            Assert.IsType<OkObjectResult>(result.Result);
 
             var grants = await db.RolePermissions
                 .Where(rp => rp.RoleId == role.Id && rp.TenantId == tenantId)
                 .Select(rp => rp.Permission)
                 .ToListAsync();
             Assert.Equal([Permissions.RolesManage], grants);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateRole_ByAnActorHoldingOnlyRolesManage_OnARoleThatAlsoCarriesAssetsDelete_SucceedsAndPreservesAssetsDelete()
+    {
+        // The DEAD END this fix targets: a restricted role-manager (holds only iams:roles:manage)
+        // opens a role that also carries assets:delete, a permission they do not hold. The UI
+        // renders that box disabled-but-checked and Save still posts it, since disabled inputs
+        // don't stop the bound value being submitted. Whole-set validation rejected every such
+        // save with no way to clear the error - this actor could never edit a role richer than
+        // their own grants. Delta-based validation preserves assets:delete (outside the actor's
+        // grantable set, so untouched) while still letting the actor's own change - dropping
+        // tickets:file, which they do hold - go through.
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var role = await SeedCustomRoleAsync(
+                db, tenantId, "RicherRole", Permissions.RolesManage, Permissions.AssetsDelete, Permissions.TicketsFile);
+
+            var controller = BuildController(
+                db, tenantId, BuildPrincipal(Permissions.RolesManage, Permissions.TicketsFile));
+
+            // Simulates the UI submitting every checked box: the two the actor holds (one
+            // unchanged, one they deliberately unchecked - TicketsFile is simply absent here) plus
+            // AssetsDelete, which stayed checked because it was rendered disabled.
+            var result = await controller.UpdateRole(role.Id, new UpdateRoleDto
+            {
+                Permissions = [Permissions.RolesManage, Permissions.AssetsDelete]
+            });
+
+            Assert.IsType<OkObjectResult>(result.Result);
+
+            var grants = await db.RolePermissions
+                .Where(rp => rp.RoleId == role.Id && rp.TenantId == tenantId)
+                .Select(rp => rp.Permission)
+                .ToListAsync();
+            Assert.Contains(Permissions.AssetsDelete, grants);
+            Assert.Contains(Permissions.RolesManage, grants);
+            Assert.DoesNotContain(Permissions.TicketsFile, grants);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateRole_CannotStripAPermissionTheActorDoesNotHold_EvenBySubmittingAStrictSubset()
+    {
+        // The DESTRUCTION this fix targets: an actor holding only iams:roles:manage submits a
+        // strict subset of a richer role's permissions (e.g. every box they can see unchecked, or
+        // a hand-crafted request). Whole-set validation accepted that subset as the new truth,
+        // silently stripping assets:delete even though the actor never held it and never asked to
+        // remove it specifically. Delta-based validation preserves it regardless of what was
+        // submitted.
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var role = await SeedCustomRoleAsync(
+                db, tenantId, "AdminLikeRole", Permissions.RolesManage, Permissions.AssetsDelete);
+
+            var controller = BuildController(db, tenantId, BuildPrincipal(Permissions.RolesManage));
+
+            var result = await controller.UpdateRole(role.Id, new UpdateRoleDto
+            {
+                Permissions = [Permissions.RolesManage]
+            });
+
+            Assert.IsType<OkObjectResult>(result.Result);
+
+            var grants = await db.RolePermissions
+                .Where(rp => rp.RoleId == role.Id && rp.TenantId == tenantId)
+                .Select(rp => rp.Permission)
+                .ToListAsync();
+            Assert.Contains(Permissions.AssetsDelete, grants);
         }
     }
 
