@@ -30,7 +30,7 @@ window.printElement = function(elementId) {
         <html>
         <head>
             <title>Print</title>
-            <link href="css/app.css" rel="stylesheet" />
+            <link href="css/app.css?v=3" rel="stylesheet" />
             <style>
                 body {
                     margin: 0;

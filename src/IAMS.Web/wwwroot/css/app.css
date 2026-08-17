@@ -67,6 +67,25 @@
     color-scheme: dark;
 }
 
+/* Paint the option list explicitly as well, rather than trusting color-scheme alone.
+   Chromium on Windows honours background-color/color on <option>, and doing it here means the
+   popup matches the dialog surface instead of the browser's generic dark grey. Where the
+   platform ignores option colours (macOS, iOS) the color-scheme rule above still carries the
+   fix, so the two together cover every target. option:checked keeps the highlighted row
+   readable - without it the selected entry inherits the same background as its neighbours and
+   the selection becomes invisible. */
+:root.dark select option,
+:root.dark select optgroup {
+    background-color: #1e293b;
+    color: #f1f5f9;
+}
+
+:root.dark select option:checked,
+:root.dark select option:hover {
+    background-color: #4f46e5;
+    color: #ffffff;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
     width: 6px;

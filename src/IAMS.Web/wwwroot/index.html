@@ -108,7 +108,12 @@
         }
     </script>
     <script src="js/theme.js"></script>
-    <link rel="stylesheet" href="css/app.css" />
+    <!-- The ?v= is load-bearing. app.css is a plain static file with no content hash, and the
+         published service worker puts it in its cache at install (service-worker.published.js),
+         so without a changing URL an edit here can sit invisible behind both the browser HTTP
+         cache and the SW cache. Bump this whenever app.css changes, and bump cacheName in
+         service-worker.published.js alongside it. -->
+    <link rel="stylesheet" href="css/app.css?v=3" />
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 antialiased">
     <div id="app" class="h-full">
