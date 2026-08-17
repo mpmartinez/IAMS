@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using IAMS.Api.Authorization;
 using IAMS.Api.Data;
 using IAMS.Api.Entities;
 using Microsoft.AspNetCore.Identity;
@@ -13,6 +14,7 @@ namespace IAMS.Api.Services;
 public class TokenService(
     IConfiguration configuration,
     UserManager<ApplicationUser> userManager,
+    IPermissionResolver permissionResolver,
     AppDbContext db)
 {
     private const int RefreshTokenExpiryDays = 7;
@@ -47,6 +49,16 @@ public class TokenService(
         if (user.IsSuperAdmin && !roles.Contains("SuperAdmin"))
         {
             claims.Add(new Claim(ClaimTypes.Role, "SuperAdmin"));
+        }
+
+        // One claim per granted permission. The Blazor client reads these same claims, so the UI
+        // cannot offer an action the API will reject. Resolved against the user's own tenant -
+        // note the resolver filters TenantId explicitly, because ITenantProvider reports nothing
+        // during login.
+        var permissions = await permissionResolver.GetPermissionsAsync(roles, user.TenantId);
+        foreach (var permission in permissions)
+        {
+            claims.Add(new Claim(Permissions.ClaimType, permission));
         }
 
         var expireMinutes = int.Parse(configuration["Jwt:ExpireMinutes"] ?? "30");

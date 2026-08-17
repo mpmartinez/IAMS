@@ -17,6 +17,7 @@ public class UsersController(
     UserManager<ApplicationUser> userManager,
     ITenantProvider tenantProvider,
     ISubscriptionService subscriptionService,
+    TokenService tokenService,
     AppDbContext db) : ControllerBase
 {
     [HttpGet]
@@ -205,6 +206,11 @@ public class UsersController(
                 return BadRequest(ApiResponse<UserDto>.Fail(
                     string.Join(", ", roleResult.Errors.Select(e => e.Description))));
             }
+
+            // Their live token still carries the old role's permissions. This affects one person,
+            // so force a refresh rather than wait out the token lifetime. Editing a role's
+            // permissions is handled differently - see the spec.
+            await tokenService.RevokeAllUserTokensAsync(user.Id);
         }
 
         var roles = await userManager.GetRolesAsync(user);
