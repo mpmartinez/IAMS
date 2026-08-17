@@ -107,7 +107,7 @@
             </FormField>
 
             <FormField LabelText="Description">
-                <Input Value="@_formDescription" ValueChanged="v => _formDescription = v" Disabled="@NameLocked" MaxLength="500" Placeholder="What this role is for" />
+                <Input Value="@_formDescription" ValueChanged="v => _formDescription = v" Disabled="@DescriptionLocked" MaxLength="500" Placeholder="What this role is for" />
             </FormField>
 
             @if (_readOnly)
@@ -241,6 +241,13 @@
     // typed here would be silently discarded by Save, which sends only description and
     // permissions. Name is editable only when creating a role.
     private bool NameLocked => _editing is not null || _readOnly;
+
+    // Description is a genuinely different field from Name: UpdateRoleDto.Description exists,
+    // Save sends it, and RolesController.UpdateRole applies it whenever the role is not built-in
+    // (RolesController.cs). Locking it to the same rule as NameLocked would also disable it for
+    // every edit of a custom role, not just built-in ones - so this mirrors the API's actual
+    // rule instead of reusing NameLocked.
+    private bool DescriptionLocked => _editing?.IsBuiltIn == true || _readOnly;
 
     protected override async Task OnInitializedAsync()
     {
