@@ -50,13 +50,16 @@
                     <NavItem Href="/tickets" Icon="wrench" Label="Tickets" OnNavigation="CloseMobileMenu" />
                 </PermissionView>
                 <NavItem Href="/scan" Icon="qr-scan" Label="Scan QR" OnNavigation="CloseMobileMenu" />
-                <PermissionView Permission="iams:warranty:manage">
-                    <NavItem Href="/warranty-alerts" Icon="shield-exclamation" Label="Warranty Alerts" BadgeCount="@_alertCount" OnNavigation="CloseMobileMenu" />
-                </PermissionView>
+                @* Ungated on purpose: WarrantyAlertsController's reads carry only a bare [Authorize],
+                   so every authenticated user may see this page. Gating the link on
+                   iams:warranty:manage would hide it from Auditor and Management, who can reach it
+                   today - the acknowledge and delete controls on the page itself are what carry
+                   that permission. Add an iams:warranty:view key if reads should ever be gated. *@
+                <NavItem Href="/warranty-alerts" Icon="shield-exclamation" Label="Warranty Alerts" BadgeCount="@_alertCount" OnNavigation="CloseMobileMenu" />
                 <NavItem Href="/notifications" Icon="bell" Label="Notifications" BadgeCount="@Notifications.UnreadCount" OnNavigation="CloseMobileMenu" />
-                <PermissionView Permission="iams:assets:view">
-                    <NavItem Href="/categories" Icon="tag" Label="Categories" OnNavigation="CloseMobileMenu" />
-                </PermissionView>
+                @* Ungated for the same reason: /categories is a bare [Authorize] page reading
+                   endpoints that require no permission. *@
+                <NavItem Href="/categories" Icon="tag" Label="Categories" OnNavigation="CloseMobileMenu" />
 
                 @if (_showAdminGroup)
                 {
@@ -448,7 +451,7 @@
                         <span class="text-xs mt-1 text-primary-600 dark:text-primary-400 font-medium">Scan</span>
                     </a>
 
-                    <PermissionView Permission="iams:warranty:manage">
+                    @* Ungated, matching the desktop nav above - the warranty reads require no permission. *@
                         <!-- Alerts -->
                         <a href="/warranty-alerts" class="@GetFooterNavClass("/warranty-alerts") relative">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -462,7 +465,6 @@
                             }
                             <span class="text-xs mt-1">Alerts</span>
                         </a>
-                    </PermissionView>
                     <AuthorizeView Roles="Employee">
                         <!-- My reports -->
                         <a href="/my-tickets" class="@GetFooterNavClass("/my-tickets")">
