@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using IAMS.Shared.DTOs;
 
 namespace IAMS.Web.Services;
@@ -7,6 +8,15 @@ namespace IAMS.Web.Services;
 public class ApiClient(HttpClient http, AuthService authService)
 {
     public event Func<Task>? OnAuthenticationFailed;
+
+    // The API serializes with MVC's JsonSerializerDefaults.Web (camelCase property names, e.g.
+    // "message"). JsonSerializerOptions.Default is case-SENSITIVE, so a bare
+    // JsonSerializer.Deserialize<ApiResponse<object>> call never binds "message" to
+    // ApiResponse.Message - every server-supplied error message is silently lost. Use this
+    // options instance (hoisted rather than allocated per call) for every hand-rolled error-body
+    // parse below; response.Content.ReadFromJsonAsync applies JsonSerializerDefaults.Web itself
+    // and does not need it.
+    private static readonly JsonSerializerOptions ErrorBodyJsonOptions = new(JsonSerializerDefaults.Web);
 
     private async Task<HttpClient> GetAuthenticatedClient()
     {
@@ -562,7 +572,7 @@ public class ApiClient(HttpClient http, AuthService authService)
             {
                 try
                 {
-                    var error = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<object>>(errorContent);
+                    var error = JsonSerializer.Deserialize<ApiResponse<object>>(errorContent, ErrorBodyJsonOptions);
                     return (false, null, error?.Message ?? "Failed to upload attachment");
                 }
                 catch
@@ -671,7 +681,7 @@ public class ApiClient(HttpClient http, AuthService authService)
             {
                 try
                 {
-                    var error = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<object>>(errorContent);
+                    var error = JsonSerializer.Deserialize<ApiResponse<object>>(errorContent, ErrorBodyJsonOptions);
                     return (false, null, error?.Message ?? "Failed to upload attachment");
                 }
                 catch
@@ -1022,11 +1032,11 @@ public class ApiClient(HttpClient http, AuthService authService)
         {
             try
             {
-                var error = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<object>>(body);
+                var error = JsonSerializer.Deserialize<ApiResponse<object>>(body, ErrorBodyJsonOptions);
                 if (!string.IsNullOrWhiteSpace(error?.Message))
                     return error.Message;
             }
-            catch (System.Text.Json.JsonException)
+            catch (JsonException)
             {
                 // Not a JSON body (or not our shape) - fall through to the status-derived message.
             }
