@@ -95,6 +95,15 @@ public class PermissionGateTests
             throw new NotSupportedException();
     }
 
+    private class UnusedFileStorageService : IFileStorageService
+    {
+        public Task<string> SaveFileAsync(Stream fileStream, string fileName, string contentType) => throw new NotSupportedException();
+        public Task<(Stream FileStream, string ContentType)?> GetFileAsync(string storedFileName) => throw new NotSupportedException();
+        public Task<bool> DeleteFileAsync(string storedFileName) => throw new NotSupportedException();
+        public bool IsValidFileType(string contentType) => throw new NotSupportedException();
+        public bool IsValidFileSize(long sizeBytes) => throw new NotSupportedException();
+    }
+
     // ---------------------------------------------------------------------------------------
     // 1. The inversion guard: TicketCommentsController.Add
     // ---------------------------------------------------------------------------------------
@@ -326,6 +335,228 @@ public class PermissionGateTests
             Assert.True(body.Success);
             Assert.Single(body.Data!);
             Assert.DoesNotContain(body.Data!, c => c.IsInternal);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // 6. The not-my-ticket write gate: TicketCommentsController.Add and
+    //    TicketAttachmentsController.UploadAttachment both require iams:tickets:manage (not the
+    //    read-only iams:tickets:queue) to write to a ticket the actor does not own, while the
+    //    ticket's own requester needs only iams:tickets:file. Each direction is a one-line
+    //    predicate (`!CanManageQueue && ticket.RequesterUserId != CurrentUserId`) a refactor
+    //    could silently revert either way, so both the forbidding and the allowing side get a
+    //    dedicated test here rather than relying on the existing internal-comment test (which
+    //    also trips the separate IsInternal-only gate and so does not discriminate this one).
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>Throws on every member - proves a Forbid short-circuits before the write path
+    /// (the real ticket/asset services, or the ticket store itself) is ever touched.</summary>
+    private sealed class ThrowingTicketService : ITicketService
+    {
+        public Task<ServiceResult<Ticket>> CreateAsync(string type, string category, string title, string? description, string priority, int? assetId, string requesterUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<Ticket?> GetAsync(int id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<(List<Ticket> Items, int TotalCount, int Page, int PageSize)> ListAsync(TicketQuery query, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<TicketSummary> GetSummaryAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ServiceResult> AssignAsync(int id, string assigneeUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ServiceResult> ChangeStatusAsync(int id, string status, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ServiceResult> ResolveAsync(int id, string resolution, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ServiceResult<TicketComment>> AddCommentAsync(int ticketId, string userId, string body, bool isInternal, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ServiceResult> FulfilAsync(int ticketId, int assetId, string resolution, string actingUserId, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    private sealed class StubFileStorageService : IFileStorageService
+    {
+        public Task<string> SaveFileAsync(Stream fileStream, string fileName, string contentType) => Task.FromResult("stored-file.txt");
+        public Task<(Stream FileStream, string ContentType)?> GetFileAsync(string storedFileName) => throw new NotSupportedException();
+        public Task<bool> DeleteFileAsync(string storedFileName) => throw new NotSupportedException();
+        public bool IsValidFileType(string contentType) => true;
+        public bool IsValidFileSize(long sizeBytes) => true;
+    }
+
+    private sealed class StubUploadAllowedSubscriptionService : ISubscriptionService
+    {
+        public Task<bool> CanCreateAssetAsync(Guid tenantId) => throw new NotSupportedException();
+        public Task<bool> CanCreateUserAsync(Guid tenantId) => throw new NotSupportedException();
+        public Task<bool> CanUploadFileAsync(Guid tenantId, long fileSizeBytes) => Task.FromResult(true);
+        public Task<bool> CanCreateTicketAsync(Guid tenantId) => throw new NotSupportedException();
+        public Task UpdateAssetCountAsync(Guid tenantId) => throw new NotSupportedException();
+        public Task UpdateUserCountAsync(Guid tenantId) => throw new NotSupportedException();
+        public Task UpdateStorageUsageAsync(Guid tenantId) => throw new NotSupportedException();
+        public Task<TenantUsageDto> GetUsageAsync(Guid tenantId) => throw new NotSupportedException();
+        public Task<bool> IsSubscriptionActiveAsync(Guid tenantId) => throw new NotSupportedException();
+    }
+
+    private sealed class StubActiveLookupService : ILookupService
+    {
+        public Task<bool> IsActiveValueAsync(string lookupType, string value, CancellationToken ct = default) => Task.FromResult(true);
+        public Task<List<string>> GetActiveValuesAsync(string lookupType, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    private static IFormFile BuildFormFile(string content = "attachment body")
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(content);
+        var stream = new MemoryStream(bytes);
+        return new Microsoft.AspNetCore.Http.FormFile(stream, 0, bytes.Length, "file", "note.txt")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "text/plain"
+        };
+    }
+
+    [Fact]
+    public async Task Add_forbids_a_queue_viewer_without_manage_rights_from_posting_a_non_internal_comment_on_someone_elses_ticket()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "Requester");
+            await TestDb.SeedUserAsync(db, tenantId, "staff-1", "Queue Viewer, No Manage Rights");
+
+            var tickets = BuildTicketService(db, tenantId);
+            var created = await tickets.CreateAsync(
+                TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.Low,
+                null, "emp-1", default);
+
+            var controller = new TicketCommentsController(tickets, db);
+            // Not internal this time - isolates the ownership check (CanManageQueue vs
+            // ticket.RequesterUserId) from the separate "only manage may write internal notes"
+            // gate the existing internal-comment test also trips.
+            SetUser(controller, BuildPrincipal(permissions: [Permissions.TicketsQueue], userId: "staff-1"));
+
+            var result = await controller.Add(
+                created.Value!.Id,
+                new AddTicketCommentRequest { Body = "Visible reply", IsInternal = false },
+                default);
+
+            Assert.IsType<ForbidResult>(result.Result);
+            Assert.Equal(0, await db.TicketComments.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Add_allows_the_ticket_owner_holding_only_TicketsFile_to_comment_on_their_own_ticket()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "Requester");
+
+            var tickets = BuildTicketService(db, tenantId);
+            var created = await tickets.CreateAsync(
+                TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.Low,
+                null, "emp-1", default);
+
+            var controller = new TicketCommentsController(tickets, db);
+            SetUser(controller, BuildPrincipal(permissions: [Permissions.TicketsFile], userId: "emp-1"));
+
+            var result = await controller.Add(
+                created.Value!.Id,
+                new AddTicketCommentRequest { Body = "Following up on my own ticket", IsInternal = false },
+                default);
+
+            var ok = Assert.IsType<OkObjectResult>(result.Result);
+            var body = Assert.IsType<ApiResponse<TicketCommentDto>>(ok.Value);
+            Assert.True(body.Success);
+            Assert.Equal(1, await db.TicketComments.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task UploadAttachment_forbids_a_queue_viewer_without_manage_rights_from_uploading_to_someone_elses_ticket()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "Requester");
+            await TestDb.SeedUserAsync(db, tenantId, "staff-1", "Queue Viewer, No Manage Rights");
+
+            var tickets = BuildTicketService(db, tenantId);
+            var created = await tickets.CreateAsync(
+                TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.Low,
+                null, "emp-1", default);
+
+            // Every dependency past the permission gate throws - a passing test here can only
+            // mean the controller returned Forbid before touching any of them.
+            var controller = new TicketAttachmentsController(
+                db, new UnusedFileStorageService(), new UnusedSubscriptionService(),
+                new FakeTenantProvider(tenantId), new UnusedLookupService());
+            SetUser(controller, BuildPrincipal(permissions: [Permissions.TicketsQueue], userId: "staff-1"));
+
+            var result = await controller.UploadAttachment(
+                created.Value!.Id, BuildFormFile(), "General", null, default);
+
+            Assert.IsType<ForbidResult>(result.Result);
+            Assert.Equal(0, await db.TicketAttachments.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task UploadAttachment_allows_the_ticket_owner_holding_only_TicketsFile_to_upload_to_their_own_ticket()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "emp-1", "Requester");
+
+            var tickets = BuildTicketService(db, tenantId);
+            var created = await tickets.CreateAsync(
+                TicketTypes.Incident, TicketCategory.Hardware, "Printer jams", null, TicketPriority.Low,
+                null, "emp-1", default);
+
+            var controller = new TicketAttachmentsController(
+                db, new StubFileStorageService(), new StubUploadAllowedSubscriptionService(),
+                new FakeTenantProvider(tenantId), new StubActiveLookupService());
+            SetUser(controller, BuildPrincipal(permissions: [Permissions.TicketsFile], userId: "emp-1"));
+
+            var result = await controller.UploadAttachment(
+                created.Value!.Id, BuildFormFile(), "General", null, default);
+
+            var created201 = Assert.IsType<CreatedAtActionResult>(result.Result);
+            var body = Assert.IsType<ApiResponse<TicketAttachmentDto>>(created201.Value);
+            Assert.True(body.Success);
+            Assert.Equal(1, await db.TicketAttachments.CountAsync());
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // 7. TicketsController.Fulfil requires iams:assignments:assign in addition to ticket-queue
+    //    management - a one-line predicate (User.HasPermission(Permissions.AssignmentsAssign))
+    //    a refactor could silently drop, re-opening the gap where queue management alone let a
+    //    holder hand out assets through this endpoint.
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Fulfil_forbids_an_actor_with_queue_management_but_not_assignment_permission()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            // ThrowingTicketService proves FulfilAsync is never reached - the Forbid must come
+            // from the permission check alone, before the ticket store is touched.
+            var controller = BuildTicketsController(new ThrowingTicketService(), db, tenantId);
+            // Holds queue-management (what the [Authorize(Policy = "CanManageTicketQueue")] route
+            // policy would check in production) but NOT AssignmentsAssign - the explicit in-body
+            // check this fix added.
+            SetUser(controller, BuildPrincipal(permissions: [Permissions.TicketsManage], userId: "staff-1"));
+
+            var result = await controller.Fulfil(
+                1, new FulfilTicketRequest { AssetId = 1, Resolution = "Issued." }, default);
+
+            Assert.IsType<ForbidResult>(result.Result);
         }
     }
 }
