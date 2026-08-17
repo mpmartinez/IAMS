@@ -66,6 +66,19 @@
                         input: 'hsl(var(--input))',
                         ring: 'hsl(var(--ring))',
                     },
+                    // Tailwind's preflight paints every element's border-color with
+                    // borderColor.DEFAULT (gray-200) and divideColor.DEFAULT likewise. Extending
+                    // `colors` above does NOT change those defaults, so the many components that
+                    // use a bare `border` / `border-b` / `divide-y` (Card, Dialog, Alert, Badge,
+                    // Table, DropdownMenu, ...) drew a near-white edge that ignored the theme and
+                    // stood out badly in dark mode. Point both defaults at the themed token so an
+                    // uncoloured border follows --border in light and dark alike.
+                    borderColor: {
+                        DEFAULT: 'hsl(var(--border))',
+                    },
+                    divideColor: {
+                        DEFAULT: 'hsl(var(--border))',
+                    },
                     animation: {
                         'fade-in': 'fadeIn 0.3s ease-out',
                         'slide-up': 'slideUp 0.3s ease-out',
