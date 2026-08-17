@@ -135,8 +135,14 @@ public class RolesController(
         if (string.IsNullOrWhiteSpace(name))
             return BadRequest(ApiResponse<RoleDto>.Fail("Name is required."));
 
+        // ApplicationRole keeps Identity's global unique index on NormalizedName (no per-tenant
+        // composite index exists yet - see the "Catalog versioning" / name-uniqueness note in the
+        // design doc), so this check is unscoped: a name already taken by ANY tenant collides
+        // here, not just this tenant's own roles. Echoing the name back in the error would
+        // confirm to tenant B that a role called that exists somewhere - possibly tenant A's,
+        // which tenant B has no visibility into otherwise. Keep the message generic.
         if (await roleManager.FindByNameAsync(name) is not null)
-            return BadRequest(ApiResponse<RoleDto>.Fail($"A role named \"{name}\" already exists."));
+            return BadRequest(ApiResponse<RoleDto>.Fail("That name is not available."));
 
         var rejected = Validate(dto.Permissions, out var accepted, existing: null);
         if (rejected is not null) return BadRequest(ApiResponse<RoleDto>.Fail(rejected));

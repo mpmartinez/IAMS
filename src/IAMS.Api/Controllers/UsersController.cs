@@ -244,9 +244,12 @@ public class UsersController(
                     string.Join(", ", roleResult.Errors.Select(e => e.Description))));
             }
 
-            // Their live token still carries the old role's permissions. This affects one person,
-            // so force a refresh rather than wait out the token lifetime. Editing a role's
-            // permissions is handled differently - see the spec.
+            // Their live access token still carries the old role's permissions and keeps working
+            // until it naturally expires - this revokes their refresh tokens, not that access
+            // token. The practical effect is a hard logout on next refresh attempt, not a silent
+            // upgrade to the new role's permissions. This affects one person, so that trade-off is
+            // fine; editing a role's permissions (affects everyone who holds it) is handled
+            // differently - see the spec's "Token and Staleness" section.
             await tokenService.RevokeAllUserTokensAsync(user.Id);
         }
 

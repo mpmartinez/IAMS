@@ -186,9 +186,37 @@ permission set.
 Staleness is handled differently by blast radius:
 
 - **A user's own role changed** — affects one person. `UsersController.UpdateUser` calls the existing
-  `TokenService.RevokeAllUserTokensAsync` so the change takes effect on their next refresh.
+  `TokenService.RevokeAllUserTokensAsync`. That revokes their *refresh* tokens, not the access token
+  already in their hands - the outstanding access token stays valid for its own remaining lifetime.
+  The practical effect is a hard logout, not a silent refresh: the next time their access token
+  expires and the client tries to use the now-revoked refresh token, that fails and the user is
+  signed out rather than transparently upgraded to a token carrying the new role's permissions.
 - **A role's permission set edited** — affects potentially every user in the tenant. Accept the natural
   JWT lifetime (`Jwt:ExpireMinutes`, currently 30) rather than mass-logout a tenant mid-work.
+
+## Catalog versioning
+
+`Permissions.All` is code-owned and can grow across releases. `Tenant.RolePermissionsSeededAt`
+gates `SeedData.EnsureRolePermissionsAsync` per tenant - once set, that method never touches the
+tenant again (see its doc comment). This has a permanent consequence, not a bug to be fixed
+incidentally: a permission key added to the catalog in a later release does **not** reach any
+tenant that was already provisioned before that release shipped. Only brand-new tenants get it by
+default. Every existing tenant's admin must tick the new permission onto each role that should
+have it, by hand, at `/admin/roles`.
+
+This is a property of the design, not an oversight - the marker exists specifically so a tenant's
+deliberate revocations survive restarts (see `EnsureRolePermissionsAsync`'s doc comment), and any
+scheme that re-examines already-provisioned tenants risks resurrecting a permission someone
+turned off on purpose. Two ways to close the gap, neither implemented here:
+
+- **Per-tenant catalog-version column.** Track which catalog version last provisioned each tenant
+  and, on startup, diff against the current catalog to insert only the *newly added* keys (never
+  touching keys that existed at the tenant's last provisioned version, so deliberate revocations of
+  those are untouched). Fully automatic, but adds a migration and a version-diffing code path.
+- **Explicit "reset role to defaults" action.** Give tenant admins a button per built-in role that
+  reapplies `Permissions.DefaultsFor(roleName)` on demand. No automatic drift-chasing, and it
+  doubles as a recovery tool for a role an admin has misconfigured, but it requires the admin to
+  notice and act rather than happening for them.
 
 ## API
 
@@ -198,7 +226,7 @@ New `RolesController`:
 |---|---|---|
 | `GET /api/roles` | `roles.view` | Built-in roles plus this tenant's custom roles, each with its permission keys and a user count. |
 | `GET /api/roles/assignable` | `users.manage` | Thin `{ name, description }` list for the Users dropdown. Gated by who can assign, not who can read roles. |
-| `POST /api/roles` | `roles.manage` | Creates a custom role. Name unique per tenant, `TenantId` set, `IsBuiltIn = false`. |
+| `POST /api/roles` | `roles.manage` | Creates a custom role. Name unique per tenant (see divergence note below), `TenantId` set, `IsBuiltIn = false`. |
 | `PUT /api/roles/{id}` | `roles.manage` | Updates description and the full permission list. For built-in roles both name and description are fixed, so only grants change. |
 | `DELETE /api/roles/{id}` | `roles.manage` | Custom roles only. Returns 409 with the user count if any user holds it. |
 | `GET /api/permissions` | `roles.view` | The catalog, grouped, for the matrix UI. |
@@ -215,6 +243,23 @@ New DTOs in `IAMS.Shared/DTOs/RoleDto.cs`: `RoleDto`, `CreateRoleDto`, `UpdateRo
 - **SuperAdmin grants are immutable**, including by another SuperAdmin, so the bypass cannot be
   weakened by a mistake in the UI.
 - **Built-in roles cannot be deleted or renamed.**
+
+### Known divergence: role names are globally unique, not per-tenant
+
+This spec promises "Name unique per tenant" above, but the shipped implementation does not
+deliver that. `ApplicationRole` keeps ASP.NET Identity's own unique index on `NormalizedName`,
+which is global, and `RolesController.CreateRole` uses the unscoped `RoleManager.FindByNameAsync`
+to check for a duplicate. The practical effect: tenant A creating a custom role called "Support"
+permanently claims that name platform-wide, and tenant B gets a generic "That name is not
+available" rejection if it tries the same name - correct in that it doesn't confirm tenant A's
+role exists, but still a real collision tenant B cannot work around by choosing a different name
+for what is, from its point of view, an unrelated role.
+
+Fixing this properly needs the global `NormalizedName` unique index replaced with a composite
+`(NormalizedName, TenantId)` index - a change to Identity's own schema, which deserves its own
+migration and review rather than a fix folded into an unrelated pass. Until then, avoid names
+likely to collide across tenants for anything platform-wide (built-in role names are reserved
+implicitly, since they're seeded with `TenantId = null`).
 
 ## Web UI
 
