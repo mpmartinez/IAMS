@@ -13,5 +13,5 @@ public static class ClaimsPrincipalExtensions
     /// gate the endpoint itself.
     /// </summary>
     public static bool HasPermission(this ClaimsPrincipal user, string permission) =>
-        user.IsInRole(Roles.SuperAdmin) || user.HasClaim(Permissions.ClaimType, permission);
+        user is not null && (user.IsInRole(Roles.SuperAdmin) || user.HasClaim(Permissions.ClaimType, permission));
 }

@@ -37,7 +37,7 @@ public class TicketsController : ControllerBase
     }
 
     private string CurrentUserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-    private bool IsStaff => User.HasPermission(Permissions.TicketsQueue);
+    private bool CanViewQueue => User.HasPermission(Permissions.TicketsQueue);
 
     [HttpGet]
     [Authorize(Policy = "CanViewTicketQueue")]
@@ -114,10 +114,10 @@ public class TicketsController : ControllerBase
             return NotFound(ApiResponse<TicketDto>.Fail("Ticket not found."));
 
         // A requester may read their own ticket; everyone else needs staff rights.
-        if (!IsStaff && ticket.RequesterUserId != CurrentUserId)
+        if (!CanViewQueue && ticket.RequesterUserId != CurrentUserId)
             return Forbid();
 
-        return Ok(ApiResponse<TicketDto>.Ok(ticket.ToDto(includeInternalComments: IsStaff)));
+        return Ok(ApiResponse<TicketDto>.Ok(ticket.ToDto(includeInternalComments: CanViewQueue)));
     }
 
     [HttpPost]
@@ -153,7 +153,7 @@ public class TicketsController : ControllerBase
             return BadRequest(ApiResponse<TicketDto>.Fail(result.Message!));
 
         var created = await _tickets.GetAsync(result.Value!.Id, ct);
-        return Ok(ApiResponse<TicketDto>.Ok(created!.ToDto(includeInternalComments: IsStaff), "Ticket created."));
+        return Ok(ApiResponse<TicketDto>.Ok(created!.ToDto(includeInternalComments: CanViewQueue), "Ticket created."));
     }
 
     [HttpPost("{id:int}/assign")]

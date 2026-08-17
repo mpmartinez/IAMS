@@ -21,7 +21,7 @@ public class TicketAttachmentsController(
     ILookupService lookups) : ControllerBase
 {
     private string CurrentUserId => User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-    private bool IsStaff => User.HasPermission(Permissions.TicketsQueue);
+    private bool CanViewQueue => User.HasPermission(Permissions.TicketsQueue);
 
     /// <summary>
     /// Get all attachments for a ticket
@@ -33,7 +33,7 @@ public class TicketAttachmentsController(
         if (ticket is null)
             return NotFound(ApiResponse<List<TicketAttachmentDto>>.Fail("Ticket not found"));
 
-        if (!IsStaff && ticket.RequesterUserId != CurrentUserId)
+        if (!CanViewQueue && ticket.RequesterUserId != CurrentUserId)
             return Forbid();
 
         var attachments = await db.TicketAttachments
@@ -57,7 +57,7 @@ public class TicketAttachmentsController(
         if (ticket is null)
             return NotFound(ApiResponse<TicketAttachmentDto>.Fail("Ticket not found"));
 
-        if (!IsStaff && ticket.RequesterUserId != CurrentUserId)
+        if (!CanViewQueue && ticket.RequesterUserId != CurrentUserId)
             return Forbid();
 
         var attachment = await db.TicketAttachments
@@ -71,8 +71,9 @@ public class TicketAttachmentsController(
     }
 
     /// <summary>
-    /// Upload a new attachment. Staff may upload to any ticket; a requester may only
-    /// upload to their own ticket - same ownership check as the read endpoints above.
+    /// Upload a new attachment. A holder of the ticket-queue permission may upload to any
+    /// ticket; a requester may only upload to their own ticket - same ownership check as the
+    /// read endpoints above.
     /// </summary>
     [HttpPost]
     [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB to account for multipart overhead
@@ -88,7 +89,7 @@ public class TicketAttachmentsController(
         if (ticket is null)
             return NotFound(ApiResponse<TicketAttachmentDto>.Fail("Ticket not found"));
 
-        if (!IsStaff && ticket.RequesterUserId != CurrentUserId)
+        if (!CanViewQueue && ticket.RequesterUserId != CurrentUserId)
             return Forbid();
 
         // Validate category - editable lookup data, not the TicketAttachmentCategories constant.
@@ -151,7 +152,7 @@ public class TicketAttachmentsController(
         if (ticket is null)
             return NotFound(ApiResponse<object>.Fail("Ticket not found"));
 
-        if (!IsStaff && ticket.RequesterUserId != CurrentUserId)
+        if (!CanViewQueue && ticket.RequesterUserId != CurrentUserId)
             return Forbid();
 
         var attachment = await db.TicketAttachments

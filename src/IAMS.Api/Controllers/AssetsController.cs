@@ -430,9 +430,10 @@ public class AssetsController(
 
         // Open to every authenticated user, because an employee scanning a QR sticker to
         // report a fault needs to resolve exactly this one asset. They do not need what it
-        // cost, so a non-staff caller gets the identifying fields without the financials.
-        var isStaff = User.HasPermission(Permissions.AssetsView);
-        return Ok(ApiResponse<AssetDto>.Ok(isStaff ? MapToDto(asset) : MapToScanDto(asset)));
+        // cost, so a caller without the assets:view permission gets the identifying fields
+        // without the financials.
+        var canViewAssets = User.HasPermission(Permissions.AssetsView);
+        return Ok(ApiResponse<AssetDto>.Ok(canViewAssets ? MapToDto(asset) : MapToScanDto(asset)));
     }
 
     /// <summary>
