@@ -40,7 +40,7 @@ Extract the existing picker, fix the two defects, and wire attachments to every 
 | Oversized photos | Downscale in the browser | The alternative is raising the server limit, which consumes tenant storage ~10× faster on a metered quota. |
 | Who uploads | The ticket creator | Stated requirement. Staff working the queue view but do not upload. |
 | When | At creation, and afterwards by the requester on their own ticket | Covers IT replying "can you send a photo of the error?" after the ticket is filed. |
-| Delete | Owner or `iams:tickets:manage` | An employee who attaches the wrong or a sensitive photo can currently only have it removed by asking IT. |
+| Delete | The uploader only | It is the requester's photo, and possibly a sensitive one. IT working the queue can view it but cannot remove it, so an attachment cannot be quietly dropped from a ticket by anyone but the person who put it there. |
 | Code reuse | One shared picker component | A second and third copy is how the Users role dropdown drifted from `Roles.TenantAssignable`. |
 
 ## Components
@@ -72,8 +72,12 @@ Displays an existing ticket's attachments. Images render as a thumbnail grid; no
 file rows with name, size, and type. Clicking an image opens it enlarged in the existing `Modal`
 component. Each item offers download, and offers delete only when the viewer may delete it.
 
-Parameters: `TicketId` (int), `CanDelete` (Func<TicketAttachmentDto, bool>), `OnChanged`
-(EventCallback, so the host can refresh counts).
+Parameters: `TicketId` (int) and `OnChanged` (EventCallback, so the host can refresh counts).
+
+The component decides the delete affordance itself rather than taking a predicate from the host: the
+rule is uploader-only, so it compares each `TicketAttachmentDto.UploadedByUserId` against the current
+user's id from `AuthenticationStateProvider`. Every host would otherwise pass the identical callback,
+and a host that got it wrong would offer a control the API rejects.
 
 ### `wwwroot/js/imageResize.js` (new)
 
@@ -118,20 +122,28 @@ returns `(bool Success, string? Error)` like the other write methods. Error bodi
 defensively — a 403 from the authorization middleware has an empty body, which is what broke the role
 methods previously.
 
-### `TicketAttachmentsController.DeleteAttachment` (loosened)
+### `TicketAttachmentsController.DeleteAttachment` (rule replaced)
 
-Currently `[Authorize(Policy = "CanManageTicketQueue")]`, a flat permission check. It becomes an
-ownership-or-permission check, matching what `TicketCommentsController` and the attachment read paths
-already do:
+This is a **swap, not a widening**. Today the action is `[Authorize(Policy = "CanManageTicketQueue")]`
+— staff can delete, the uploader cannot. It becomes uploader-only:
 
 ```
-if (!User.HasPermission(Permissions.TicketsManage) && attachment.UploadedByUserId != CurrentUserId)
+if (attachment.UploadedByUserId != CurrentUserId)
     return Forbid();
 ```
 
-The permission attribute is removed from the action and the ownership check moves into the body, so a
-requester can delete a file they uploaded. Deleting still removes the stored file and the row, so
-metered storage is genuinely reclaimed.
+The permission attribute is removed from the action and this check moves into the body. Deleting still
+removes the stored file and the row, so metered storage is genuinely reclaimed.
+
+Note both halves of the swap. The requester **gains** the ability to remove a file they uploaded.
+Queue managers **lose** the ability to remove anyone else's — deliberately, so an attachment cannot be
+quietly dropped from a ticket by anyone but the person who put it there.
+
+**Known consequence, accepted:** if an employee uploads something genuinely inappropriate and then
+leaves — `UsersController.DeleteUser` soft-deletes by setting `IsActive = false`, and
+`AuthController` blocks inactive users from signing in — nobody can remove that file through the UI.
+It would need a database or storage-level intervention. Widening this later to include SuperAdmin is a
+one-line change if that becomes a real problem; it is not added pre-emptively.
 
 No other API change. No migration: `TicketAttachment` already carries everything needed, including
 `UploadedByUserId`.
@@ -178,8 +190,9 @@ API-side, in `tests/IAMS.Api.Tests`, following the existing controller-test patt
 constructed directly with a `ClaimsPrincipal` on `ControllerContext`):
 
 - The uploader can delete their own attachment.
-- A different non-manager user cannot delete it (403), and the attachment survives.
-- A holder of `iams:tickets:manage` can delete anyone's attachment.
+- A different user cannot delete it (403), and the attachment survives.
+- **A holder of `iams:tickets:manage` who is not the uploader cannot delete it** — this is the half of
+  the rule that changed, so it needs a test that would fail against today's staff-only behavior.
 - Deleting removes both the row and the stored file, so quota is reclaimed.
 
 Each test must be verified to discriminate by breaking the predicate it targets and confirming failure.
