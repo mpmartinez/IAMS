@@ -978,10 +978,10 @@ public class ApiClient(HttpClient http, AuthService authService)
         var client = await GetAuthenticatedClient();
         var response = await client.PostAsJsonAsync("api/roles", dto);
 
-        var payload = await response.Content.ReadFromJsonAsync<ApiResponse<RoleDto>>();
         if (!response.IsSuccessStatusCode)
-            return (false, null, payload?.Message ?? "Failed to create role.");
+            return (false, null, await ReadRoleErrorAsync(response, "create"));
 
+        var payload = await response.Content.ReadFromJsonAsync<ApiResponse<RoleDto>>();
         return (true, payload?.Data, null);
     }
 
@@ -991,10 +991,7 @@ public class ApiClient(HttpClient http, AuthService authService)
         var response = await client.PutAsJsonAsync($"api/roles/{id}", dto);
 
         if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
-            return (false, error?.Message ?? "Failed to update role.");
-        }
+            return (false, await ReadRoleErrorAsync(response, "update"));
 
         return (true, null);
     }
@@ -1005,12 +1002,43 @@ public class ApiClient(HttpClient http, AuthService authService)
         var response = await client.DeleteAsync($"api/roles/{id}");
 
         if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
-            return (false, error?.Message ?? "Failed to delete role.");
-        }
+            return (false, await ReadRoleErrorAsync(response, "delete"));
 
         return (true, null);
+    }
+
+    /// <summary>
+    /// A 403 from the authorization middleware itself (as opposed to one a controller action
+    /// returns deliberately) has an empty body - ReadFromJsonAsync throws JsonException on that,
+    /// which used to surface as an unhandled error instead of a message. Read the body as a string
+    /// first and only attempt to parse it if there's anything there, falling back to a
+    /// status-derived message otherwise.
+    /// </summary>
+    private static async Task<string> ReadRoleErrorAsync(HttpResponseMessage response, string action)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            try
+            {
+                var error = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<object>>(body);
+                if (!string.IsNullOrWhiteSpace(error?.Message))
+                    return error.Message;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Not a JSON body (or not our shape) - fall through to the status-derived message.
+            }
+        }
+
+        return response.StatusCode switch
+        {
+            System.Net.HttpStatusCode.Forbidden => "You don't have permission to do that.",
+            System.Net.HttpStatusCode.Unauthorized => "Session expired. Please log in again.",
+            System.Net.HttpStatusCode.NotFound => "That role could not be found.",
+            _ => $"Failed to {action} role."
+        };
     }
 }
 

@@ -5,6 +5,7 @@
 @inject ApiClient Api
 @inject SnackbarService Snackbar
 @inject AuthenticationStateProvider AuthProvider
+@inject PermissionChecker PermissionChecker
 
 <PageTitle>Roles - IAMS</PageTitle>
 
@@ -18,12 +19,14 @@
                 custom roles are yours to create.
             </p>
         </div>
-        <Button OnClick="OpenCreate">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            New Role
-        </Button>
+        <PermissionView Permission="iams:roles:manage">
+            <Button OnClick="OpenCreate">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                New Role
+            </Button>
+        </PermissionView>
     </div>
 
     <Card Class="overflow-hidden">
@@ -76,13 +79,15 @@
                                 <td class="py-3 px-4 text-sm text-slate-600 dark:text-slate-300">@role.UserCount</td>
                                 <td class="py-3 px-4">
                                     <div class="flex items-center justify-end gap-1">
-                                        <Button Variant="ghost" Size="sm" OnClick="() => OpenEdit(role)">
-                                            @(role.Name == "SuperAdmin" ? "View" : "Edit")
-                                        </Button>
-                                        @if (!role.IsBuiltIn)
-                                        {
-                                            <Button Variant="ghost" Size="sm" OnClick="() => ConfirmDelete(role)">Delete</Button>
-                                        }
+                                        <PermissionView Permission="iams:roles:manage">
+                                            <Button Variant="ghost" Size="sm" OnClick="() => OpenEdit(role)">
+                                                @(role.Name == "SuperAdmin" ? "View" : "Edit")
+                                            </Button>
+                                            @if (!role.IsBuiltIn)
+                                            {
+                                                <Button Variant="ghost" Size="sm" OnClick="() => ConfirmDelete(role)">Delete</Button>
+                                            }
+                                        </PermissionView>
                                     </div>
                                 </td>
                             </tr>
@@ -235,6 +240,17 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Blazor runs a component's lifecycle regardless of what the wrapping PermissionView
+        // decides to render, so a view-less holder would otherwise still fire the API calls below
+        // - and GetPermissionGroupsAsync/GetRolesAsync use GetFromJsonAsync, which throws on the
+        // 403 that comes back, surfacing Blazor's unhandled-error banner instead of the page's own
+        // denial message.
+        if (!await PermissionChecker.HasPermissionAsync("iams:roles:view"))
+        {
+            _roles = [];
+            return;
+        }
+
         _groups = await Api.GetPermissionGroupsAsync();
         _totalPermissions = _groups?.Sum(g => g.Permissions.Count) ?? 0;
 
