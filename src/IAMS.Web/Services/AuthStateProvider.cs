@@ -9,6 +9,17 @@ namespace IAMS.Web.Services;
 
 public class AuthStateProvider(ILocalStorageService localStorage, IServiceProvider serviceProvider) : AuthenticationStateProvider
 {
+    // Bounds the claim-less-token refresh below to a single attempt for the LIFETIME of this
+    // provider instance, not just within one call frame. NotifyAuthenticationStateChanged()
+    // (see bottom of this file) re-enters GetAuthenticationStateAsync by evaluating its own
+    // argument, and TryRefreshTokenAsync calls that notifier on its success path - so a local
+    // "have I tried yet" variable gets reset on every re-entry and never actually bounds
+    // anything. A field survives the re-entry: if the refreshed token is itself still
+    // claim-less (e.g. a genuinely zero-permission user, or a refresh served by a pre-deploy
+    // instance mid-rollout), every subsequent call - including the one Notify's own re-entry
+    // triggers - skips straight past this branch instead of refreshing again.
+    private bool _claimlessRefreshAttempted;
+
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
         try
@@ -30,11 +41,15 @@ public class AuthStateProvider(ILocalStorageService localStorage, IServiceProvid
             // carries no "permission" claim at all - every PermissionView and nav gate would read
             // that as "holds nothing", locking an already-logged-in user out for up to the token's
             // remaining lifetime (Jwt:ExpireMinutes, currently 30). Force one refresh attempt to
-            // pick up a claim-bearing token instead. Bounded to a single attempt within this call -
-            // if the refreshed token is itself still claim-less (e.g. the refresh hit an old API
-            // instance mid-deploy), fall through and use what we have rather than looping.
-            if (jwtToken.ValidTo >= DateTime.UtcNow && !jwtToken.Claims.Any(c => c.Type == "permission"))
+            // pick up a claim-bearing token instead. Bounded to a single attempt for the life of
+            // this provider instance (see _claimlessRefreshAttempted) - a user with a genuinely
+            // empty permission set is indistinguishable from a stale token here, and would
+            // otherwise refresh forever: if the refreshed token is itself still claim-less, fall
+            // through and use what we have rather than looping.
+            if (jwtToken.ValidTo >= DateTime.UtcNow && !jwtToken.Claims.Any(c => c.Type == "permission")
+                && !_claimlessRefreshAttempted)
             {
+                _claimlessRefreshAttempted = true;
                 var authService = serviceProvider.GetRequiredService<AuthService>();
                 if (await authService.TryRefreshTokenAsync())
                 {
@@ -45,6 +60,20 @@ public class AuthStateProvider(ILocalStorageService localStorage, IServiceProvid
                         jwtToken = handler.ReadJwtToken(token);
                         user = await localStorage.GetItemAsync<UserDto>("currentUser") ?? user;
                     }
+                }
+                else
+                {
+                    // The refresh failed (e.g. a 401 because the refresh token was invalid).
+                    // TryRefreshTokenAsync already cleared storage and pushed its own
+                    // unauthenticated notification in that case - but this frame is still
+                    // holding the stale `token`/`user` locals read before the attempt. Falling
+                    // through with those would build and return an AUTHENTICATED state here,
+                    // racing the unauthenticated one that notification just queued. Re-check
+                    // storage instead: if it's gone, this call must agree and report
+                    // unauthenticated too.
+                    var stillHasToken = await localStorage.GetItemAsync<string>("authToken");
+                    if (string.IsNullOrEmpty(stillHasToken))
+                        return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
                 }
             }
 
