@@ -1,0 +1,250 @@
+@* Shows a ticket's existing attachments: image thumbnails, non-image file tiles, enlarge,
+   download and remove. Until this existed nothing in the app displayed an attachment at all,
+   so uploaded files consumed tenant storage while being invisible to everyone. *@
+
+@using System.Security.Claims
+@inject ApiClient Api
+@inject SnackbarService Snackbar
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthProvider
+
+@if (_loading)
+{
+    <div class="flex flex-wrap gap-2">
+        @for (var i = 0; i < 3; i++)
+        {
+            <div class="w-20 h-20 rounded-lg skeleton"></div>
+        }
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="flex items-center gap-3">
+        <p class="text-sm text-red-600 dark:text-red-400">@_error</p>
+        <Button Variant="ghost" Size="sm" OnClick="ReloadAsync">Retry</Button>
+    </div>
+}
+else if (_attachments.Count == 0)
+{
+    <p class="text-sm text-slate-500 dark:text-slate-400">No attachments.</p>
+}
+else
+{
+    <div class="flex flex-wrap gap-2">
+        @foreach (var a in _attachments)
+        {
+            <div @key="a.Id" class="relative">
+                @if (a.IsImage)
+                {
+                    <button type="button" @onclick="() => OpenPreview(a)" title="@a.FileName"
+                            class="block w-20 h-20 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700">
+                        @if (_thumbCache.TryGetValue(a.Id, out var thumb))
+                        {
+                            <img src="@thumb" alt="@a.FileName" class="w-full h-full object-cover" />
+                        }
+                        else
+                        {
+                            <span class="block w-full h-full skeleton"></span>
+                        }
+                    </button>
+                }
+                else
+                {
+                    <button type="button" @onclick="() => Download(a)" title="@a.FileName"
+                            class="w-20 h-20 flex flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-1">
+                        <svg class="w-5 h-5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <span class="text-[9px] leading-tight text-slate-500 dark:text-slate-400 truncate w-full text-center">@a.FileName</span>
+                    </button>
+                }
+
+                @if (CanDelete(a))
+                {
+                    <button type="button" @onclick="() => ConfirmDelete(a)" title="Remove"
+                            class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-700 dark:bg-slate-600 text-white flex items-center justify-center hover:bg-red-600 transition-colors">
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+}
+
+<Modal IsOpen="@(_preview is not null)" Title="@(_preview?.FileName ?? "")" Size="lg" OnClose="ClosePreview">
+    <ChildContent>
+        @if (_previewSrc is not null)
+        {
+            <img src="@_previewSrc" alt="@_preview?.FileName" class="w-full h-auto rounded-lg" />
+        }
+        else
+        {
+            <div class="h-48 rounded-lg skeleton"></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <Button Variant="ghost" OnClick="ClosePreview">Close</Button>
+        @if (_preview is not null)
+        {
+            <Button OnClick="() => Download(_preview)">Download</Button>
+        }
+    </FooterContent>
+</Modal>
+
+<Modal IsOpen="@(_toDelete is not null)" Title="Remove attachment" OnClose="CancelDelete">
+    <ChildContent>
+        <p class="text-sm text-slate-600 dark:text-slate-300">
+            Remove <span class="font-medium text-slate-900 dark:text-white">@_toDelete?.FileName</span>?
+            This deletes the file and cannot be undone.
+        </p>
+    </ChildContent>
+    <FooterContent>
+        <Button Variant="ghost" OnClick="CancelDelete" Disabled="@_deleting">Cancel</Button>
+        <Button Variant="destructive" OnClick="DeleteConfirmed" Loading="@_deleting">Remove</Button>
+    </FooterContent>
+</Modal>
+
+@code {
+    [Parameter, EditorRequired] public int TicketId { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private List<TicketAttachmentDto> _attachments = new();
+    private bool _loading = true;
+    private string? _error;
+    private string? _currentUserId;
+
+    private TicketAttachmentDto? _preview;
+    private string? _previewSrc;
+    private readonly Dictionary<int, string> _thumbCache = new();
+
+    private TicketAttachmentDto? _toDelete;
+    private bool _deleting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+        _currentUserId = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        await ReloadAsync();
+    }
+
+    /// Public so a host can refresh the gallery after uploading new files.
+    public async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        var list = await Api.GetTicketAttachmentsAsync(TicketId);
+        if (list is null)
+        {
+            _error = "Couldn't load attachments.";
+            _attachments = new();
+        }
+        else
+        {
+            _attachments = list;
+        }
+
+        _loading = false;
+        StateHasChanged();
+
+        // Fetch image bytes after the grid is on screen, so tiles appear immediately and fill in
+        // rather than the whole card waiting on the last image. Sequential for the same reason
+        // uploads are: these offices are on poor connections. Uploads are downscaled, so small.
+        foreach (var a in _attachments.Where(a => a.IsImage && !_thumbCache.ContainsKey(a.Id)).ToList())
+        {
+            var (ok, data, contentType, _) = await Api.DownloadTicketAttachmentAsync(TicketId, a.Id);
+            if (ok && data is not null)
+            {
+                _thumbCache[a.Id] = $"data:{contentType ?? a.ContentType};base64,{Convert.ToBase64String(data)}";
+                StateHasChanged();
+            }
+        }
+    }
+
+    // Uploader-only, mirroring TicketAttachmentsController.DeleteAttachment. Decided here rather
+    // than taken as a predicate so every host cannot re-derive the same rule and get it subtly
+    // wrong, which would offer a control the API rejects.
+    private bool CanDelete(TicketAttachmentDto a) =>
+        _currentUserId is not null && a.UploadedByUserId == _currentUserId;
+
+    private async Task OpenPreview(TicketAttachmentDto a)
+    {
+        _preview = a;
+
+        if (_thumbCache.TryGetValue(a.Id, out var cached))
+        {
+            _previewSrc = cached;
+            return;
+        }
+
+        _previewSrc = null;
+        var (ok, data, contentType, _) = await Api.DownloadTicketAttachmentAsync(TicketId, a.Id);
+        if (ok && data is not null)
+        {
+            _previewSrc = $"data:{contentType ?? a.ContentType};base64,{Convert.ToBase64String(data)}";
+            _thumbCache[a.Id] = _previewSrc;
+        }
+        else
+        {
+            Snackbar.Error("Couldn't open that image.");
+            _preview = null;
+        }
+    }
+
+    private void ClosePreview()
+    {
+        _preview = null;
+        _previewSrc = null;
+    }
+
+    private async Task Download(TicketAttachmentDto a)
+    {
+        var (ok, data, contentType, error) = await Api.DownloadTicketAttachmentAsync(TicketId, a.Id);
+        if (!ok || data is null)
+        {
+            Snackbar.Error(error ?? "Download failed.");
+            return;
+        }
+
+        // Reuses the existing helper in wwwroot/js/fileUtils.js: downloadFile(dataUrl, fileName).
+        var dataUrl = $"data:{contentType ?? a.ContentType};base64,{Convert.ToBase64String(data)}";
+        await JS.InvokeVoidAsync("downloadFile", dataUrl, a.FileName);
+    }
+
+    private void ConfirmDelete(TicketAttachmentDto a) => _toDelete = a;
+
+    private void CancelDelete()
+    {
+        // Ignore dismiss requests while a delete is in flight, so the pending continuation below
+        // cannot read a _toDelete that Cancel, the backdrop or the X has already nulled.
+        if (_deleting) return;
+        _toDelete = null;
+    }
+
+    private async Task DeleteConfirmed()
+    {
+        var target = _toDelete;
+        if (target is null) return;
+
+        _deleting = true;
+        var (ok, error) = await Api.DeleteTicketAttachmentAsync(TicketId, target.Id);
+        _deleting = false;
+
+        if (ok)
+        {
+            Snackbar.Success($"Removed {target.FileName}");
+            _toDelete = null;
+            _thumbCache.Remove(target.Id);
+            await ReloadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        else
+        {
+            Snackbar.Error(error ?? "Couldn't remove the attachment.");
+            _toDelete = null;
+        }
+    }
+}
