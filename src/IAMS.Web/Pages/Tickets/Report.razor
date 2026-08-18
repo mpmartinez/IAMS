@@ -210,72 +210,7 @@
                 </div>
             }
 
-            <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Attachments <span class="text-slate-400 font-normal">(optional)</span>
-                </label>
-                <p class="text-xs text-slate-400 dark:text-slate-500">
-                    A photo is often faster than a description. Up to @MaxFiles files, @(MaxFileSizeBytes / (1024 * 1024)) MB each.
-                </p>
-
-                <div class="flex gap-2">
-                    <label for="@_cameraInputId"
-                           class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm cursor-pointer">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        Take Photo
-                    </label>
-                    <InputFile id="@_cameraInputId" class="sr-only" accept="image/*" capture="environment"
-                               OnChange="OnPhotoCaptured" disabled="@_submitting" />
-
-                    <label for="@_filesInputId"
-                           class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm cursor-pointer">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        Choose Files
-                    </label>
-                    <InputFile id="@_filesInputId" class="sr-only" accept="@AttachmentAccept" multiple
-                               OnChange="OnFilesChosen" disabled="@_submitting" />
-                </div>
-
-                @if (!string.IsNullOrEmpty(_attachError))
-                {
-                    <p class="text-xs text-red-600 dark:text-red-400">@_attachError</p>
-                }
-
-                @if (_pendingFiles.Count > 0)
-                {
-                    <div class="flex flex-wrap gap-2 pt-1">
-                        @foreach (var f in _pendingFiles)
-                        {
-                            <div @key="f.Id" class="relative">
-                                @if (f.PreviewUrl is not null)
-                                {
-                                    <img src="@f.PreviewUrl" alt="@f.Name" class="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-600" />
-                                }
-                                else
-                                {
-                                    <div class="w-16 h-16 flex flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-1">
-                                        <svg class="w-5 h-5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                        </svg>
-                                        <span class="text-[9px] leading-tight text-slate-500 dark:text-slate-400 truncate w-full text-center" title="@f.Name">@f.Name</span>
-                                    </div>
-                                }
-                                <button type="button" @onclick="() => RemoveFile(f)" disabled="@_submitting"
-                                        class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-700 dark:bg-slate-600 text-white flex items-center justify-center hover:bg-red-600 transition-colors disabled:opacity-50">
-                                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                </button>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
+            <TicketAttachmentPicker @bind-Files="_pendingFiles" Disabled="@_submitting" />
 
             @if (!string.IsNullOrEmpty(_error))
             {
@@ -327,27 +262,7 @@
 
     private string? _category;
 
-    // Mirrors IAMS.Api.Entities.TicketAttachmentCategories.Other, for the same reason as above.
-    private const string TicketAttachmentCategoryOther = "Other";
-
     [SupplyParameterFromQuery] public int? AssetId { get; set; }
-
-    // Matches the API's allow-list in FileStorageService (jpeg/png/gif/webp + pdf/doc/docx/txt)
-    // so the picker never offers a type UploadAttachment will reject.
-    private const string AttachmentAccept = "image/*,.pdf,.doc,.docx,.txt";
-    private const int MaxFiles = 6;
-    private const long MaxFileSizeBytes = 5 * 1024 * 1024; // matches FileStorageService's default 5 MB per-file limit
-    private const long MaxTotalBytes = 20 * 1024 * 1024;
-    private const int MaxImageDimension = 1600; // client-side downscale target for photos
-
-    private sealed class PendingFile
-    {
-        public Guid Id { get; } = Guid.NewGuid();
-        public required string Name { get; init; }
-        public required string ContentType { get; init; }
-        public required byte[] Data { get; init; }
-        public string? PreviewUrl { get; init; }
-    }
 
     private string? _type;
     private string _title = "";
@@ -362,10 +277,7 @@
     private TicketDto? _created;
     private System.Timers.Timer? _searchTimer;
 
-    private readonly List<PendingFile> _pendingFiles = new();
-    private string? _attachError;
-    private readonly string _cameraInputId = $"report-camera-{Guid.NewGuid():N}";
-    private readonly string _filesInputId = $"report-files-{Guid.NewGuid():N}";
+    private List<PendingAttachment> _pendingFiles = new();
     private int _uploadedCount;
     private int _uploadTotal;
 
@@ -477,94 +389,6 @@
         _searchTimer.Start();
     }
 
-    private async Task OnPhotoCaptured(InputFileChangeEventArgs e)
-    {
-        if (e.File is not null)
-        {
-            await AddFile(e.File);
-        }
-    }
-
-    private async Task OnFilesChosen(InputFileChangeEventArgs e)
-    {
-        // Pass a generous ceiling here purely so GetMultipleFiles doesn't throw on a large
-        // selection - our own MaxFiles check below is what actually enforces the cap.
-        foreach (var file in e.GetMultipleFiles(50))
-        {
-            await AddFile(file);
-        }
-    }
-
-    private async Task AddFile(IBrowserFile file)
-    {
-        _attachError = null;
-
-        if (_pendingFiles.Count >= MaxFiles)
-        {
-            _attachError = $"You can attach up to {MaxFiles} files.";
-            return;
-        }
-
-        var isImage = file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
-
-        try
-        {
-            // Downscale photos client-side: phone camera shots run 5-10MB, which is slow
-            // to upload on the poor connections these offices have and eats into the
-            // tenant's storage quota. Non-image files (PDF/DOC/TXT) pass through as-is.
-            var source = file;
-            if (isImage)
-            {
-                try
-                {
-                    source = await file.RequestImageFileAsync(file.ContentType, MaxImageDimension, MaxImageDimension);
-                }
-                catch
-                {
-                    // Some browsers/formats can't be resized (e.g. HEIC) - fall back to the original
-                    // and let the size/type checks below decide whether it can be attached.
-                    source = file;
-                }
-            }
-
-            if (source.Size > MaxFileSizeBytes)
-            {
-                _attachError = $"\"{file.Name}\" is over the {MaxFileSizeBytes / (1024 * 1024)} MB limit and wasn't added.";
-                return;
-            }
-
-            var currentTotal = _pendingFiles.Sum(f => (long)f.Data.Length);
-            if (currentTotal + source.Size > MaxTotalBytes)
-            {
-                _attachError = $"Adding \"{file.Name}\" would go over the {MaxTotalBytes / (1024 * 1024)} MB total limit.";
-                return;
-            }
-
-            await using var stream = source.OpenReadStream(MaxFileSizeBytes);
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms);
-            var bytes = ms.ToArray();
-
-            _pendingFiles.Add(new PendingFile
-            {
-                Name = file.Name,
-                ContentType = file.ContentType,
-                Data = bytes,
-                PreviewUrl = isImage ? $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}" : null
-            });
-        }
-        catch (Exception ex)
-        {
-            _attachError = $"Couldn't read \"{file.Name}\": {ex.Message}";
-        }
-    }
-
-    private void RemoveFile(PendingFile file)
-    {
-        _pendingFiles.Remove(file);
-        _attachError = null;
-    }
-
     private async Task Submit()
     {
         if (string.IsNullOrWhiteSpace(_title)) return;
@@ -621,7 +445,7 @@
 
             using var stream = new MemoryStream(f.Data);
             var (ok, _, _) = await Api.UploadTicketAttachmentAsync(
-                ticketId, stream, f.Name, f.ContentType, TicketAttachmentCategoryOther);
+                ticketId, stream, f.Name, f.ContentType, TicketAttachmentDefaults.Category);
 
             if (!ok) failed++;
         }
@@ -649,8 +473,7 @@
         _title = "";
         _description = "";
         _error = null;
-        _pendingFiles.Clear();
-        _attachError = null;
+        _pendingFiles = new();
         _uploadedCount = 0;
         _uploadTotal = 0;
         if (!AssetId.HasValue)

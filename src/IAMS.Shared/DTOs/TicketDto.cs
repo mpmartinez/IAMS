@@ -18,6 +18,15 @@ public record TicketListItemDto
     public DateTime? DueAt { get; init; }
 
     public string Reference => $"TKT-{TicketNumber:D4}";
+
+    /// <summary>
+    /// Whether the ticket is still being worked. Mirrors IAMS.Api.Entities.TicketStatus.Open.
+    ///
+    /// Duplicated here rather than referenced because IAMS.Web cannot see IAMS.Api. It lives on the
+    /// DTO so there is exactly one copy shared by both projects instead of a status list pasted into
+    /// each page, and TicketDtoIsOpenTests pins it against TicketStatus.Open so the two cannot drift.
+    /// </summary>
+    public bool IsOpen => Status is "New" or "Assigned" or "InProgress" or "OnHold";
 }
 
 public record TicketDto : TicketListItemDto
