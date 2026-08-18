@@ -19,32 +19,32 @@
 - Attachments are keyed by ticket id, so any create-then-attach flow uploads **after** the ticket exists, and an attachment failure never undoes a created ticket.
 - Uploads are **sequential, never parallel** — the existing comment explains why: these offices are on poor connections and a batch of large photos saturates the link.
 - The API caps a request at 10 MB (`[RequestSizeLimit]`) and a file at 5 MB (`FileStorageService`, `MaxFileSizeMB: 5`).
-- Build: `dotnet build`. Tests: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj` (currently 179/179).
+- Build: `dotnet build`. Tests: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj` (currently 179/179).
 - There is **no test project for the Blazor assembly**. Blazor work is verified by build plus running the app; never imply test coverage that does not exist.
 
 ## File Structure
 
 **Create:**
-- `src/IAMS.Web/Components/PendingAttachment.cs` — the shared pending-file model
-- `src/IAMS.Web/Components/TicketAttachmentPicker.razor` — camera + multi-select + previews
-- `src/IAMS.Web/Components/TicketAttachmentGallery.razor` — view/download/delete existing attachments
-- `tests/IAMS.Api.Tests/TicketAttachmentDeleteTests.cs`
+- `src/AssetDesk.Web/Components/PendingAttachment.cs` — the shared pending-file model
+- `src/AssetDesk.Web/Components/TicketAttachmentPicker.razor` — camera + multi-select + previews
+- `src/AssetDesk.Web/Components/TicketAttachmentGallery.razor` — view/download/delete existing attachments
+- `tests/AssetDesk.Api.Tests/TicketAttachmentDeleteTests.cs`
 
 **Modify:**
-- `src/IAMS.Web/Pages/Tickets/Report.razor` — consume the picker, delete the extracted code
-- `src/IAMS.Web/Services/ApiClient.cs` — add list/download/delete
-- `src/IAMS.Api/Controllers/TicketAttachmentsController.cs:183-185` — uploader-only delete
-- `src/IAMS.Web/Pages/Tickets/View.razor` — gallery + requester-only add
-- `src/IAMS.Web/Pages/Tickets/Index.razor` — picker in the New Ticket dialog
+- `src/AssetDesk.Web/Pages/Tickets/Report.razor` — consume the picker, delete the extracted code
+- `src/AssetDesk.Web/Services/ApiClient.cs` — add list/download/delete
+- `src/AssetDesk.Api/Controllers/TicketAttachmentsController.cs:183-185` — uploader-only delete
+- `src/AssetDesk.Web/Pages/Tickets/View.razor` — gallery + requester-only add
+- `src/AssetDesk.Web/Pages/Tickets/Index.razor` — picker in the New Ticket dialog
 
 ---
 
 ### Task 1: Extract the attachment picker, and add the two shared values it needs
 
 **Files:**
-- Create: `src/IAMS.Web/Components/PendingAttachment.cs`, `src/IAMS.Web/Components/TicketAttachmentPicker.razor`, `src/IAMS.Web/Components/TicketAttachmentDefaults.cs`
-- Modify: `src/IAMS.Shared/DTOs/TicketDto.cs`, `src/IAMS.Web/Pages/Tickets/Report.razor`
-- Test: `tests/IAMS.Api.Tests/TicketDtoIsOpenTests.cs`
+- Create: `src/AssetDesk.Web/Components/PendingAttachment.cs`, `src/AssetDesk.Web/Components/TicketAttachmentPicker.razor`, `src/AssetDesk.Web/Components/TicketAttachmentDefaults.cs`
+- Modify: `src/AssetDesk.Shared/DTOs/TicketDto.cs`, `src/AssetDesk.Web/Pages/Tickets/Report.razor`
+- Test: `tests/AssetDesk.Api.Tests/TicketDtoIsOpenTests.cs`
 
 **Why the two shared values are here.** Tasks 5 and 6 both need "is this ticket still open?" and both need the
 default attachment category. Writing either inline in each page would put a literal status list and a magic
@@ -53,20 +53,20 @@ now, before the first consumer exists.
 
 **Interfaces:**
 - Consumes: nothing
-- Produces: `IAMS.Web.Components.PendingAttachment` with `Guid Id`, `string Name`, `string ContentType`, `byte[] Data`, `string? PreviewUrl`. `TicketAttachmentPicker` with parameters `List<PendingAttachment> Files`, `EventCallback<List<PendingAttachment>> FilesChanged`, `bool Disabled`, `int MaxFiles` (default 6).
+- Produces: `AssetDesk.Web.Components.PendingAttachment` with `Guid Id`, `string Name`, `string ContentType`, `byte[] Data`, `string? PreviewUrl`. `TicketAttachmentPicker` with parameters `List<PendingAttachment> Files`, `EventCallback<List<PendingAttachment>> FilesChanged`, `bool Disabled`, `int MaxFiles` (default 6).
 
 This task moves code. Nothing about the user-visible behavior of `Report.razor` may change.
 
 - [ ] **Step 0a: Add `IsOpen` to the shared ticket DTO**
 
-In `src/IAMS.Shared/DTOs/TicketDto.cs`, add to `TicketListItemDto` beside the existing computed
+In `src/AssetDesk.Shared/DTOs/TicketDto.cs`, add to `TicketListItemDto` beside the existing computed
 `Reference` property:
 
 ```csharp
     /// <summary>
-    /// Whether the ticket is still being worked. Mirrors IAMS.Api.Entities.TicketStatus.Open.
+    /// Whether the ticket is still being worked. Mirrors AssetDesk.Api.Entities.TicketStatus.Open.
     ///
-    /// Duplicated here rather than referenced because IAMS.Web cannot see IAMS.Api. It lives on the
+    /// Duplicated here rather than referenced because AssetDesk.Web cannot see AssetDesk.Api. It lives on the
     /// DTO so there is exactly one copy shared by both projects instead of a status list pasted into
     /// each page, and TicketDtoIsOpenTests pins it against TicketStatus.Open so the two cannot drift.
     /// </summary>
@@ -75,13 +75,13 @@ In `src/IAMS.Shared/DTOs/TicketDto.cs`, add to `TicketListItemDto` beside the ex
 
 - [ ] **Step 0b: Pin `IsOpen` against the API's canonical list**
 
-Create `tests/IAMS.Api.Tests/TicketDtoIsOpenTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TicketDtoIsOpenTests.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
-using IAMS.Shared.DTOs;
+using AssetDesk.Api.Entities;
+using AssetDesk.Shared.DTOs;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TicketDtoIsOpenTests
 {
@@ -97,8 +97,8 @@ public class TicketDtoIsOpenTests
     [Fact]
     public void IsOpen_AgreesWithTicketStatusOpen_ForEveryStatus()
     {
-        // TicketDto.IsOpen duplicates TicketStatus.Open because IAMS.Web cannot reference
-        // IAMS.Api. This test is what makes that duplication safe: add a status to one side
+        // TicketDto.IsOpen duplicates TicketStatus.Open because AssetDesk.Web cannot reference
+        // AssetDesk.Api. This test is what makes that duplication safe: add a status to one side
         // without the other and it fails here rather than silently in the UI.
         foreach (var status in TicketStatus.All)
         {
@@ -117,17 +117,17 @@ public class TicketDtoIsOpenTests
 
 - [ ] **Step 0c: Run the pinning test**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketDtoIsOpenTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketDtoIsOpenTests`
 
 Expected: PASS, 2 tests. A failure here means the literal list in `IsOpen` disagrees with
 `TicketStatus.Open` — fix `IsOpen`, not the test.
 
 - [ ] **Step 0d: Add the default attachment category constant**
 
-Create `src/IAMS.Web/Components/TicketAttachmentDefaults.cs`:
+Create `src/AssetDesk.Web/Components/TicketAttachmentDefaults.cs`:
 
 ```csharp
-namespace IAMS.Web.Components;
+namespace AssetDesk.Web.Components;
 
 /// <summary>
 /// Values every page that uploads a ticket attachment needs. One definition so the three upload
@@ -135,7 +135,7 @@ namespace IAMS.Web.Components;
 /// </summary>
 public static class TicketAttachmentDefaults
 {
-    /// Mirrors IAMS.Api.Entities.TicketAttachmentCategories.Other. The API requires a category and
+    /// Mirrors AssetDesk.Api.Entities.TicketAttachmentCategories.Other. The API requires a category and
     /// the picker does not expose the lookup, so every upload from the Web client sends this one.
     public const string Category = "Other";
 }
@@ -143,10 +143,10 @@ public static class TicketAttachmentDefaults
 
 - [ ] **Step 1: Create the shared model**
 
-Create `src/IAMS.Web/Components/PendingAttachment.cs`:
+Create `src/AssetDesk.Web/Components/PendingAttachment.cs`:
 
 ```csharp
-namespace IAMS.Web.Components;
+namespace AssetDesk.Web.Components;
 
 /// <summary>
 /// A file chosen in the browser but not yet uploaded. Attachments are keyed by ticket id, so a
@@ -167,7 +167,7 @@ public sealed class PendingAttachment
 
 - [ ] **Step 2: Create the picker component**
 
-Create `src/IAMS.Web/Components/TicketAttachmentPicker.razor`. The markup and logic are lifted verbatim from `Report.razor` lines 213-278 and its file-handling methods:
+Create `src/AssetDesk.Web/Components/TicketAttachmentPicker.razor`. The markup and logic are lifted verbatim from `Report.razor` lines 213-278 and its file-handling methods:
 
 ```razor
 @* Camera capture, multi-select, client-side downscaling and thumbnails for pending ticket
@@ -354,11 +354,11 @@ Create `src/IAMS.Web/Components/TicketAttachmentPicker.razor`. The markup and lo
 }
 ```
 
-Add `@using Microsoft.AspNetCore.Components.Forms` to `src/IAMS.Web/_Imports.razor` if `InputFile` and `IBrowserFile` do not resolve during the build in Step 4.
+Add `@using Microsoft.AspNetCore.Components.Forms` to `src/AssetDesk.Web/_Imports.razor` if `InputFile` and `IBrowserFile` do not resolve during the build in Step 4.
 
 - [ ] **Step 3: Replace the extracted block in Report.razor**
 
-In `src/IAMS.Web/Pages/Tickets/Report.razor`:
+In `src/AssetDesk.Web/Pages/Tickets/Report.razor`:
 
 Replace the whole `<div class="space-y-1.5">` attachment block (starting at the `Attachments <span…(optional)` label, ending at the closing `</div>` before the `@if (!string.IsNullOrEmpty(_error))` block) with:
 
@@ -409,7 +409,7 @@ If you cannot run the app, say so plainly in your report rather than claiming th
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/IAMS.Web/Components/PendingAttachment.cs src/IAMS.Web/Components/TicketAttachmentPicker.razor src/IAMS.Web/Pages/Tickets/Report.razor && git commit -m "refactor(web): extract the ticket attachment picker out of Report.razor"
+git add src/AssetDesk.Web/Components/PendingAttachment.cs src/AssetDesk.Web/Components/TicketAttachmentPicker.razor src/AssetDesk.Web/Pages/Tickets/Report.razor && git commit -m "refactor(web): extract the ticket attachment picker out of Report.razor"
 ```
 
 ---
@@ -417,17 +417,17 @@ git add src/IAMS.Web/Components/PendingAttachment.cs src/IAMS.Web/Components/Tic
 ### Task 2: ApiClient read, download, and delete
 
 **Files:**
-- Modify: `src/IAMS.Web/Services/ApiClient.cs`
+- Modify: `src/AssetDesk.Web/Services/ApiClient.cs`
 
 **Interfaces:**
-- Consumes: `TicketAttachmentDto` from `IAMS.Shared.DTOs`
+- Consumes: `TicketAttachmentDto` from `AssetDesk.Shared.DTOs`
 - Produces: `Task<List<TicketAttachmentDto>?> GetTicketAttachmentsAsync(int ticketId)`, `Task<(bool Success, byte[]? Data, string? ContentType, string? Error)> DownloadTicketAttachmentAsync(int ticketId, int attachmentId)`, `Task<(bool Success, string? Error)> DeleteTicketAttachmentAsync(int ticketId, int attachmentId)`
 
 The endpoints already exist on `TicketAttachmentsController`; only the client is missing, which is why no screen can show attachments.
 
 - [ ] **Step 1: Add the three methods**
 
-Append to `src/IAMS.Web/Services/ApiClient.cs`, next to `UploadTicketAttachmentAsync`:
+Append to `src/AssetDesk.Web/Services/ApiClient.cs`, next to `UploadTicketAttachmentAsync`:
 
 ```csharp
     public async Task<List<TicketAttachmentDto>?> GetTicketAttachmentsAsync(int ticketId)
@@ -502,7 +502,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/IAMS.Web/Services/ApiClient.cs && git commit -m "feat(web): add the ticket attachment read, download and delete client methods"
+git add src/AssetDesk.Web/Services/ApiClient.cs && git commit -m "feat(web): add the ticket attachment read, download and delete client methods"
 ```
 
 ---
@@ -510,8 +510,8 @@ git add src/IAMS.Web/Services/ApiClient.cs && git commit -m "feat(web): add the 
 ### Task 3: Uploader-only delete
 
 **Files:**
-- Modify: `src/IAMS.Api/Controllers/TicketAttachmentsController.cs:183-185`
-- Test: `tests/IAMS.Api.Tests/TicketAttachmentDeleteTests.cs`
+- Modify: `src/AssetDesk.Api/Controllers/TicketAttachmentsController.cs:183-185`
+- Test: `tests/AssetDesk.Api.Tests/TicketAttachmentDeleteTests.cs`
 
 **Interfaces:**
 - Consumes: `TicketAttachmentsController.CurrentUserId` (already present)
@@ -521,20 +521,20 @@ This is a **swap**, not a widening: today the action is `[Authorize(Policy = "Ca
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/IAMS.Api.Tests/TicketAttachmentDeleteTests.cs`. Follow the principal-construction pattern in `tests/IAMS.Api.Tests/PermissionGateTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TicketAttachmentDeleteTests.cs`. Follow the principal-construction pattern in `tests/AssetDesk.Api.Tests/PermissionGateTests.cs`:
 
 ```csharp
 using System.Security.Claims;
-using IAMS.Api.Authorization;
-using IAMS.Api.Controllers;
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
-using IAMS.Api.Services;
+using AssetDesk.Api.Authorization;
+using AssetDesk.Api.Controllers;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TicketAttachmentDeleteTests
 {
@@ -654,13 +654,13 @@ public class TicketAttachmentDeleteTests
 }
 ```
 
-These three fakes do **not** exist — `tests/IAMS.Api.Tests/` contains only `FakeTenantProvider.cs`. Create `tests/IAMS.Api.Tests/AttachmentTestDoubles.cs`:
+These three fakes do **not** exist — `tests/AssetDesk.Api.Tests/` contains only `FakeTenantProvider.cs`. Create `tests/AssetDesk.Api.Tests/AttachmentTestDoubles.cs`:
 
 ```csharp
-using IAMS.Api.Services;
-using IAMS.Shared.DTOs;
+using AssetDesk.Api.Services;
+using AssetDesk.Shared.DTOs;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 /// Records what was deleted so a test can assert the stored file went too, not just the row.
 internal sealed class FakeFileStorageService : IFileStorageService
@@ -703,7 +703,7 @@ internal sealed class FakeLookupService : ILookupService
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketAttachmentDeleteTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketAttachmentDeleteTests`
 
 Expected: `Uploader_CanDeleteTheirOwnAttachment` and `QueueManager_WhoDidNotUpload_CannotDelete` FAIL. The uploader test fails because nothing yet lets a non-manager through; the manager test fails because today a manager is allowed.
 
@@ -711,7 +711,7 @@ Note the attribute-based policy is not evaluated when a controller is constructe
 
 - [ ] **Step 3: Replace the authorization rule**
 
-In `src/IAMS.Api/Controllers/TicketAttachmentsController.cs`, change:
+In `src/AssetDesk.Api/Controllers/TicketAttachmentsController.cs`, change:
 
 ```csharp
     [HttpDelete("{attachmentId:int}")]
@@ -750,20 +750,20 @@ to:
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketAttachmentDeleteTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketAttachmentDeleteTests`
 
 Expected: PASS, 3 tests.
 
 - [ ] **Step 5: Run the full suite**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 
 Expected: 182/182 (179 before this task, plus 3). If a pre-existing test asserted that a manager could delete an attachment, it was pinning the old rule — update it to the new one and say so in your report rather than deleting it.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/IAMS.Api/Controllers/TicketAttachmentsController.cs tests/IAMS.Api.Tests/TicketAttachmentDeleteTests.cs && git commit -m "feat(api): make attachment delete uploader-only"
+git add src/AssetDesk.Api/Controllers/TicketAttachmentsController.cs tests/AssetDesk.Api.Tests/TicketAttachmentDeleteTests.cs && git commit -m "feat(api): make attachment delete uploader-only"
 ```
 
 ---
@@ -771,7 +771,7 @@ git add src/IAMS.Api/Controllers/TicketAttachmentsController.cs tests/IAMS.Api.T
 ### Task 4: Attachment gallery component
 
 **Files:**
-- Create: `src/IAMS.Web/Components/TicketAttachmentGallery.razor`
+- Create: `src/AssetDesk.Web/Components/TicketAttachmentGallery.razor`
 
 **Interfaces:**
 - Consumes: `ApiClient.GetTicketAttachmentsAsync`, `DownloadTicketAttachmentAsync`, `DeleteTicketAttachmentAsync` (Task 2)
@@ -781,7 +781,7 @@ The component decides the delete affordance itself by comparing `UploadedByUserI
 
 - [ ] **Step 1: Create the component**
 
-Create `src/IAMS.Web/Components/TicketAttachmentGallery.razor`:
+Create `src/AssetDesk.Web/Components/TicketAttachmentGallery.razor`:
 
 ```razor
 @using Microsoft.AspNetCore.Components.Authorization
@@ -1004,7 +1004,7 @@ else
 }
 ```
 
-No new JavaScript is needed for the download. `src/IAMS.Web/wwwroot/js/fileUtils.js:11` already defines
+No new JavaScript is needed for the download. `src/AssetDesk.Web/wwwroot/js/fileUtils.js:11` already defines
 `window.downloadFile = function(dataUrl, fileName)`, which is what the code above calls. Do not add a
 second helper.
 
@@ -1037,7 +1037,7 @@ Expected: Build succeeded, 0 errors. `Modal` does have a `Size` parameter (`Moda
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/IAMS.Web/Components/TicketAttachmentGallery.razor src/IAMS.Web/wwwroot/js/fileUtils.js && git commit -m "feat(web): add the ticket attachment gallery"
+git add src/AssetDesk.Web/Components/TicketAttachmentGallery.razor src/AssetDesk.Web/wwwroot/js/fileUtils.js && git commit -m "feat(web): add the ticket attachment gallery"
 ```
 
 ---
@@ -1045,7 +1045,7 @@ git add src/IAMS.Web/Components/TicketAttachmentGallery.razor src/IAMS.Web/wwwro
 ### Task 5: Wire the gallery into the ticket detail page
 
 **Files:**
-- Modify: `src/IAMS.Web/Pages/Tickets/View.razor`
+- Modify: `src/AssetDesk.Web/Pages/Tickets/View.razor`
 
 **Interfaces:**
 - Consumes: `TicketAttachmentGallery` (Task 4), `TicketAttachmentPicker` (Task 1), `ApiClient.UploadTicketAttachmentAsync` (existing)
@@ -1055,7 +1055,7 @@ This is the task that closes the black hole: until now nothing displayed attachm
 
 - [ ] **Step 1: Add the Attachments card**
 
-In `src/IAMS.Web/Pages/Tickets/View.razor`, add a new `<Card>` immediately after the Description card (which begins near line 64 with `<CardTitle>Description</CardTitle>`):
+In `src/AssetDesk.Web/Pages/Tickets/View.razor`, add a new `<Card>` immediately after the Description card (which begins near line 64 with `<CardTitle>Description</CardTitle>`):
 
 ```razor
                 <Card>
@@ -1089,7 +1089,7 @@ In `src/IAMS.Web/Pages/Tickets/View.razor`, add a new `<Card>` immediately after
 
 - [ ] **Step 2: Add the supporting code**
 
-Add to the `@code` block in `src/IAMS.Web/Pages/Tickets/View.razor`:
+Add to the `@code` block in `src/AssetDesk.Web/Pages/Tickets/View.razor`:
 
 ```csharp
     private TicketAttachmentGallery? _gallery;
@@ -1171,7 +1171,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/IAMS.Web/Pages/Tickets/View.razor && git commit -m "feat(web): show ticket attachments and let the requester add more"
+git add src/AssetDesk.Web/Pages/Tickets/View.razor && git commit -m "feat(web): show ticket attachments and let the requester add more"
 ```
 
 ---
@@ -1179,7 +1179,7 @@ git add src/IAMS.Web/Pages/Tickets/View.razor && git commit -m "feat(web): show 
 ### Task 6: Attachments in the staff New Ticket dialog
 
 **Files:**
-- Modify: `src/IAMS.Web/Pages/Tickets/Index.razor`
+- Modify: `src/AssetDesk.Web/Pages/Tickets/Index.razor`
 
 **Interfaces:**
 - Consumes: `TicketAttachmentPicker` (Task 1), `ApiClient.UploadTicketAttachmentAsync` (existing)
@@ -1189,7 +1189,7 @@ Staff creating a ticket are its creator, so they attach here. Attachments need a
 
 - [ ] **Step 1: Add the picker to the dialog**
 
-In `src/IAMS.Web/Pages/Tickets/Index.razor`, inside the New Ticket `<Modal>` (opens near line 275), add the picker as the last field before the modal's `FooterContent`:
+In `src/AssetDesk.Web/Pages/Tickets/Index.razor`, inside the New Ticket `<Modal>` (opens near line 275), add the picker as the last field before the modal's `FooterContent`:
 
 ```razor
         <TicketAttachmentPicker @bind-Files="_pendingFiles" Disabled="@_creating" />
@@ -1270,7 +1270,7 @@ Expected: Build succeeded, 0 errors.
 
 - [ ] **Step 4: Run the full test suite**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 
 Expected: 182/182.
 
@@ -1290,7 +1290,7 @@ Report which of these you could and could not perform.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/IAMS.Web/Pages/Tickets/Index.razor && git commit -m "feat(web): attach files when creating a ticket from the queue"
+git add src/AssetDesk.Web/Pages/Tickets/Index.razor && git commit -m "feat(web): attach files when creating a ticket from the queue"
 ```
 
 ---
@@ -1306,5 +1306,5 @@ Checked against the spec:
 Deviations recorded rather than left silent:
 
 - Task 4 Step 2 fixes a real defect in Step 1's own code: `ThumbnailSrc` returns empty until an image is previewed, so thumbnails would start blank. Kept as a separate step so the reason is visible rather than folded into the component silently.
-- A pre-flight review flagged that the first draft duplicated the open-status list and the `"Other"` category into each page. Both are now single definitions added in Task 1: `TicketListItemDto.IsOpen` in `IAMS.Shared` (pinned against `TicketStatus.Open` by `TicketDtoIsOpenTests`, so the two cannot drift) and `TicketAttachmentDefaults.Category` in `IAMS.Web`. Moving `TicketStatus` itself into `IAMS.Shared` would have been the purist fix but touches 95 call sites across the API and tests — out of scope for this feature.
+- A pre-flight review flagged that the first draft duplicated the open-status list and the `"Other"` category into each page. Both are now single definitions added in Task 1: `TicketListItemDto.IsOpen` in `AssetDesk.Shared` (pinned against `TicketStatus.Open` by `TicketDtoIsOpenTests`, so the two cannot drift) and `TicketAttachmentDefaults.Category` in `AssetDesk.Web`. Moving `TicketStatus` itself into `AssetDesk.Shared` would have been the purist fix but touches 95 call sites across the API and tests — out of scope for this feature.
 - Task 3's `AnotherUser_CannotDelete` test may pass before the fix, because attribute policies are not evaluated on a directly-constructed controller. This is stated in the step so nobody reads it as a discriminating test; the other two carry the proof.

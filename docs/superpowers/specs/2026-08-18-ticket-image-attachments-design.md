@@ -179,7 +179,7 @@ ticket. A ticket that was created but whose photos failed is still a filed ticke
 
 ## Testing
 
-API-side, in `tests/IAMS.Api.Tests`, following the existing controller-test pattern (controllers
+API-side, in `tests/AssetDesk.Api.Tests`, following the existing controller-test pattern (controllers
 constructed directly with a `ClaimsPrincipal` on `ControllerContext`):
 
 - The uploader can delete their own attachment.

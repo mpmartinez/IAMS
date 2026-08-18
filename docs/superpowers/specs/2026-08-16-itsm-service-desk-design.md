@@ -1,4 +1,4 @@
-# IAMS Service Desk — Design
+# AssetDesk Service Desk — Design
 
 **Date:** 2026-08-16
 **Status:** Approved for planning
@@ -6,15 +6,15 @@
 
 ## Context
 
-IAMS today tracks assets, assignments, warranties and maintenance for multi-tenant
+AssetDesk today tracks assets, assignments, warranties and maintenance for multi-tenant
 customers. The target market is IT officers at manning (crewing) agencies — offices of
 roughly 50–500 shore staff with IT departments of two to five people. They have no
 existing ITSM tool, and both ISO 9001 and ISO/IEC 27001 certification are active drivers
 for them.
 
-This design adds a service desk to IAMS: a ticket queue for IT staff and a
+This design adds a service desk to AssetDesk: a ticket queue for IT staff and a
 report-a-problem channel for office users. The value is not ticketing in the abstract —
-it is that a ticket in IAMS arrives already linked to a known asset, because the
+it is that a ticket in AssetDesk arrives already linked to a known asset, because the
 requester scanned its QR sticker.
 
 ## Goal
@@ -360,7 +360,7 @@ Phases 1 and 2 together are the pilot. Phase 3 is what makes it read as ITSM to 
 
 ## Assumptions
 
-- Manning agencies run one IAMS tenant each; multi-branch offices are one tenant with
+- Manning agencies run one AssetDesk tenant each; multi-branch offices are one tenant with
   `Asset.Location` distinguishing sites. A first-class `Site` entity is deferred.
 - Office users authenticate with the same identity provider as staff. Anonymous or
   email-based ticket submission is not supported.

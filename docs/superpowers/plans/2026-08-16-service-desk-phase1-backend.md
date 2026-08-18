@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Target framework is `net10.0`; `ImplicitUsings` and `Nullable` are both `enable`.
-- All API endpoints return `ApiResponse<T>` or `ApiResponse<PagedResponse<T>>` from `IAMS.Shared.DTOs`. Use the `ApiResponse<T>.Ok(data, message)` and `ApiResponse<T>.Fail(message, errors)` factories — do not construct them by hand.
+- All API endpoints return `ApiResponse<T>` or `ApiResponse<PagedResponse<T>>` from `AssetDesk.Shared.DTOs`. Use the `ApiResponse<T>.Ok(data, message)` and `ApiResponse<T>.Fail(message, errors)` factories — do not construct them by hand.
 - Every tenant-scoped entity implements `ITenantEntity` and gets a global query filter in `AppDbContext.OnModelCreating` matching the existing shape exactly: `e => _tenantProvider == null || _tenantProvider.IsSuperAdmin() || e.TenantId == _tenantProvider.GetCurrentTenantId()`.
 - Status, type and priority values are `string` columns with `HasMaxLength(50)`, validated against static constant classes. Do not introduce enums — the codebase uses the `AssetStatus` / `MaintenanceStatus` string-constant pattern throughout.
 - The UTC `DateTime` value converter block at the end of `OnModelCreating` must stay last. Add new entity configuration above it.
@@ -26,11 +26,11 @@
 ### Task 1: Test project
 
 **Files:**
-- Create: `tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`
-- Create: `tests/IAMS.Api.Tests/TestDb.cs`
-- Create: `tests/IAMS.Api.Tests/FakeTenantProvider.cs`
-- Create: `tests/IAMS.Api.Tests/TestDbTests.cs`
-- Modify: `IAMS.sln`
+- Create: `tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
+- Create: `tests/AssetDesk.Api.Tests/TestDb.cs`
+- Create: `tests/AssetDesk.Api.Tests/FakeTenantProvider.cs`
+- Create: `tests/AssetDesk.Api.Tests/TestDbTests.cs`
+- Modify: `AssetDesk.sln`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -38,7 +38,7 @@
 
 - [ ] **Step 1: Create the test project file**
 
-Create `tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`:
+Create `tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`:
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
@@ -58,7 +58,7 @@ Create `tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`:
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\IAMS.Api\IAMS.Api.csproj" />
+    <ProjectReference Include="..\..\src\AssetDesk.Api\AssetDesk.Api.csproj" />
   </ItemGroup>
 
 </Project>
@@ -66,12 +66,12 @@ Create `tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`:
 
 - [ ] **Step 2: Create the fake tenant provider**
 
-Create `tests/IAMS.Api.Tests/FakeTenantProvider.cs`:
+Create `tests/AssetDesk.Api.Tests/FakeTenantProvider.cs`:
 
 ```csharp
-using IAMS.Api.Services;
+using AssetDesk.Api.Services;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class FakeTenantProvider : ITenantProvider
 {
@@ -101,16 +101,16 @@ public class FakeTenantProvider : ITenantProvider
 
 SQLite's in-memory database lives only as long as its connection is open, so the helper hands the connection back to the caller to dispose.
 
-Create `tests/IAMS.Api.Tests/TestDb.cs`:
+Create `tests/AssetDesk.Api.Tests/TestDb.cs`:
 
 ```csharp
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
-using IAMS.Api.Services;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public static class TestDb
 {
@@ -182,13 +182,13 @@ public static class TestDb
 
 - [ ] **Step 4: Write the smoke test**
 
-Create `tests/IAMS.Api.Tests/TestDbTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TestDbTests.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
+using AssetDesk.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TestDbTests
 {
@@ -201,11 +201,11 @@ public class TestDbTests
         using (conn)
         {
             await TestDb.SeedTenantAsync(db, tenantId);
-            var asset = await TestDb.SeedAssetAsync(db, tenantId, "IAMS-0001");
+            var asset = await TestDb.SeedAssetAsync(db, tenantId, "AssetDesk-0001");
 
             var found = await db.Assets.SingleAsync(a => a.Id == asset.Id);
 
-            Assert.Equal("IAMS-0001", found.AssetTag);
+            Assert.Equal("AssetDesk-0001", found.AssetTag);
             Assert.Equal(tenantId, found.TenantId);
         }
     }
@@ -236,10 +236,10 @@ public class TestDbTests
 - [ ] **Step 5: Add the project to the solution and run the tests**
 
 ```bash
-dotnet sln IAMS.sln add tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj
+dotnet sln AssetDesk.sln add tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj
 ```
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 Expected: `Passed! - Failed: 0, Passed: 2`
 
 If `Query_filter_hides_other_tenants_assets` fails with two assets returned, the model was cached from the first test's filter-free context. Confirm each test builds its own `DbContextOptions` — `TestDb.Create` already does this per call.
@@ -247,8 +247,8 @@ If `Query_filter_hides_other_tenants_assets` fails with two assets returned, the
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/IAMS.Api.Tests IAMS.sln
-git commit -m "test: add IAMS.Api.Tests project with SQLite in-memory harness"
+git add tests/AssetDesk.Api.Tests AssetDesk.sln
+git commit -m "test: add AssetDesk.Api.Tests project with SQLite in-memory harness"
 ```
 
 ---
@@ -256,8 +256,8 @@ git commit -m "test: add IAMS.Api.Tests project with SQLite in-memory harness"
 ### Task 2: Ticket constants and status transitions
 
 **Files:**
-- Create: `src/IAMS.Api/Entities/TicketConstants.cs`
-- Create: `tests/IAMS.Api.Tests/TicketWorkflowTests.cs`
+- Create: `src/AssetDesk.Api/Entities/TicketConstants.cs`
+- Create: `tests/AssetDesk.Api.Tests/TicketWorkflowTests.cs`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -265,12 +265,12 @@ git commit -m "test: add IAMS.Api.Tests project with SQLite in-memory harness"
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/IAMS.Api.Tests/TicketWorkflowTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TicketWorkflowTests.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
+using AssetDesk.Api.Entities;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TicketWorkflowTests
 {
@@ -335,15 +335,15 @@ public class TicketWorkflowTests
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketWorkflowTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketWorkflowTests`
 Expected: build failure — `The name 'TicketStatus' does not exist in the current context` (and the same for `TicketTypes`, `TicketPriority`, `TicketWorkflow`).
 
 - [ ] **Step 3: Write the implementation**
 
-Create `src/IAMS.Api/Entities/TicketConstants.cs`:
+Create `src/AssetDesk.Api/Entities/TicketConstants.cs`:
 
 ```csharp
-namespace IAMS.Api.Entities;
+namespace AssetDesk.Api.Entities;
 
 public static class TicketTypes
 {
@@ -413,13 +413,13 @@ public static class TicketWorkflow
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketWorkflowTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketWorkflowTests`
 Expected: `Passed! - Failed: 0, Passed: 18` (nine allowed transitions, six rejected, three facts)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/IAMS.Api/Entities/TicketConstants.cs tests/IAMS.Api.Tests/TicketWorkflowTests.cs
+git add src/AssetDesk.Api/Entities/TicketConstants.cs tests/AssetDesk.Api.Tests/TicketWorkflowTests.cs
 git commit -m "feat(tickets): add ticket type, status, priority constants and transition rules"
 ```
 
@@ -428,31 +428,31 @@ git commit -m "feat(tickets): add ticket type, status, priority constants and tr
 ### Task 3: Entities and DbContext configuration
 
 **Files:**
-- Create: `src/IAMS.Api/Entities/Ticket.cs`
-- Create: `src/IAMS.Api/Entities/TicketComment.cs`
-- Create: `src/IAMS.Api/Entities/TicketAttachment.cs`
-- Create: `src/IAMS.Api/Entities/AuditLog.cs`
-- Delete: `src/IAMS.Api/Entities/Maintenance.cs`
-- Delete: `src/IAMS.Api/Entities/MaintenanceAttachment.cs`
-- Modify: `src/IAMS.Api/Entities/Asset.cs`
-- Modify: `src/IAMS.Api/Data/AppDbContext.cs`
-- Create: `tests/IAMS.Api.Tests/TicketEntityTests.cs`
+- Create: `src/AssetDesk.Api/Entities/Ticket.cs`
+- Create: `src/AssetDesk.Api/Entities/TicketComment.cs`
+- Create: `src/AssetDesk.Api/Entities/TicketAttachment.cs`
+- Create: `src/AssetDesk.Api/Entities/AuditLog.cs`
+- Delete: `src/AssetDesk.Api/Entities/Maintenance.cs`
+- Delete: `src/AssetDesk.Api/Entities/MaintenanceAttachment.cs`
+- Modify: `src/AssetDesk.Api/Entities/Asset.cs`
+- Modify: `src/AssetDesk.Api/Data/AppDbContext.cs`
+- Create: `tests/AssetDesk.Api.Tests/TicketEntityTests.cs`
 
 **Interfaces:**
 - Consumes: `TicketTypes`, `TicketStatus`, `TicketPriority` from Task 2.
 - Produces: entities `Ticket`, `TicketComment`, `TicketAttachment`, `AuditLog`; `Asset.OwnerUserId` (`string?`) and `Asset.LastVerifiedAt` (`DateTime?`); DbSets `AppDbContext.Tickets`, `.TicketComments`, `.TicketAttachments`, `.AuditLogs`.
 
-Read `src/IAMS.Api/Entities/MaintenanceAttachment.cs` before deleting it — `TicketAttachment` below must keep the same file-storage property names (`FileName`, `StoredFileName`, `ContentType`, `FileSizeBytes`, `Category`, `Description`, `UploadedByUserId`, `UploadedAt`) so `FileStorageService` and the storage-quota query keep working unchanged.
+Read `src/AssetDesk.Api/Entities/MaintenanceAttachment.cs` before deleting it — `TicketAttachment` below must keep the same file-storage property names (`FileName`, `StoredFileName`, `ContentType`, `FileSizeBytes`, `Category`, `Description`, `UploadedByUserId`, `UploadedAt`) so `FileStorageService` and the storage-quota query keep working unchanged.
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/IAMS.Api.Tests/TicketEntityTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TicketEntityTests.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
+using AssetDesk.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TicketEntityTests
 {
@@ -558,7 +558,7 @@ public class TicketEntityTests
         {
             await TestDb.SeedTenantAsync(db, tenantId);
             await TestDb.SeedUserAsync(db, tenantId, "owner-1", "Crewing Manager");
-            var asset = await TestDb.SeedAssetAsync(db, tenantId, "IAMS-0241");
+            var asset = await TestDb.SeedAssetAsync(db, tenantId, "AssetDesk-0241");
 
             asset.OwnerUserId = "owner-1";
             asset.LastVerifiedAt = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -575,15 +575,15 @@ public class TicketEntityTests
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketEntityTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketEntityTests`
 Expected: build failure — `The name 'Ticket' does not exist` and `'AppDbContext' does not contain a definition for 'Tickets'`.
 
 - [ ] **Step 3: Create the entities**
 
-Create `src/IAMS.Api/Entities/Ticket.cs`:
+Create `src/AssetDesk.Api/Entities/Ticket.cs`:
 
 ```csharp
-namespace IAMS.Api.Entities;
+namespace AssetDesk.Api.Entities;
 
 /// <summary>
 /// A unit of IT work: an incident, an equipment request, or a security event report.
@@ -636,10 +636,10 @@ public class Ticket : ITenantEntity
 }
 ```
 
-Create `src/IAMS.Api/Entities/TicketComment.cs`:
+Create `src/AssetDesk.Api/Entities/TicketComment.cs`:
 
 ```csharp
-namespace IAMS.Api.Entities;
+namespace AssetDesk.Api.Entities;
 
 public class TicketComment : ITenantEntity
 {
@@ -663,10 +663,10 @@ public class TicketComment : ITenantEntity
 }
 ```
 
-Create `src/IAMS.Api/Entities/TicketAttachment.cs` — keep the property names identical to the deleted `MaintenanceAttachment` so `FileStorageService` needs no changes:
+Create `src/AssetDesk.Api/Entities/TicketAttachment.cs` — keep the property names identical to the deleted `MaintenanceAttachment` so `FileStorageService` needs no changes:
 
 ```csharp
-namespace IAMS.Api.Entities;
+namespace AssetDesk.Api.Entities;
 
 public class TicketAttachment : ITenantEntity
 {
@@ -694,10 +694,10 @@ public class TicketAttachment : ITenantEntity
 }
 ```
 
-Create `src/IAMS.Api/Entities/AuditLog.cs`:
+Create `src/AssetDesk.Api/Entities/AuditLog.cs`:
 
 ```csharp
-namespace IAMS.Api.Entities;
+namespace AssetDesk.Api.Entities;
 
 /// <summary>
 /// Append-only record of changes to audited entities. Never updated or deleted.
@@ -730,7 +730,7 @@ public static class AuditActions
 
 - [ ] **Step 4: Add the two new Asset fields**
 
-In `src/IAMS.Api/Entities/Asset.cs`, insert after the `AssignedToUser` property (currently line 24), keeping the existing "Legacy/additional fields" block below it:
+In `src/AssetDesk.Api/Entities/Asset.cs`, insert after the `AssignedToUser` property (currently line 24), keeping the existing "Legacy/additional fields" block below it:
 
 ```csharp
     /// <summary>The person accountable for this asset, as distinct from whoever currently holds it.</summary>
@@ -744,10 +744,10 @@ In `src/IAMS.Api/Entities/Asset.cs`, insert after the `AssignedToUser` property 
 - [ ] **Step 5: Delete the Maintenance entities and wire up the DbContext**
 
 ```bash
-git rm src/IAMS.Api/Entities/Maintenance.cs src/IAMS.Api/Entities/MaintenanceAttachment.cs
+git rm src/AssetDesk.Api/Entities/Maintenance.cs src/AssetDesk.Api/Entities/MaintenanceAttachment.cs
 ```
 
-In `src/IAMS.Api/Data/AppDbContext.cs`, replace the two Maintenance DbSet properties:
+In `src/AssetDesk.Api/Data/AppDbContext.cs`, replace the two Maintenance DbSet properties:
 
 ```csharp
     public DbSet<Maintenance> Maintenances => Set<Maintenance>();
@@ -933,26 +933,26 @@ Add the `Asset.OwnerUser` relationship inside the existing `modelBuilder.Entity<
 The build will fail in files that still reference `Maintenance`. Find them:
 
 ```bash
-grep -rln "Maintenance" src/IAMS.Api --include=*.cs
+grep -rln "Maintenance" src/AssetDesk.Api --include=*.cs
 ```
 
-Delete `src/IAMS.Api/Controllers/MaintenanceController.cs` and `src/IAMS.Api/Controllers/MaintenanceAttachmentsController.cs` — they are replaced in Tasks 10 and 11.
+Delete `src/AssetDesk.Api/Controllers/MaintenanceController.cs` and `src/AssetDesk.Api/Controllers/MaintenanceAttachmentsController.cs` — they are replaced in Tasks 10 and 11.
 
 ```bash
-git rm src/IAMS.Api/Controllers/MaintenanceController.cs src/IAMS.Api/Controllers/MaintenanceAttachmentsController.cs
+git rm src/AssetDesk.Api/Controllers/MaintenanceController.cs src/AssetDesk.Api/Controllers/MaintenanceAttachmentsController.cs
 ```
 
-If `DashboardController.cs` or `SeedData.cs` reference `db.Maintenances`, change them to `db.Tickets` and map `MaintenanceStatus.Pending` to `TicketStatus.New`, `MaintenanceStatus.InProgress` to `TicketStatus.InProgress`, and `MaintenanceStatus.Completed` to `TicketStatus.Closed`. Leave `src/IAMS.Shared/DTOs/MaintenanceDto.cs` in place for now; Task 10 replaces it.
+If `DashboardController.cs` or `SeedData.cs` reference `db.Maintenances`, change them to `db.Tickets` and map `MaintenanceStatus.Pending` to `TicketStatus.New`, `MaintenanceStatus.InProgress` to `TicketStatus.InProgress`, and `MaintenanceStatus.Completed` to `TicketStatus.Closed`. Leave `src/AssetDesk.Shared/DTOs/MaintenanceDto.cs` in place for now; Task 10 replaces it.
 
 - [ ] **Step 7: Run tests to verify they pass**
 
-Run: `dotnet build && dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketEntityTests`
+Run: `dotnet build && dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketEntityTests`
 Expected: build succeeds; `Passed! - Failed: 0, Passed: 4`
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add -A src/IAMS.Api tests/IAMS.Api.Tests
+git add -A src/AssetDesk.Api tests/AssetDesk.Api.Tests
 git commit -m "feat(tickets): add Ticket, TicketComment, TicketAttachment and AuditLog entities"
 ```
 
@@ -961,7 +961,7 @@ git commit -m "feat(tickets): add Ticket, TicketComment, TicketAttachment and Au
 ### Task 4: Migration from Maintenance
 
 **Files:**
-- Create: `src/IAMS.Api/Migrations/<timestamp>_TicketsFromMaintenance.cs` (generated)
+- Create: `src/AssetDesk.Api/Migrations/<timestamp>_TicketsFromMaintenance.cs` (generated)
 - Modify: the generated migration's `Up` method
 
 **Interfaces:**
@@ -973,7 +973,7 @@ This task has no unit test. It is verified by generating the SQL, reading it, an
 - [ ] **Step 1: Generate the migration**
 
 ```bash
-cd src/IAMS.Api && dotnet ef migrations add TicketsFromMaintenance
+cd src/AssetDesk.Api && dotnet ef migrations add TicketsFromMaintenance
 ```
 
 - [ ] **Step 2: Rewrite the generated Up method to rename rather than drop**
@@ -1065,7 +1065,7 @@ Move the EF-generated `CreateTable("TicketComments")` and `CreateTable("AuditLog
 - [ ] **Step 3: Verify the generated SQL renames rather than drops**
 
 ```bash
-cd src/IAMS.Api && dotnet ef migrations script --idempotent --output ../../artifacts/tickets-migration.sql
+cd src/AssetDesk.Api && dotnet ef migrations script --idempotent --output ../../artifacts/tickets-migration.sql
 ```
 
 Run: `grep -iE "DROP TABLE|ALTER TABLE .Maintenances. RENAME" artifacts/tickets-migration.sql`
@@ -1086,7 +1086,7 @@ Verify by inspection instead:
 3. The migration and the model agree — after adding the migration, run:
 
 ```bash
-cd src/IAMS.Api && dotnet ef migrations add VerifyNoPendingChanges --dry-run
+cd src/AssetDesk.Api && dotnet ef migrations add VerifyNoPendingChanges --dry-run
 ```
 
 If EF reports further pending model changes, the migration is incomplete: something in
@@ -1104,7 +1104,7 @@ work is reviewed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/IAMS.Api/Migrations
+git add src/AssetDesk.Api/Migrations
 git commit -m "feat(db): migrate Maintenance to Ticket, preserving existing records"
 ```
 
@@ -1113,9 +1113,9 @@ git commit -m "feat(db): migrate Maintenance to Ticket, preserving existing reco
 ### Task 5: Audit log interceptor
 
 **Files:**
-- Create: `src/IAMS.Api/Data/AuditSaveChangesInterceptor.cs`
-- Modify: `src/IAMS.Api/Program.cs`
-- Create: `tests/IAMS.Api.Tests/AuditLogTests.cs`
+- Create: `src/AssetDesk.Api/Data/AuditSaveChangesInterceptor.cs`
+- Modify: `src/AssetDesk.Api/Program.cs`
+- Create: `tests/AssetDesk.Api.Tests/AuditLogTests.cs`
 
 **Interfaces:**
 - Consumes: `AuditLog`, `AuditActions` from Task 3.
@@ -1123,16 +1123,16 @@ git commit -m "feat(db): migrate Maintenance to Ticket, preserving existing reco
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/IAMS.Api.Tests/AuditLogTests.cs`:
+Create `tests/AssetDesk.Api.Tests/AuditLogTests.cs`:
 
 ```csharp
 using System.Text.Json;
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class AuditLogTests
 {
@@ -1284,7 +1284,7 @@ public class AuditLogTests
         using (conn)
         {
             await TestDb.SeedTenantAsync(db, tenantId);
-            await TestDb.SeedAssetAsync(db, tenantId, "IAMS-0001");
+            await TestDb.SeedAssetAsync(db, tenantId, "AssetDesk-0001");
 
             Assert.Equal(1, await db.AuditLogs.CountAsync());
         }
@@ -1294,22 +1294,22 @@ public class AuditLogTests
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter AuditLogTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter AuditLogTests`
 Expected: build failure — `The name 'AuditSaveChangesInterceptor' does not exist` and `'ICurrentUserAccessor' could not be found`.
 
 - [ ] **Step 3: Write the implementation**
 
-Create `src/IAMS.Api/Data/AuditSaveChangesInterceptor.cs`:
+Create `src/AssetDesk.Api/Data/AuditSaveChangesInterceptor.cs`:
 
 ```csharp
 using System.Text.Json;
-using IAMS.Api.Entities;
+using AssetDesk.Api.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
-namespace IAMS.Api.Data;
+namespace AssetDesk.Api.Data;
 
 public interface ICurrentUserAccessor
 {
@@ -1500,7 +1500,7 @@ Note the two-phase design. A row's identity value does not exist until after its
 
 - [ ] **Step 4: Register the interceptor**
 
-In `src/IAMS.Api/Program.cs`, find the `builder.Services.AddDbContext<AppDbContext>(...)` call and register the accessor before it and the interceptor inside it:
+In `src/AssetDesk.Api/Program.cs`, find the `builder.Services.AddDbContext<AppDbContext>(...)` call and register the accessor before it and the interceptor inside it:
 
 ```csharp
 builder.Services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
@@ -1513,17 +1513,17 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 });
 ```
 
-Keep whatever `UseNpgsql` arguments the existing call already passes — only the lambda signature and the `AddInterceptors` line are new. Add `using IAMS.Api.Data;` if it is not already present.
+Keep whatever `UseNpgsql` arguments the existing call already passes — only the lambda signature and the `AddInterceptors` line are new. Add `using AssetDesk.Api.Data;` if it is not already present.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter AuditLogTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter AuditLogTests`
 Expected: `Passed! - Failed: 0, Passed: 5`
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/IAMS.Api/Data/AuditSaveChangesInterceptor.cs src/IAMS.Api/Program.cs tests/IAMS.Api.Tests/AuditLogTests.cs
+git add src/AssetDesk.Api/Data/AuditSaveChangesInterceptor.cs src/AssetDesk.Api/Program.cs tests/AssetDesk.Api.Tests/AuditLogTests.cs
 git commit -m "feat(audit): record entity changes through a SaveChanges interceptor"
 ```
 
@@ -1532,8 +1532,8 @@ git commit -m "feat(audit): record entity changes through a SaveChanges intercep
 ### Task 6: Per-tenant ticket numbering
 
 **Files:**
-- Create: `src/IAMS.Api/Services/TicketNumberAllocator.cs`
-- Create: `tests/IAMS.Api.Tests/TicketNumberAllocatorTests.cs`
+- Create: `src/AssetDesk.Api/Services/TicketNumberAllocator.cs`
+- Create: `tests/AssetDesk.Api.Tests/TicketNumberAllocatorTests.cs`
 
 **Interfaces:**
 - Consumes: `AppDbContext.Tickets`.
@@ -1541,13 +1541,13 @@ git commit -m "feat(audit): record entity changes through a SaveChanges intercep
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/IAMS.Api.Tests/TicketNumberAllocatorTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TicketNumberAllocatorTests.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
-using IAMS.Api.Services;
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TicketNumberAllocatorTests
 {
@@ -1611,18 +1611,18 @@ public class TicketNumberAllocatorTests
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketNumberAllocatorTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketNumberAllocatorTests`
 Expected: build failure — `The name 'TicketNumberAllocator' does not exist in the current context`.
 
 - [ ] **Step 3: Write the implementation**
 
-Create `src/IAMS.Api/Services/TicketNumberAllocator.cs`:
+Create `src/AssetDesk.Api/Services/TicketNumberAllocator.cs`:
 
 ```csharp
-using IAMS.Api.Data;
+using AssetDesk.Api.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Services;
+namespace AssetDesk.Api.Services;
 
 public interface ITicketNumberAllocator
 {
@@ -1657,13 +1657,13 @@ public class TicketNumberAllocator : ITicketNumberAllocator
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketNumberAllocatorTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketNumberAllocatorTests`
 Expected: `Passed! - Failed: 0, Passed: 3`
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/IAMS.Api/Services/TicketNumberAllocator.cs tests/IAMS.Api.Tests/TicketNumberAllocatorTests.cs
+git add src/AssetDesk.Api/Services/TicketNumberAllocator.cs tests/AssetDesk.Api.Tests/TicketNumberAllocatorTests.cs
 git commit -m "feat(tickets): allocate per-tenant ticket numbers"
 ```
 
@@ -1672,8 +1672,8 @@ git commit -m "feat(tickets): allocate per-tenant ticket numbers"
 ### Task 7: TicketService — create and query
 
 **Files:**
-- Create: `src/IAMS.Api/Services/TicketService.cs`
-- Create: `tests/IAMS.Api.Tests/TicketServiceCreateTests.cs`
+- Create: `src/AssetDesk.Api/Services/TicketService.cs`
+- Create: `tests/AssetDesk.Api.Tests/TicketServiceCreateTests.cs`
 
 **Interfaces:**
 - Consumes: `ITicketNumberAllocator.NextAsync`, `ITenantProvider.GetRequiredTenantId()`, `TicketTypes`, `TicketStatus`, `TicketPriority`.
@@ -1689,18 +1689,18 @@ git commit -m "feat(tickets): allocate per-tenant ticket numbers"
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/IAMS.Api.Tests/TicketServiceCreateTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TicketServiceCreateTests.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
-using IAMS.Api.Services;
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TicketServiceCreateTests
 {
-    private static TicketService Build(IAMS.Api.Data.AppDbContext db, Guid tenantId) =>
+    private static TicketService Build(AssetDesk.Api.Data.AppDbContext db, Guid tenantId) =>
         new(db, new TicketNumberAllocator(db), new FakeTenantProvider(tenantId));
 
     [Fact]
@@ -1843,19 +1843,19 @@ public class TicketServiceCreateTests
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketServiceCreateTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketServiceCreateTests`
 Expected: build failure — `The name 'TicketService' does not exist in the current context`.
 
 - [ ] **Step 3: Write the implementation**
 
-Create `src/IAMS.Api/Services/TicketService.cs`:
+Create `src/AssetDesk.Api/Services/TicketService.cs`:
 
 ```csharp
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Services;
+namespace AssetDesk.Api.Services;
 
 public record ServiceResult(bool Success, string? Message = null)
 {
@@ -2042,13 +2042,13 @@ The class is `partial` because Tasks 8 and 9 add the workflow methods in a secon
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketServiceCreateTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketServiceCreateTests`
 Expected: `Passed! - Failed: 0, Passed: 6`
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/IAMS.Api/Services/TicketService.cs tests/IAMS.Api.Tests/TicketServiceCreateTests.cs
+git add src/AssetDesk.Api/Services/TicketService.cs tests/AssetDesk.Api.Tests/TicketServiceCreateTests.cs
 git commit -m "feat(tickets): add TicketService create, list and summary"
 ```
 
@@ -2057,9 +2057,9 @@ git commit -m "feat(tickets): add TicketService create, list and summary"
 ### Task 8: TicketService — assign, status, resolve
 
 **Files:**
-- Create: `src/IAMS.Api/Services/TicketService.Workflow.cs`
-- Modify: `src/IAMS.Api/Services/TicketService.cs:39-52` (the `ITicketService` interface — add the four new members)
-- Create: `tests/IAMS.Api.Tests/TicketServiceWorkflowTests.cs`
+- Create: `src/AssetDesk.Api/Services/TicketService.Workflow.cs`
+- Modify: `src/AssetDesk.Api/Services/TicketService.cs:39-52` (the `ITicketService` interface — add the four new members)
+- Create: `tests/AssetDesk.Api.Tests/TicketServiceWorkflowTests.cs`
 
 **Interfaces:**
 - Consumes: `TicketWorkflow.CanTransition`, `ServiceResult` from Task 7.
@@ -2071,15 +2071,15 @@ git commit -m "feat(tickets): add TicketService create, list and summary"
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/IAMS.Api.Tests/TicketServiceWorkflowTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TicketServiceWorkflowTests.cs`:
 
 ```csharp
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
-using IAMS.Api.Services;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TicketServiceWorkflowTests
 {
@@ -2247,12 +2247,12 @@ public class TicketServiceWorkflowTests
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketServiceWorkflowTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketServiceWorkflowTests`
 Expected: build failure — `'TicketService' does not contain a definition for 'AssignAsync'`.
 
 - [ ] **Step 3: Extend the interface**
 
-In `src/IAMS.Api/Services/TicketService.cs`, add these four members to the `ITicketService` interface, after `GetSummaryAsync`:
+In `src/AssetDesk.Api/Services/TicketService.cs`, add these four members to the `ITicketService` interface, after `GetSummaryAsync`:
 
 ```csharp
     Task<ServiceResult> AssignAsync(int id, string assigneeUserId, CancellationToken ct = default);
@@ -2267,13 +2267,13 @@ In `src/IAMS.Api/Services/TicketService.cs`, add these four members to the `ITic
 
 - [ ] **Step 4: Write the implementation**
 
-Create `src/IAMS.Api/Services/TicketService.Workflow.cs`:
+Create `src/AssetDesk.Api/Services/TicketService.Workflow.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
+using AssetDesk.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Services;
+namespace AssetDesk.Api.Services;
 
 public partial class TicketService
 {
@@ -2400,13 +2400,13 @@ public partial class TicketService
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketServiceWorkflowTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketServiceWorkflowTests`
 Expected: `Passed! - Failed: 0, Passed: 7`
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/IAMS.Api/Services/TicketService.cs src/IAMS.Api/Services/TicketService.Workflow.cs tests/IAMS.Api.Tests/TicketServiceWorkflowTests.cs
+git add src/AssetDesk.Api/Services/TicketService.cs src/AssetDesk.Api/Services/TicketService.Workflow.cs tests/AssetDesk.Api.Tests/TicketServiceWorkflowTests.cs
 git commit -m "feat(tickets): add assign, status change, resolve and comments"
 ```
 
@@ -2415,27 +2415,27 @@ git commit -m "feat(tickets): add assign, status change, resolve and comments"
 ### Task 9: Request fulfilment in one transaction
 
 **Files:**
-- Create: `src/IAMS.Api/Services/TicketService.Fulfilment.cs`
-- Modify: `src/IAMS.Api/Services/TicketService.cs` (add `FulfilAsync` to `ITicketService`)
-- Create: `tests/IAMS.Api.Tests/TicketFulfilmentTests.cs`
+- Create: `src/AssetDesk.Api/Services/TicketService.Fulfilment.cs`
+- Modify: `src/AssetDesk.Api/Services/TicketService.cs` (add `FulfilAsync` to `ITicketService`)
+- Create: `tests/AssetDesk.Api.Tests/TicketFulfilmentTests.cs`
 
 **Interfaces:**
 - Consumes: `AssetAssignment`, `AssetStatus`, `ServiceResult`.
 - Produces: `ITicketService.FulfilAsync(int ticketId, int assetId, string resolution, string actingUserId, CancellationToken ct)` returning `Task<ServiceResult>`.
 
-Read `src/IAMS.Api/Entities/AssetAssignment.cs` first and use its actual property names in the code below. The names used here — `AssetId`, `UserId`, `AssignedAt`, `AssignedByUserId`, `ReturnedAt` — match the entity as of this plan; if any differ, adjust and keep the rest identical.
+Read `src/AssetDesk.Api/Entities/AssetAssignment.cs` first and use its actual property names in the code below. The names used here — `AssetId`, `UserId`, `AssignedAt`, `AssignedByUserId`, `ReturnedAt` — match the entity as of this plan; if any differ, adjust and keep the rest identical.
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/IAMS.Api.Tests/TicketFulfilmentTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TicketFulfilmentTests.cs`:
 
 ```csharp
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
-using IAMS.Api.Services;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TicketFulfilmentTests
 {
@@ -2462,7 +2462,7 @@ public class TicketFulfilmentTests
         using (conn)
         {
             var (service, request) = await SetupAsync(db, tenantId);
-            var asset = await TestDb.SeedAssetAsync(db, tenantId, "IAMS-0356");
+            var asset = await TestDb.SeedAssetAsync(db, tenantId, "AssetDesk-0356");
 
             var result = await service.FulfilAsync(
                 request.Id, asset.Id, "Issued ThinkPad E14 with charger.", "staff-1", default);
@@ -2494,7 +2494,7 @@ public class TicketFulfilmentTests
         using (conn)
         {
             var (service, request) = await SetupAsync(db, tenantId);
-            var asset = await TestDb.SeedAssetAsync(db, tenantId, "IAMS-0356", AssetStatus.InUse);
+            var asset = await TestDb.SeedAssetAsync(db, tenantId, "AssetDesk-0356", AssetStatus.InUse);
 
             var result = await service.FulfilAsync(request.Id, asset.Id, "Issued.", "staff-1", default);
 
@@ -2521,7 +2521,7 @@ public class TicketFulfilmentTests
             var service = new TicketService(db, new TicketNumberAllocator(db), new FakeTenantProvider(tenantId));
             var incident = await service.CreateAsync(
                 TicketTypes.Incident, "Printer jams", null, TicketPriority.Low, null, "emp-1", default);
-            var asset = await TestDb.SeedAssetAsync(db, tenantId, "IAMS-0356");
+            var asset = await TestDb.SeedAssetAsync(db, tenantId, "AssetDesk-0356");
 
             var result = await service.FulfilAsync(incident.Value!.Id, asset.Id, "n/a", "emp-1", default);
 
@@ -2539,7 +2539,7 @@ public class TicketFulfilmentTests
         using (conn)
         {
             var (service, _) = await SetupAsync(db, tenantId);
-            var asset = await TestDb.SeedAssetAsync(db, tenantId, "IAMS-0356");
+            var asset = await TestDb.SeedAssetAsync(db, tenantId, "AssetDesk-0356");
 
             var result = await service.FulfilAsync(9999, asset.Id, "Issued.", "staff-1", default);
 
@@ -2556,12 +2556,12 @@ public class TicketFulfilmentTests
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketFulfilmentTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketFulfilmentTests`
 Expected: build failure — `'TicketService' does not contain a definition for 'FulfilAsync'`.
 
 - [ ] **Step 3: Extend the interface**
 
-In `src/IAMS.Api/Services/TicketService.cs`, add to `ITicketService`:
+In `src/AssetDesk.Api/Services/TicketService.cs`, add to `ITicketService`:
 
 ```csharp
     Task<ServiceResult> FulfilAsync(
@@ -2570,13 +2570,13 @@ In `src/IAMS.Api/Services/TicketService.cs`, add to `ITicketService`:
 
 - [ ] **Step 4: Write the implementation**
 
-Create `src/IAMS.Api/Services/TicketService.Fulfilment.cs`:
+Create `src/AssetDesk.Api/Services/TicketService.Fulfilment.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
+using AssetDesk.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Services;
+namespace AssetDesk.Api.Services;
 
 public partial class TicketService
 {
@@ -2652,13 +2652,13 @@ public partial class TicketService
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketFulfilmentTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketFulfilmentTests`
 Expected: `Passed! - Failed: 0, Passed: 4`
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/IAMS.Api/Services/TicketService.cs src/IAMS.Api/Services/TicketService.Fulfilment.cs tests/IAMS.Api.Tests/TicketFulfilmentTests.cs
+git add src/AssetDesk.Api/Services/TicketService.cs src/AssetDesk.Api/Services/TicketService.Fulfilment.cs tests/AssetDesk.Api.Tests/TicketFulfilmentTests.cs
 git commit -m "feat(tickets): fulfil equipment requests by issuing an asset"
 ```
 
@@ -2667,12 +2667,12 @@ git commit -m "feat(tickets): fulfil equipment requests by issuing an asset"
 ### Task 10: DTOs and TicketsController
 
 **Files:**
-- Create: `src/IAMS.Shared/DTOs/TicketDto.cs`
-- Delete: `src/IAMS.Shared/DTOs/MaintenanceDto.cs`
-- Create: `src/IAMS.Api/Controllers/TicketsController.cs`
-- Create: `src/IAMS.Api/Mapping/TicketMapping.cs`
-- Modify: `src/IAMS.Api/Program.cs` (service registrations)
-- Create: `tests/IAMS.Api.Tests/TicketMappingTests.cs`
+- Create: `src/AssetDesk.Shared/DTOs/TicketDto.cs`
+- Delete: `src/AssetDesk.Shared/DTOs/MaintenanceDto.cs`
+- Create: `src/AssetDesk.Api/Controllers/TicketsController.cs`
+- Create: `src/AssetDesk.Api/Mapping/TicketMapping.cs`
+- Modify: `src/AssetDesk.Api/Program.cs` (service registrations)
+- Create: `tests/AssetDesk.Api.Tests/TicketMappingTests.cs`
 
 **Interfaces:**
 - Consumes: `ITicketService` (all members), `ApiResponse<T>`, `PagedResponse<T>`.
@@ -2680,10 +2680,10 @@ git commit -m "feat(tickets): fulfil equipment requests by issuing an asset"
 
 - [ ] **Step 1: Write the DTOs**
 
-Create `src/IAMS.Shared/DTOs/TicketDto.cs`:
+Create `src/AssetDesk.Shared/DTOs/TicketDto.cs`:
 
 ```csharp
-namespace IAMS.Shared.DTOs;
+namespace AssetDesk.Shared.DTOs;
 
 public record TicketListItemDto
 {
@@ -2778,13 +2778,13 @@ public record AddTicketCommentRequest
 
 - [ ] **Step 2: Write the failing mapping test**
 
-Create `tests/IAMS.Api.Tests/TicketMappingTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TicketMappingTests.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
-using IAMS.Api.Mapping;
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Mapping;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TicketMappingTests
 {
@@ -2807,7 +2807,7 @@ public class TicketMappingTests
             Asset = new Asset
             {
                 Id = 41,
-                AssetTag = "IAMS-0241",
+                AssetTag = "AssetDesk-0241",
                 DeviceType = DeviceTypes.Printer,
                 Status = AssetStatus.Maintenance,
                 Manufacturer = "HP",
@@ -2818,7 +2818,7 @@ public class TicketMappingTests
 
         var dto = ticket.ToDto(includeInternalComments: false);
 
-        Assert.Equal("IAMS-0241", dto.AssetTag);
+        Assert.Equal("AssetDesk-0241", dto.AssetTag);
         Assert.Equal("HP LaserJet M404dn", dto.AssetName);
         Assert.Equal(AssetStatus.Maintenance, dto.AssetStatus);
         Assert.Equal(2026, dto.WarrantyEndDate!.Value.Year);
@@ -2849,18 +2849,18 @@ public class TicketMappingTests
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketMappingTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketMappingTests`
 Expected: build failure — `The type or namespace name 'Mapping' does not exist`.
 
 - [ ] **Step 4: Write the mapping**
 
-Create `src/IAMS.Api/Mapping/TicketMapping.cs`:
+Create `src/AssetDesk.Api/Mapping/TicketMapping.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
-using IAMS.Shared.DTOs;
+using AssetDesk.Api.Entities;
+using AssetDesk.Shared.DTOs;
 
-namespace IAMS.Api.Mapping;
+namespace AssetDesk.Api.Mapping;
 
 public static class TicketMapping
 {
@@ -2929,24 +2929,24 @@ public static class TicketMapping
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketMappingTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketMappingTests`
 Expected: `Passed! - Failed: 0, Passed: 3`
 
 - [ ] **Step 6: Write the controller**
 
-Create `src/IAMS.Api/Controllers/TicketsController.cs`:
+Create `src/AssetDesk.Api/Controllers/TicketsController.cs`:
 
 ```csharp
 using System.Security.Claims;
-using IAMS.Api.Data;
-using IAMS.Api.Mapping;
-using IAMS.Api.Services;
-using IAMS.Shared.DTOs;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Mapping;
+using AssetDesk.Api.Services;
+using AssetDesk.Shared.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Controllers;
+namespace AssetDesk.Api.Controllers;
 
 [ApiController]
 [Route("api/tickets")]
@@ -3108,7 +3108,7 @@ public class TicketsController : ControllerBase
 
 - [ ] **Step 7: Register the services and delete the old DTO**
 
-In `src/IAMS.Api/Program.cs`, beside the other `AddScoped` registrations:
+In `src/AssetDesk.Api/Program.cs`, beside the other `AddScoped` registrations:
 
 ```csharp
 builder.Services.AddScoped<ITicketNumberAllocator, TicketNumberAllocator>();
@@ -3116,10 +3116,10 @@ builder.Services.AddScoped<ITicketService, TicketService>();
 ```
 
 ```bash
-git rm src/IAMS.Shared/DTOs/MaintenanceDto.cs
+git rm src/AssetDesk.Shared/DTOs/MaintenanceDto.cs
 ```
 
-Any remaining compile errors will be in `src/IAMS.Web` referring to maintenance DTOs. Comment out or delete `Pages/Maintenance.razor`, `Components/MaintenanceAttachments.razor` and the maintenance methods in `Services/ApiClient.cs` — the replacement pages come in the phase 1 web plan.
+Any remaining compile errors will be in `src/AssetDesk.Web` referring to maintenance DTOs. Comment out or delete `Pages/Maintenance.razor`, `Components/MaintenanceAttachments.razor` and the maintenance methods in `Services/ApiClient.cs` — the replacement pages come in the phase 1 web plan.
 
 - [ ] **Step 8: Verify the whole solution builds and all tests pass**
 
@@ -3138,33 +3138,33 @@ git commit -m "feat(api): add TicketsController with DTOs and mapping"
 ### Task 11: Comments and attachments endpoints
 
 **Files:**
-- Create: `src/IAMS.Api/Controllers/TicketCommentsController.cs`
-- Create: `src/IAMS.Api/Controllers/TicketAttachmentsController.cs`
-- Create: `tests/IAMS.Api.Tests/TicketCommentVisibilityTests.cs`
+- Create: `src/AssetDesk.Api/Controllers/TicketCommentsController.cs`
+- Create: `src/AssetDesk.Api/Controllers/TicketAttachmentsController.cs`
+- Create: `tests/AssetDesk.Api.Tests/TicketCommentVisibilityTests.cs`
 
 **Interfaces:**
 - Consumes: `ITicketService.AddCommentAsync`, `TicketMapping.ToDto`, `FileStorageService`, `ISubscriptionService.CanUploadFileAsync`.
 - Produces: no new types; two controllers.
 
-Read `src/IAMS.Api/Controllers/MaintenanceAttachmentsController.cs` in git history before writing the attachments controller — it is the template:
+Read `src/AssetDesk.Api/Controllers/MaintenanceAttachmentsController.cs` in git history before writing the attachments controller — it is the template:
 
 ```bash
-git show HEAD~1:src/IAMS.Api/Controllers/MaintenanceAttachmentsController.cs
+git show HEAD~1:src/AssetDesk.Api/Controllers/MaintenanceAttachmentsController.cs
 ```
 
 Reproduce it with `Maintenance` replaced by `Ticket` throughout, keeping the same upload validation, `CanUploadFileAsync` quota check, `FileStorageService` calls, and download and delete endpoints.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/IAMS.Api.Tests/TicketCommentVisibilityTests.cs`:
+Create `tests/AssetDesk.Api.Tests/TicketCommentVisibilityTests.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
-using IAMS.Api.Mapping;
-using IAMS.Api.Services;
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Mapping;
+using AssetDesk.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class TicketCommentVisibilityTests
 {
@@ -3206,24 +3206,24 @@ public class TicketCommentVisibilityTests
 
 - [ ] **Step 2: Run test to verify it passes already**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter TicketCommentVisibilityTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter TicketCommentVisibilityTests`
 Expected: `Passed! - Failed: 0, Passed: 1` — the filtering logic landed in Task 10; this test pins the behaviour so a future edit to the controller cannot leak internal notes.
 
 - [ ] **Step 3: Write the comments controller**
 
-Create `src/IAMS.Api/Controllers/TicketCommentsController.cs`:
+Create `src/AssetDesk.Api/Controllers/TicketCommentsController.cs`:
 
 ```csharp
 using System.Security.Claims;
-using IAMS.Api.Data;
-using IAMS.Api.Mapping;
-using IAMS.Api.Services;
-using IAMS.Shared.DTOs;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Mapping;
+using AssetDesk.Api.Services;
+using AssetDesk.Shared.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Controllers;
+namespace AssetDesk.Api.Controllers;
 
 [ApiController]
 [Route("api/tickets/{ticketId:int}/comments")]
@@ -3289,14 +3289,14 @@ public class TicketCommentsController : ControllerBase
 
 - [ ] **Step 4: Write the attachments controller**
 
-Create `src/IAMS.Api/Controllers/TicketAttachmentsController.cs` as a copy of the old `MaintenanceAttachmentsController` retrieved in the task preamble, with these substitutions applied throughout: route `api/maintenance/{maintenanceId:int}/attachments` becomes `api/tickets/{ticketId:int}/attachments`; `_db.MaintenanceAttachments` becomes `_db.TicketAttachments`; `MaintenanceAttachment` becomes `TicketAttachment`; `MaintenanceId` becomes `TicketId`; `_db.Maintenances` becomes `_db.Tickets`. Keep every validation, quota check and storage call byte-for-byte otherwise.
+Create `src/AssetDesk.Api/Controllers/TicketAttachmentsController.cs` as a copy of the old `MaintenanceAttachmentsController` retrieved in the task preamble, with these substitutions applied throughout: route `api/maintenance/{maintenanceId:int}/attachments` becomes `api/tickets/{ticketId:int}/attachments`; `_db.MaintenanceAttachments` becomes `_db.TicketAttachments`; `MaintenanceAttachment` becomes `TicketAttachment`; `MaintenanceId` becomes `TicketId`; `_db.Maintenances` becomes `_db.Tickets`. Keep every validation, quota check and storage call byte-for-byte otherwise.
 
 - [ ] **Step 5: Count ticket attachments toward the tenant storage quota**
 
 `SubscriptionService` sums only `db.Attachments`, so maintenance attachments never
 counted toward `Tenant.MaxStorageBytes` and ticket attachments would not either — the
 quota check would run on every ticket upload and never be able to fail. Fix all three
-places in `src/IAMS.Api/Services/SubscriptionService.cs` that sum attachment bytes
+places in `src/AssetDesk.Api/Services/SubscriptionService.cs` that sum attachment bytes
 (`CanUploadFileAsync`, `UpdateStorageUsageAsync`, `GetUsageAsync`) to add the ticket
 attachment total. In each, alongside the existing `db.Attachments` sum, add:
 
@@ -3310,7 +3310,7 @@ attachment total. In each, alongside the existing `db.Attachments` sum, add:
 and use `currentUsage + ticketBytes` (respectively `storageBytes + ticketBytes`) where
 the single sum is used today.
 
-Add a test to `tests/IAMS.Api.Tests/` proving a tenant's reported storage includes both
+Add a test to `tests/AssetDesk.Api.Tests/` proving a tenant's reported storage includes both
 tables: seed a tenant, insert one `Attachment` of 100 bytes and one `TicketAttachment`
 of 50 bytes, and assert `GetUsageAsync` reports 150.
 
@@ -3322,7 +3322,7 @@ Expected: build succeeds; `Failed: 0` across the whole suite
 - [ ] **Step 7: Smoke-test the API by hand**
 
 ```bash
-cd src/IAMS.Api && dotnet run
+cd src/AssetDesk.Api && dotnet run
 ```
 
 In Swagger at `https://localhost:5001/swagger`, sign in as `admin@company.com` / `Admin123!` and confirm: `POST /api/tickets` returns a ticket with `reference: "TKT-0001"`; `GET /api/tickets` lists it; `POST /api/tickets/{id}/assign` then `/status` to `InProgress` then `/resolve` walks the ticket through; and `POST /api/tickets/{id}/status` with `Closed` from `New` returns 400 with a readable message.

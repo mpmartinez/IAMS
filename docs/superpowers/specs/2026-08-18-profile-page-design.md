@@ -5,7 +5,7 @@
 
 ## Problem
 
-IAMS has no account page. Everything a user might want to know or change about their own account
+AssetDesk has no account page. Everything a user might want to know or change about their own account
 is either invisible or scattered:
 
 - Their department, tenant, role and join date exist in the database but are never shown to them.
@@ -30,7 +30,7 @@ and viewing *another* user's profile — `/profile` is always the signed-in user
 
 ### Route and entry point
 
-New page at `/profile` (`src/IAMS.Web/Pages/Profile.razor`), `[Authorize]` with no role or
+New page at `/profile` (`src/AssetDesk.Web/Pages/Profile.razor`), `[Authorize]` with no role or
 permission gate — every authenticated user has an account to look at.
 
 The sidebar footer user card in `MainLayout.razor` becomes a `NavLink` to `/profile`, gaining a
@@ -126,7 +126,7 @@ trimmed, ≤100 characters, empty string stored as null. Violations return
 
 ## Testing
 
-API tests in `tests/IAMS.Api.Tests/ProfileSelfServiceTests.cs`, following the existing pattern of
+API tests in `tests/AssetDesk.Api.Tests/ProfileSelfServiceTests.cs`, following the existing pattern of
 instantiating the controller directly over a real Identity store on a test `AppDbContext`
 (as `UsersControllerRoleAssignmentTests` does):
 

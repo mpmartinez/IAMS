@@ -1,4 +1,4 @@
-# IAMS (Integrated Asset Management System) — Dokploy stack for the Hetzner box.
+# AssetDesk (IT asset management + service desk) — Dokploy stack for the Hetzner box.
 #
 # ─── Setup in Dokploy ─────────────────────────────────────────────────────────
 #  1. Create a "Compose" service pointing at this file (docker-compose.dokploy.yml).
@@ -45,7 +45,7 @@ services:
       Smtp__Username: ${SMTP_USERNAME}
       Smtp__Password: ${SMTP_PASSWORD}
       Smtp__FromEmail: ${SMTP_FROM_EMAIL}
-      Smtp__FromName: ${SMTP_FROM_NAME:-IAMS}
+      Smtp__FromName: ${SMTP_FROM_NAME:-AssetDesk}
       App__WebUrl: https://iams.m2netsolutions.com
     volumes:
       # No iams-data volume: the database is external, reached via DATABASE_CONNECTION.

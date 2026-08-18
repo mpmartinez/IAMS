@@ -17,65 +17,65 @@
 - `RolePermission` gets **no global query filter**. Every read filters `TenantId` explicitly. See "Query-filter trap" below — getting this wrong empties every user's permissions at login and the failure is silent.
 - Default grants must reproduce today's access exactly. The per-role tables in Task 1 are the contract; do not adjust them to taste.
 - SuperAdmin keeps its existing bypass. It is never permission-resolved and its grants are never editable.
-- Database is **PostgreSQL** (`Program.cs:29` uses `UseNpgsql`), despite what `CLAUDE.md` says. Tests use SQLite in-memory via `tests/IAMS.Api.Tests/TestDb.cs`.
-- Run all tests with: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`
+- Database is **PostgreSQL** (`Program.cs:29` uses `UseNpgsql`), despite what `CLAUDE.md` says. Tests use SQLite in-memory via `tests/AssetDesk.Api.Tests/TestDb.cs`.
+- Run all tests with: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 
 ### Query-filter trap
 
-`TokenService` runs during login, when the HTTP context is still unauthenticated. `TenantProvider.GetCurrentTenantId()` returns null and `IsSuperAdmin()` returns false at that moment. EF Core extracts the provider call into a query parameter and evaluates it eagerly, so a `_tenantProvider == null` guard inside a filter does **not** short-circuit the way C# `||` would — this is documented at `tests/IAMS.Api.Tests/TestDb.cs:21-26`. A filtered `RolePermission` would match zero rows at login and hand every user an empty permission set, with no error anywhere.
+`TokenService` runs during login, when the HTTP context is still unauthenticated. `TenantProvider.GetCurrentTenantId()` returns null and `IsSuperAdmin()` returns false at that moment. EF Core extracts the provider call into a query parameter and evaluates it eagerly, so a `_tenantProvider == null` guard inside a filter does **not** short-circuit the way C# `||` would — this is documented at `tests/AssetDesk.Api.Tests/TestDb.cs:21-26`. A filtered `RolePermission` would match zero rows at login and hand every user an empty permission set, with no error anywhere.
 
 `RolePermission` therefore does not implement `ITenantEntity` and gets no `HasQueryFilter` call.
 
 ## File Structure
 
 **Create:**
-- `src/IAMS.Api/Authorization/Permissions.cs` — catalog and per-role defaults
-- `src/IAMS.Api/Authorization/PermissionRequirement.cs` — requirement + handler + registration helper
-- `src/IAMS.Api/Entities/ApplicationRole.cs` — Identity role with TenantId/IsBuiltIn/Description
-- `src/IAMS.Api/Entities/RolePermission.cs` — the grant row
-- `src/IAMS.Api/Services/PermissionResolver.cs` — role names + tenant to permission keys
-- `src/IAMS.Api/Controllers/RolesController.cs`
-- `src/IAMS.Shared/DTOs/RoleDto.cs`
-- `src/IAMS.Web/Pages/Admin/Roles.razor`
-- `tests/IAMS.Api.Tests/PermissionCatalogTests.cs`
-- `tests/IAMS.Api.Tests/PermissionResolverTests.cs`
-- `tests/IAMS.Api.Tests/RolePermissionSeedTests.cs`
+- `src/AssetDesk.Api/Authorization/Permissions.cs` — catalog and per-role defaults
+- `src/AssetDesk.Api/Authorization/PermissionRequirement.cs` — requirement + handler + registration helper
+- `src/AssetDesk.Api/Entities/ApplicationRole.cs` — Identity role with TenantId/IsBuiltIn/Description
+- `src/AssetDesk.Api/Entities/RolePermission.cs` — the grant row
+- `src/AssetDesk.Api/Services/PermissionResolver.cs` — role names + tenant to permission keys
+- `src/AssetDesk.Api/Controllers/RolesController.cs`
+- `src/AssetDesk.Shared/DTOs/RoleDto.cs`
+- `src/AssetDesk.Web/Pages/Admin/Roles.razor`
+- `tests/AssetDesk.Api.Tests/PermissionCatalogTests.cs`
+- `tests/AssetDesk.Api.Tests/PermissionResolverTests.cs`
+- `tests/AssetDesk.Api.Tests/RolePermissionSeedTests.cs`
 
 **Modify:**
-- `src/IAMS.Api/Data/AppDbContext.cs` — role type parameter, `RolePermissions` DbSet, entity config
-- `src/IAMS.Api/Data/SeedData.cs` — seed `ApplicationRole` metadata and backfill grants per tenant
-- `src/IAMS.Api/Program.cs` — Identity generic args, policy redefinitions, DI
-- `src/IAMS.Api/Services/TokenService.cs` — emit permission claims
-- `src/IAMS.Api/Controllers/{Assets,Tickets,TicketAttachments,Users,Attachments,WarrantyAlerts,Notifications,Tenants}Controller.cs`
-- `src/IAMS.Web/Services/AuthStateProvider.cs` — copy permission claims out of the JWT
-- `src/IAMS.Web/Services/ApiClient.cs` — roles/permissions endpoints
-- `src/IAMS.Web/Shared/PermissionView.razor` — drop the Admin fallback
-- `src/IAMS.Web/Layout/MainLayout.razor` — role lists to permission gates
-- `src/IAMS.Web/Pages/Users.razor` — role dropdown from the API
+- `src/AssetDesk.Api/Data/AppDbContext.cs` — role type parameter, `RolePermissions` DbSet, entity config
+- `src/AssetDesk.Api/Data/SeedData.cs` — seed `ApplicationRole` metadata and backfill grants per tenant
+- `src/AssetDesk.Api/Program.cs` — Identity generic args, policy redefinitions, DI
+- `src/AssetDesk.Api/Services/TokenService.cs` — emit permission claims
+- `src/AssetDesk.Api/Controllers/{Assets,Tickets,TicketAttachments,Users,Attachments,WarrantyAlerts,Notifications,Tenants}Controller.cs`
+- `src/AssetDesk.Web/Services/AuthStateProvider.cs` — copy permission claims out of the JWT
+- `src/AssetDesk.Web/Services/ApiClient.cs` — roles/permissions endpoints
+- `src/AssetDesk.Web/Shared/PermissionView.razor` — drop the Admin fallback
+- `src/AssetDesk.Web/Layout/MainLayout.razor` — role lists to permission gates
+- `src/AssetDesk.Web/Pages/Users.razor` — role dropdown from the API
 
 ---
 
 ### Task 1: Permission catalog
 
 **Files:**
-- Create: `src/IAMS.Api/Authorization/Permissions.cs`
-- Test: `tests/IAMS.Api.Tests/PermissionCatalogTests.cs`
+- Create: `src/AssetDesk.Api/Authorization/Permissions.cs`
+- Test: `tests/AssetDesk.Api.Tests/PermissionCatalogTests.cs`
 
 **Interfaces:**
 - Consumes: nothing
-- Produces: `IAMS.Api.Authorization.Permissions` with `const string ClaimType = "permission"`, one `const string` per key, `PermissionDescriptor[] All`, `string[] Keys`, and `IReadOnlyList<string> DefaultsFor(string roleName)`. `PermissionDescriptor` is `record(string Key, string Group, string Label, string Description)`.
+- Produces: `AssetDesk.Api.Authorization.Permissions` with `const string ClaimType = "permission"`, one `const string` per key, `PermissionDescriptor[] All`, `string[] Keys`, and `IReadOnlyList<string> DefaultsFor(string roleName)`. `PermissionDescriptor` is `record(string Key, string Group, string Label, string Description)`.
 
 The defaults below are derived from the policies in `Program.cs:113-139` and the role attributes on controllers as they exist today. They reproduce current access exactly.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/IAMS.Api.Tests/PermissionCatalogTests.cs`:
+Create `tests/AssetDesk.Api.Tests/PermissionCatalogTests.cs`:
 
 ```csharp
-using IAMS.Api.Authorization;
-using IAMS.Api.Entities;
+using AssetDesk.Api.Authorization;
+using AssetDesk.Api.Entities;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class PermissionCatalogTests
 {
@@ -87,7 +87,7 @@ public class PermissionCatalogTests
     }
 
     [Fact]
-    public void EveryKey_UsesTheIamsConvention()
+    public void EveryKey_UsesTheAssetDeskConvention()
     {
         foreach (var key in Permissions.Keys)
         {
@@ -170,18 +170,18 @@ public class PermissionCatalogTests
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter PermissionCatalogTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter PermissionCatalogTests`
 
-Expected: FAIL to compile — `The type or namespace name 'Authorization' does not exist in the namespace 'IAMS.Api'`.
+Expected: FAIL to compile — `The type or namespace name 'Authorization' does not exist in the namespace 'AssetDesk.Api'`.
 
 - [ ] **Step 3: Write the catalog**
 
-Create `src/IAMS.Api/Authorization/Permissions.cs`:
+Create `src/AssetDesk.Api/Authorization/Permissions.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
+using AssetDesk.Api.Entities;
 
-namespace IAMS.Api.Authorization;
+namespace AssetDesk.Api.Authorization;
 
 /// <param name="Key">Stable identifier stored in RolePermission and emitted as a claim.</param>
 /// <param name="Group">Heading the permission sits under in the /admin/roles matrix.</param>
@@ -299,14 +299,14 @@ public static class Permissions
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter PermissionCatalogTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter PermissionCatalogTests`
 
 Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/IAMS.Api/Authorization/Permissions.cs tests/IAMS.Api.Tests/PermissionCatalogTests.cs && git commit -m "feat(auth): add the permission catalog and per-role defaults"
+git add src/AssetDesk.Api/Authorization/Permissions.cs tests/AssetDesk.Api.Tests/PermissionCatalogTests.cs && git commit -m "feat(auth): add the permission catalog and per-role defaults"
 ```
 
 ---
@@ -314,11 +314,11 @@ git add src/IAMS.Api/Authorization/Permissions.cs tests/IAMS.Api.Tests/Permissio
 ### Task 2: Role and grant entities, Identity swap, migration
 
 **Files:**
-- Create: `src/IAMS.Api/Entities/ApplicationRole.cs`, `src/IAMS.Api/Entities/RolePermission.cs`
-- Modify: `src/IAMS.Api/Data/AppDbContext.cs:9`, `:35`, `:470`
-- Modify: `src/IAMS.Api/Program.cs:54`, `:225`
-- Modify: `src/IAMS.Api/Data/SeedData.cs:15`, `:18-24`
-- Modify: `src/IAMS.Api/Controllers/TenantsController.cs` (RoleManager generic arg)
+- Create: `src/AssetDesk.Api/Entities/ApplicationRole.cs`, `src/AssetDesk.Api/Entities/RolePermission.cs`
+- Modify: `src/AssetDesk.Api/Data/AppDbContext.cs:9`, `:35`, `:470`
+- Modify: `src/AssetDesk.Api/Program.cs:54`, `:225`
+- Modify: `src/AssetDesk.Api/Data/SeedData.cs:15`, `:18-24`
+- Modify: `src/AssetDesk.Api/Controllers/TenantsController.cs` (RoleManager generic arg)
 
 **Interfaces:**
 - Consumes: `Permissions` (Task 1)
@@ -326,12 +326,12 @@ git add src/IAMS.Api/Authorization/Permissions.cs tests/IAMS.Api.Tests/Permissio
 
 - [ ] **Step 1: Write the entities**
 
-Create `src/IAMS.Api/Entities/ApplicationRole.cs`:
+Create `src/AssetDesk.Api/Entities/ApplicationRole.cs`:
 
 ```csharp
 using Microsoft.AspNetCore.Identity;
 
-namespace IAMS.Api.Entities;
+namespace AssetDesk.Api.Entities;
 
 public class ApplicationRole : IdentityRole
 {
@@ -349,10 +349,10 @@ public class ApplicationRole : IdentityRole
 }
 ```
 
-Create `src/IAMS.Api/Entities/RolePermission.cs`:
+Create `src/AssetDesk.Api/Entities/RolePermission.cs`:
 
 ```csharp
-namespace IAMS.Api.Entities;
+namespace AssetDesk.Api.Entities;
 
 /// <summary>
 /// One permission granted to one role within one tenant.
@@ -381,7 +381,7 @@ public class RolePermission
 
 - [ ] **Step 2: Swap the Identity role type in AppDbContext**
 
-In `src/IAMS.Api/Data/AppDbContext.cs`, change line 9 from:
+In `src/AssetDesk.Api/Data/AppDbContext.cs`, change line 9 from:
 
 ```csharp
 public class AppDbContext : IdentityDbContext<ApplicationUser>
@@ -435,17 +435,17 @@ Add this entity configuration immediately before the `LookupValue` block (curren
 
 - [ ] **Step 3: Update every RoleManager and Identity generic argument**
 
-In `src/IAMS.Api/Program.cs` line 54, change `AddIdentity<ApplicationUser, IdentityRole>(` to `AddIdentity<ApplicationUser, ApplicationRole>(`.
+In `src/AssetDesk.Api/Program.cs` line 54, change `AddIdentity<ApplicationUser, IdentityRole>(` to `AddIdentity<ApplicationUser, ApplicationRole>(`.
 
-In `src/IAMS.Api/Program.cs` line 225, change `GetRequiredService<RoleManager<IdentityRole>>()` to `GetRequiredService<RoleManager<ApplicationRole>>()`.
+In `src/AssetDesk.Api/Program.cs` line 225, change `GetRequiredService<RoleManager<IdentityRole>>()` to `GetRequiredService<RoleManager<ApplicationRole>>()`.
 
-In `src/IAMS.Api/Data/SeedData.cs` line 15, change the parameter `RoleManager<IdentityRole> roleManager` to `RoleManager<ApplicationRole> roleManager`.
+In `src/AssetDesk.Api/Data/SeedData.cs` line 15, change the parameter `RoleManager<IdentityRole> roleManager` to `RoleManager<ApplicationRole> roleManager`.
 
-In `src/IAMS.Api/Controllers/TenantsController.cs`, change the injected `RoleManager<IdentityRole>` to `RoleManager<ApplicationRole>`, and the `new IdentityRole("Admin")` call to `new ApplicationRole("Admin") { IsBuiltIn = true }`.
+In `src/AssetDesk.Api/Controllers/TenantsController.cs`, change the injected `RoleManager<IdentityRole>` to `RoleManager<ApplicationRole>`, and the `new IdentityRole("Admin")` call to `new ApplicationRole("Admin") { IsBuiltIn = true }`.
 
 - [ ] **Step 4: Seed built-in role metadata**
 
-In `src/IAMS.Api/Data/SeedData.cs`, replace the loop at lines 18-24 with:
+In `src/AssetDesk.Api/Data/SeedData.cs`, replace the loop at lines 18-24 with:
 
 ```csharp
         // Create roles including SuperAdmin, and keep their built-in metadata current.
@@ -471,7 +471,7 @@ In `src/IAMS.Api/Data/SeedData.cs`, replace the loop at lines 18-24 with:
         }
 ```
 
-Add to `src/IAMS.Api/Entities/Roles.cs`, inside the `Roles` class:
+Add to `src/AssetDesk.Api/Entities/Roles.cs`, inside the `Roles` class:
 
 ```csharp
     public static string DescriptionFor(string role) => role switch
@@ -489,10 +489,10 @@ Add to `src/IAMS.Api/Entities/Roles.cs`, inside the `Roles` class:
 - [ ] **Step 5: Create the migration**
 
 ```bash
-cd "src/IAMS.Api" && dotnet ef migrations add AddRolePermissions
+cd "src/AssetDesk.Api" && dotnet ef migrations add AddRolePermissions
 ```
 
-Expected: creates `src/IAMS.Api/Migrations/<timestamp>_AddRolePermissions.cs` adding `TenantId`, `IsBuiltIn`, `Description` to `AspNetRoles` and creating the `RolePermissions` table.
+Expected: creates `src/AssetDesk.Api/Migrations/<timestamp>_AddRolePermissions.cs` adding `TenantId`, `IsBuiltIn`, `Description` to `AspNetRoles` and creating the `RolePermissions` table.
 
 - [ ] **Step 6: Verify the solution builds**
 
@@ -503,7 +503,7 @@ Expected: Build succeeded. If `RoleManager<IdentityRole>` errors remain, fix eac
 - [ ] **Step 7: Commit**
 
 ```bash
-git add -A src/IAMS.Api && git commit -m "feat(auth): add ApplicationRole and RolePermission with migration"
+git add -A src/AssetDesk.Api && git commit -m "feat(auth): add ApplicationRole and RolePermission with migration"
 ```
 
 ---
@@ -511,8 +511,8 @@ git add -A src/IAMS.Api && git commit -m "feat(auth): add ApplicationRole and Ro
 ### Task 3: Backfill grants per tenant
 
 **Files:**
-- Modify: `src/IAMS.Api/Data/SeedData.cs`
-- Test: `tests/IAMS.Api.Tests/RolePermissionSeedTests.cs`
+- Modify: `src/AssetDesk.Api/Data/SeedData.cs`
+- Test: `tests/AssetDesk.Api.Tests/RolePermissionSeedTests.cs`
 
 **Interfaces:**
 - Consumes: `Permissions.DefaultsFor` (Task 1), `RolePermission` (Task 2)
@@ -522,15 +522,15 @@ Idempotent-and-additive is the required behaviour: it must not delete grants, or
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/IAMS.Api.Tests/RolePermissionSeedTests.cs`:
+Create `tests/AssetDesk.Api.Tests/RolePermissionSeedTests.cs`:
 
 ```csharp
-using IAMS.Api.Authorization;
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
+using AssetDesk.Api.Authorization;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class RolePermissionSeedTests
 {
@@ -639,13 +639,13 @@ public class RolePermissionSeedTests
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter RolePermissionSeedTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter RolePermissionSeedTests`
 
 Expected: FAIL to compile — `'SeedData' does not contain a definition for 'EnsureRolePermissionsAsync'`.
 
 - [ ] **Step 3: Implement the backfill**
 
-Add to `src/IAMS.Api/Data/SeedData.cs`:
+Add to `src/AssetDesk.Api/Data/SeedData.cs`:
 
 ```csharp
     /// <summary>
@@ -708,7 +708,7 @@ Add to `src/IAMS.Api/Data/SeedData.cs`:
     }
 ```
 
-Add `using IAMS.Api.Authorization;` to the top of `SeedData.cs`.
+Add `using AssetDesk.Api.Authorization;` to the top of `SeedData.cs`.
 
 Then call it for every tenant at the end of `SeedData.Initialize`, before the method returns:
 
@@ -721,14 +721,14 @@ Then call it for every tenant at the end of `SeedData.Initialize`, before the me
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter RolePermissionSeedTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter RolePermissionSeedTests`
 
 Expected: PASS, 4 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A src/IAMS.Api tests && git commit -m "feat(auth): backfill built-in role grants per tenant"
+git add -A src/AssetDesk.Api tests && git commit -m "feat(auth): backfill built-in role grants per tenant"
 ```
 
 ---
@@ -736,9 +736,9 @@ git add -A src/IAMS.Api tests && git commit -m "feat(auth): backfill built-in ro
 ### Task 4: Permission resolver
 
 **Files:**
-- Create: `src/IAMS.Api/Services/PermissionResolver.cs`
-- Modify: `src/IAMS.Api/Program.cs` (DI registration near line 154)
-- Test: `tests/IAMS.Api.Tests/PermissionResolverTests.cs`
+- Create: `src/AssetDesk.Api/Services/PermissionResolver.cs`
+- Modify: `src/AssetDesk.Api/Program.cs` (DI registration near line 154)
+- Test: `tests/AssetDesk.Api.Tests/PermissionResolverTests.cs`
 
 **Interfaces:**
 - Consumes: `RolePermission`, `ApplicationRole` (Task 2)
@@ -748,15 +748,15 @@ It takes a set of role names rather than one because the seeded super admin hold
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/IAMS.Api.Tests/PermissionResolverTests.cs`:
+Create `tests/AssetDesk.Api.Tests/PermissionResolverTests.cs`:
 
 ```csharp
-using IAMS.Api.Authorization;
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
-using IAMS.Api.Services;
+using AssetDesk.Api.Authorization;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class PermissionResolverTests
 {
@@ -869,19 +869,19 @@ public class PermissionResolverTests
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter PermissionResolverTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter PermissionResolverTests`
 
 Expected: FAIL to compile — `The type or namespace name 'PermissionResolver' could not be found`.
 
 - [ ] **Step 3: Implement the resolver**
 
-Create `src/IAMS.Api/Services/PermissionResolver.cs`:
+Create `src/AssetDesk.Api/Services/PermissionResolver.cs`:
 
 ```csharp
-using IAMS.Api.Data;
+using AssetDesk.Api.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Services;
+namespace AssetDesk.Api.Services;
 
 public interface IPermissionResolver
 {
@@ -911,7 +911,7 @@ public class PermissionResolver(AppDbContext db) : IPermissionResolver
 }
 ```
 
-Register it in `src/IAMS.Api/Program.cs` alongside the other scoped services (after line 154):
+Register it in `src/AssetDesk.Api/Program.cs` alongside the other scoped services (after line 154):
 
 ```csharp
 builder.Services.AddScoped<IPermissionResolver, PermissionResolver>();
@@ -919,14 +919,14 @@ builder.Services.AddScoped<IPermissionResolver, PermissionResolver>();
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter PermissionResolverTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter PermissionResolverTests`
 
 Expected: PASS, 5 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A src/IAMS.Api tests && git commit -m "feat(auth): resolve a role's permissions within a tenant"
+git add -A src/AssetDesk.Api tests && git commit -m "feat(auth): resolve a role's permissions within a tenant"
 ```
 
 ---
@@ -934,8 +934,8 @@ git add -A src/IAMS.Api tests && git commit -m "feat(auth): resolve a role's per
 ### Task 5: Authorization requirement, handler, and policy rewrite
 
 **Files:**
-- Create: `src/IAMS.Api/Authorization/PermissionRequirement.cs`
-- Modify: `src/IAMS.Api/Program.cs:112-139`
+- Create: `src/AssetDesk.Api/Authorization/PermissionRequirement.cs`
+- Modify: `src/AssetDesk.Api/Program.cs:112-139`
 - Modify: 8 controllers (exact sites listed in Step 3)
 
 **Interfaces:**
@@ -944,13 +944,13 @@ git add -A src/IAMS.Api tests && git commit -m "feat(auth): resolve a role's per
 
 - [ ] **Step 1: Write the requirement and handler**
 
-Create `src/IAMS.Api/Authorization/PermissionRequirement.cs`:
+Create `src/AssetDesk.Api/Authorization/PermissionRequirement.cs`:
 
 ```csharp
-using IAMS.Api.Entities;
+using AssetDesk.Api.Entities;
 using Microsoft.AspNetCore.Authorization;
 
-namespace IAMS.Api.Authorization;
+namespace AssetDesk.Api.Authorization;
 
 public sealed class PermissionRequirement(string permission) : IAuthorizationRequirement
 {
@@ -985,7 +985,7 @@ public static class AuthorizationBuilderExtensions
 
 - [ ] **Step 2: Rewrite the policy block**
 
-In `src/IAMS.Api/Program.cs`, replace lines 112-139 entirely with:
+In `src/AssetDesk.Api/Program.cs`, replace lines 112-139 entirely with:
 
 ```csharp
 // Authorization policies.
@@ -1024,7 +1024,7 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("CanManageTenants", policy => policy.RequireRole(Roles.SuperAdmin));
 ```
 
-Add `using IAMS.Api.Authorization;` and `using Microsoft.AspNetCore.Authorization;` to the top of `Program.cs` — the latter is needed for the `IAuthorizationHandler` registration.
+Add `using AssetDesk.Api.Authorization;` and `using Microsoft.AspNetCore.Authorization;` to the top of `Program.cs` — the latter is needed for the `IAuthorizationHandler` registration.
 
 Note what this removes: the `Staff` and `Auditor` policies (`Staff` was overloaded across assets and tickets and is replaced by `CanViewAssets` / `CanViewTicketQueue` / `CanManageTicketQueue`; `Auditor` had no call sites), and `TenantAdmin` / `CanManageOrgSettings`, which also had no call sites.
 
@@ -1032,38 +1032,38 @@ Note what this removes: the `Staff` and `Auditor` policies (`Staff` was overload
 
 Apply each of these exactly. The left column is the current attribute argument, the right is the replacement.
 
-`src/IAMS.Api/Controllers/AssetsController.cs`
+`src/AssetDesk.Api/Controllers/AssetsController.cs`
 - line 23: `Policy = "Staff"` → `Policy = "CanViewAssets"`
 - line 72: `Policy = "Staff"` → `Policy = "CanViewAssets"`
 - line 243: `Policy = "CanCreateAssets"` → `Policy = "CanImportAssets"`
 
-`src/IAMS.Api/Controllers/TicketsController.cs`
+`src/AssetDesk.Api/Controllers/TicketsController.cs`
 - line 42: `Policy = "Staff"` → `Policy = "CanViewTicketQueue"`
 - line 72: `Policy = "Staff"` → `Policy = "CanViewTicketQueue"`
 - line 159: `Policy = "Staff"` → `Policy = "CanManageTicketQueue"`
 - line 171: `Policy = "Staff"` → `Policy = "CanManageTicketQueue"`
 - line 183: `Policy = "Staff"` → `Policy = "CanManageTicketQueue"`
 
-`src/IAMS.Api/Controllers/TicketAttachmentsController.cs`
+`src/AssetDesk.Api/Controllers/TicketAttachmentsController.cs`
 - line 173: `Policy = "Staff"` → `Policy = "CanManageTicketQueue"`
 
-`src/IAMS.Api/Controllers/UsersController.cs`
+`src/AssetDesk.Api/Controllers/UsersController.cs`
 - line 23: `Roles = "Admin"` → `Policy = "CanViewUsers"`
 - line 73: `Roles = "Admin"` → `Policy = "CanManageUsers"`
 - line 129: `Roles = "Admin"` → `Policy = "CanViewUsers"`
 - line 148: `Roles = "Admin"` → `Policy = "CanManageUsers"`
 - line 215: `Roles = "Admin"` → `Policy = "CanManageUsers"`
 
-`src/IAMS.Api/Controllers/AttachmentsController.cs`
+`src/AssetDesk.Api/Controllers/AttachmentsController.cs`
 - line 75: `Roles = "Admin,Staff"` → `Policy = "CanManageAttachments"`
 - line 172: `Roles = "Admin,Staff"` → `Policy = "CanManageAttachments"`
 
-`src/IAMS.Api/Controllers/WarrantyAlertsController.cs`
+`src/AssetDesk.Api/Controllers/WarrantyAlertsController.cs`
 - line 100: `Roles = "Admin,Staff"` → `Policy = "CanManageWarrantyAlerts"`
 - line 130: `Roles = "Admin,Staff"` → `Policy = "CanManageWarrantyAlerts"`
 - line 158: `Roles = "Admin"` → `Policy = "CanDeleteWarrantyAlerts"`
 
-`src/IAMS.Api/Controllers/NotificationsController.cs`
+`src/AssetDesk.Api/Controllers/NotificationsController.cs`
 - line 144: `Roles = "Admin"` → `Policy = "CanSendTestNotifications"`
 
 Worked example — `UsersController.cs:23` goes from:
@@ -1093,7 +1093,7 @@ Expected: Build succeeded.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add -A src/IAMS.Api && git commit -m "feat(auth): enforce policies via permissions instead of role lists"
+git add -A src/AssetDesk.Api && git commit -m "feat(auth): enforce policies via permissions instead of role lists"
 ```
 
 ---
@@ -1101,8 +1101,8 @@ git add -A src/IAMS.Api && git commit -m "feat(auth): enforce policies via permi
 ### Task 6: Emit permission claims, and revoke tokens on role change
 
 **Files:**
-- Modify: `src/IAMS.Api/Services/TokenService.cs:13-63`
-- Modify: `src/IAMS.Api/Controllers/UsersController.cs:196-208`
+- Modify: `src/AssetDesk.Api/Services/TokenService.cs:13-63`
+- Modify: `src/AssetDesk.Api/Controllers/UsersController.cs:196-208`
 
 **Interfaces:**
 - Consumes: `IPermissionResolver` (Task 4), `Permissions.ClaimType` (Task 1)
@@ -1110,7 +1110,7 @@ git add -A src/IAMS.Api && git commit -m "feat(auth): enforce policies via permi
 
 - [ ] **Step 1: Inject the resolver and emit claims**
 
-In `src/IAMS.Api/Services/TokenService.cs`, add `IPermissionResolver permissionResolver` to the primary constructor at line 13-16, so it reads:
+In `src/AssetDesk.Api/Services/TokenService.cs`, add `IPermissionResolver permissionResolver` to the primary constructor at line 13-16, so it reads:
 
 ```csharp
 public class TokenService(
@@ -1120,7 +1120,7 @@ public class TokenService(
     AppDbContext db)
 ```
 
-Add `using IAMS.Api.Authorization;` at the top.
+Add `using AssetDesk.Api.Authorization;` at the top.
 
 Then insert this immediately after the SuperAdmin role block (currently lines 46-50), before `var expireMinutes`:
 
@@ -1138,7 +1138,7 @@ Then insert this immediately after the SuperAdmin role block (currently lines 46
 
 - [ ] **Step 2: Revoke refresh tokens when a user's role changes**
 
-In `src/IAMS.Api/Controllers/UsersController.cs`, the role-change block at lines 196-208 currently ends after re-adding roles on failure. Replace the whole block with:
+In `src/AssetDesk.Api/Controllers/UsersController.cs`, the role-change block at lines 196-208 currently ends after re-adding roles on failure. Replace the whole block with:
 
 ```csharp
         // Update role if changed
@@ -1165,14 +1165,14 @@ Add `TokenService tokenService` to the `UsersController` primary constructor par
 
 - [ ] **Step 3: Build and run the full suite**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 
 Expected: all tests pass. If `TokenService` is constructed anywhere in tests, add the new parameter there.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add -A src/IAMS.Api && git commit -m "feat(auth): put permission claims in the token, revoke on role change"
+git add -A src/AssetDesk.Api && git commit -m "feat(auth): put permission claims in the token, revoke on role change"
 ```
 
 ---
@@ -1180,9 +1180,9 @@ git add -A src/IAMS.Api && git commit -m "feat(auth): put permission claims in t
 ### Task 7: Roles API
 
 **Files:**
-- Create: `src/IAMS.Shared/DTOs/RoleDto.cs`, `src/IAMS.Api/Controllers/RolesController.cs`
-- Modify: `src/IAMS.Api/Controllers/TenantsController.cs` (call the backfill for new tenants)
-- Test: `tests/IAMS.Api.Tests/RolesApiTests.cs`
+- Create: `src/AssetDesk.Shared/DTOs/RoleDto.cs`, `src/AssetDesk.Api/Controllers/RolesController.cs`
+- Modify: `src/AssetDesk.Api/Controllers/TenantsController.cs` (call the backfill for new tenants)
+- Test: `tests/AssetDesk.Api.Tests/RolesApiTests.cs`
 
 **Interfaces:**
 - Consumes: `Permissions`, `IPermissionResolver`, `SeedData.EnsureRolePermissionsAsync`
@@ -1190,10 +1190,10 @@ git add -A src/IAMS.Api && git commit -m "feat(auth): put permission claims in t
 
 - [ ] **Step 1: Write the DTOs**
 
-Create `src/IAMS.Shared/DTOs/RoleDto.cs`:
+Create `src/AssetDesk.Shared/DTOs/RoleDto.cs`:
 
 ```csharp
-namespace IAMS.Shared.DTOs;
+namespace AssetDesk.Shared.DTOs;
 
 public record RoleDto
 {
@@ -1241,15 +1241,15 @@ public record PermissionGroupDto
 
 - [ ] **Step 2: Write the failing test**
 
-Create `tests/IAMS.Api.Tests/RolesApiTests.cs`:
+Create `tests/AssetDesk.Api.Tests/RolesApiTests.cs`:
 
 ```csharp
-using IAMS.Api.Authorization;
-using IAMS.Api.Controllers;
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
+using AssetDesk.Api.Authorization;
+using AssetDesk.Api.Controllers;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 public class RolesApiTests
 {
@@ -1300,28 +1300,28 @@ internal static class TestPrincipals
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter RolesApiTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter RolesApiTests`
 
 Expected: FAIL to compile — `The type or namespace name 'RolesController' could not be found`.
 
 - [ ] **Step 4: Write the controller**
 
-Create `src/IAMS.Api/Controllers/RolesController.cs`:
+Create `src/AssetDesk.Api/Controllers/RolesController.cs`:
 
 ```csharp
 using System.Security.Claims;
-using IAMS.Api.Authorization;
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
-using IAMS.Api.Services;
-using IAMS.Shared.DTOs;
+using AssetDesk.Api.Authorization;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
+using AssetDesk.Shared.DTOs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace IAMS.Api.Controllers;
+namespace AssetDesk.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -1578,7 +1578,7 @@ public class RolesController(
 
 - [ ] **Step 5: Provision grants for new tenants**
 
-In `src/IAMS.Api/Controllers/TenantsController.cs`, immediately after the tenant admin user is created and added to the Admin role, add:
+In `src/AssetDesk.Api/Controllers/TenantsController.cs`, immediately after the tenant admin user is created and added to the Admin role, add:
 
 ```csharp
         // Give the new tenant its own copy of every built-in role's default grants, so its admin
@@ -1586,17 +1586,17 @@ In `src/IAMS.Api/Controllers/TenantsController.cs`, immediately after the tenant
         await SeedData.EnsureRolePermissionsAsync(db, tenant.Id);
 ```
 
-Add `using IAMS.Api.Data;` if not already present.
+Add `using AssetDesk.Api.Data;` if not already present.
 
 - [ ] **Step 6: Run tests to verify they pass**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj --filter RolesApiTests`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter RolesApiTests`
 
 Expected: PASS, 3 tests.
 
 - [ ] **Step 7: Run the full suite and build**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 
 Expected: all tests pass.
 
@@ -1611,9 +1611,9 @@ git add -A src tests && git commit -m "feat(roles): add the roles API with escal
 ### Task 8: Client reads permission claims
 
 **Files:**
-- Modify: `src/IAMS.Web/Services/AuthStateProvider.cs:43-72`
-- Modify: `src/IAMS.Web/Shared/PermissionView.razor:25-41`
-- Modify: `src/IAMS.Web/Services/ApiClient.cs`
+- Modify: `src/AssetDesk.Web/Services/AuthStateProvider.cs:43-72`
+- Modify: `src/AssetDesk.Web/Shared/PermissionView.razor:25-41`
+- Modify: `src/AssetDesk.Web/Services/ApiClient.cs`
 
 **Interfaces:**
 - Consumes: the `permission` claims minted in Task 6, the endpoints from Task 7
@@ -1621,7 +1621,7 @@ git add -A src tests && git commit -m "feat(roles): add the roles API with escal
 
 - [ ] **Step 1: Copy permission claims into the identity**
 
-In `src/IAMS.Web/Services/AuthStateProvider.cs`, insert immediately after the `claims.AddRange(roleClaims...)` line (currently line 72):
+In `src/AssetDesk.Web/Services/AuthStateProvider.cs`, insert immediately after the `claims.AddRange(roleClaims...)` line (currently line 72):
 
 ```csharp
             // Permission claims come from the token for the same reason roles do: the token is
@@ -1635,7 +1635,7 @@ In `src/IAMS.Web/Services/AuthStateProvider.cs`, insert immediately after the `c
 
 - [ ] **Step 2: Remove the Admin fallback from PermissionView**
 
-Replace the `CheckPermission` method in `src/IAMS.Web/Shared/PermissionView.razor` (lines 25-41) with:
+Replace the `CheckPermission` method in `src/AssetDesk.Web/Shared/PermissionView.razor` (lines 25-41) with:
 
 ```csharp
     private async Task CheckPermission()
@@ -1659,7 +1659,7 @@ The old `IsInRole("Admin") || IsInRole("Administrator")` fallback is deliberatel
 
 - [ ] **Step 3: Add the API client methods**
 
-Append to `src/IAMS.Web/Services/ApiClient.cs`, following the existing lookup-method style:
+Append to `src/AssetDesk.Web/Services/ApiClient.cs`, following the existing lookup-method style:
 
 ```csharp
     // Roles and permissions.
@@ -1735,7 +1735,7 @@ Expected: Build succeeded.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A src/IAMS.Web && git commit -m "feat(web): read permission claims and call the roles API"
+git add -A src/AssetDesk.Web && git commit -m "feat(web): read permission claims and call the roles API"
 ```
 
 ---
@@ -1743,25 +1743,25 @@ git add -A src/IAMS.Web && git commit -m "feat(web): read permission claims and 
 ### Task 9: Roles admin page
 
 **Files:**
-- Create: `src/IAMS.Web/Pages/Admin/Roles.razor`
-- Modify: `src/IAMS.Web/Layout/MainLayout.razor` (Admin nav group, around line 59-65)
+- Create: `src/AssetDesk.Web/Pages/Admin/Roles.razor`
+- Modify: `src/AssetDesk.Web/Layout/MainLayout.razor` (Admin nav group, around line 59-65)
 
 **Interfaces:**
 - Consumes: `ApiClient` role methods (Task 8), `RoleDto`, `PermissionGroupDto`, `CreateRoleDto`, `UpdateRoleDto`
 
 - [ ] **Step 1: Create the page**
 
-Create `src/IAMS.Web/Pages/Admin/Roles.razor`:
+Create `src/AssetDesk.Web/Pages/Admin/Roles.razor`:
 
 ```razor
 @page "/admin/roles"
-@using IAMS.Web.Components.UI
+@using AssetDesk.Web.Components.UI
 @using Microsoft.AspNetCore.Components.Authorization
 @inject ApiClient Api
 @inject SnackbarService Snackbar
 @inject AuthenticationStateProvider AuthProvider
 
-<PageTitle>Roles - IAMS</PageTitle>
+<PageTitle>Roles - AssetDesk</PageTitle>
 
 <div class="space-y-6">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -2067,7 +2067,7 @@ Create `src/IAMS.Web/Pages/Admin/Roles.razor`:
 
 - [ ] **Step 2: Add the nav entry**
 
-In `src/IAMS.Web/Layout/MainLayout.razor`, inside the Admin nav group (currently lines 59-65), add after the Users `NavItem`:
+In `src/AssetDesk.Web/Layout/MainLayout.razor`, inside the Admin nav group (currently lines 59-65), add after the Users `NavItem`:
 
 ```razor
                         <PermissionView Permission="iams:roles:view">
@@ -2075,7 +2075,7 @@ In `src/IAMS.Web/Layout/MainLayout.razor`, inside the Admin nav group (currently
                         </PermissionView>
 ```
 
-`NavItem` renders icons from a fixed `switch` at `src/IAMS.Web/Layout/NavItem.razor:5` supporting exactly: `home`, `cube`, `tag`, `users`, `chart`, `qr-scan`, `shield-exclamation`, `bell`, `building`, `wrench`, `alert-triangle`, `clipboard-list`. Anything else renders no icon silently, so `users` is used above. Adding a new icon case is out of scope for this task.
+`NavItem` renders icons from a fixed `switch` at `src/AssetDesk.Web/Layout/NavItem.razor:5` supporting exactly: `home`, `cube`, `tag`, `users`, `chart`, `qr-scan`, `shield-exclamation`, `bell`, `building`, `wrench`, `alert-triangle`, `clipboard-list`. Anything else renders no icon silently, so `users` is used above. Adding a new icon case is out of scope for this task.
 
 - [ ] **Step 3: Build**
 
@@ -2086,7 +2086,7 @@ Expected: Build succeeded.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add -A src/IAMS.Web && git commit -m "feat(web): add the /admin/roles screen"
+git add -A src/AssetDesk.Web && git commit -m "feat(web): add the /admin/roles screen"
 ```
 
 ---
@@ -2094,16 +2094,16 @@ git add -A src/IAMS.Web && git commit -m "feat(web): add the /admin/roles screen
 ### Task 10: Replace role gating in the UI
 
 **Files:**
-- Modify: `src/IAMS.Web/Pages/Users.razor:174-190`, `:3`, `:312`, `:454`
-- Modify: `src/IAMS.Web/Layout/MainLayout.razor` (nav entries at lines 44-58, and the mobile bar around 415-467)
-- Modify: `src/IAMS.Web/Pages/Assets/*.razor`, `Reports.razor`, `WarrantyAlerts.razor` page-level `[Authorize(Roles = ...)]` attributes
+- Modify: `src/AssetDesk.Web/Pages/Users.razor:174-190`, `:3`, `:312`, `:454`
+- Modify: `src/AssetDesk.Web/Layout/MainLayout.razor` (nav entries at lines 44-58, and the mobile bar around 415-467)
+- Modify: `src/AssetDesk.Web/Pages/Assets/*.razor`, `Reports.razor`, `WarrantyAlerts.razor` page-level `[Authorize(Roles = ...)]` attributes
 
 **Interfaces:**
 - Consumes: `ApiClient.GetAssignableRolesAsync()` (Task 8), `PermissionView` (Task 8)
 
 - [ ] **Step 1: Feed the Users role dropdown from the API**
 
-In `src/IAMS.Web/Pages/Users.razor`, replace the `<select>` block at lines 174-190 with:
+In `src/AssetDesk.Web/Pages/Users.razor`, replace the `<select>` block at lines 174-190 with:
 
 ```razor
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Role *</label>
@@ -2140,14 +2140,14 @@ The hand-maintained option list and its drift comment are gone — that was the 
 
 Replace each page's `@attribute [Authorize(Roles = "...")]` with the permission-gated equivalent. Blazor's `[Authorize]` takes a policy name, and the WASM client has no policies registered, so gate the page body with `PermissionView` and keep `[Authorize]` bare:
 
-- `src/IAMS.Web/Pages/Users.razor:3` — change `@attribute [Authorize(Roles = "Admin,SuperAdmin")]` to `@attribute [Authorize]`, and wrap the page's root `<div class="space-y-6">` in `<PermissionView Permission="iams:users:view">`.
-- `src/IAMS.Web/Pages/Admin/Roles.razor` — add `@attribute [Authorize]` and wrap its root div in `<PermissionView Permission="iams:roles:view">`.
+- `src/AssetDesk.Web/Pages/Users.razor:3` — change `@attribute [Authorize(Roles = "Admin,SuperAdmin")]` to `@attribute [Authorize]`, and wrap the page's root `<div class="space-y-6">` in `<PermissionView Permission="iams:users:view">`.
+- `src/AssetDesk.Web/Pages/Admin/Roles.razor` — add `@attribute [Authorize]` and wrap its root div in `<PermissionView Permission="iams:roles:view">`.
 
-Leave `src/IAMS.Web/Pages/Admin/Lookups.razor` and `Tenants.razor` on `[Authorize(Roles = "SuperAdmin")]` — those are platform-level and deliberately not permission-gated.
+Leave `src/AssetDesk.Web/Pages/Admin/Lookups.razor` and `Tenants.razor` on `[Authorize(Roles = "SuperAdmin")]` — those are platform-level and deliberately not permission-gated.
 
 - [ ] **Step 3: Convert the nav role lists**
 
-In `src/IAMS.Web/Layout/MainLayout.razor`, replace these `AuthorizeView` wrappers with `PermissionView`:
+In `src/AssetDesk.Web/Layout/MainLayout.razor`, replace these `AuthorizeView` wrappers with `PermissionView`:
 
 - line 45 `<AuthorizeView Roles="Admin,Staff,Management,Auditor,SuperAdmin">` around the Assets item → `<PermissionView Permission="iams:assets:view">`
 - line 48 `<AuthorizeView Roles="Admin,Staff">` around the Tickets item → `<PermissionView Permission="iams:tickets:queue">`
@@ -2163,7 +2163,7 @@ Note this is a deliberate behaviour change on two entries. Assets and Warranty A
 
 - [ ] **Step 4: Verify no stale role gates remain**
 
-Run: `git grep -n 'AuthorizeView Roles=' -- src/IAMS.Web`
+Run: `git grep -n 'AuthorizeView Roles=' -- src/AssetDesk.Web`
 
 Expected: only the `Employee` and `SuperAdmin` blocks described above. Anything else is an unconverted gate.
 
@@ -2175,7 +2175,7 @@ Expected: Build succeeded.
 
 - [ ] **Step 6: Run the full test suite**
 
-Run: `dotnet test tests/IAMS.Api.Tests/IAMS.Api.Tests.csproj`
+Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 
 Expected: all tests pass.
 
@@ -2193,7 +2193,7 @@ Step 4 is the end-to-end proof: a tenant retuned a built-in role and both the AP
 - [ ] **Step 8: Commit**
 
 ```bash
-git add -A src/IAMS.Web && git commit -m "feat(web): gate navigation and pages on permissions"
+git add -A src/AssetDesk.Web && git commit -m "feat(web): gate navigation and pages on permissions"
 ```
 
 ---

@@ -84,7 +84,7 @@ jobs:
           if [ -z "$WEBHOOK" ]; then
             echo "::warning::DOKPLOY_DEPLOY_WEBHOOK is not set - images built, but nothing was told to deploy them."
             echo "Images for this commit are in GHCR. Deploy by clicking Redeploy in Dokploy."
-            echo "To automate it: Dokploy UI -> the IAMS compose service -> Deployments ->"
+            echo "To automate it: Dokploy UI -> the AssetDesk compose service, still named iams-* -> Deployments ->"
             echo "Webhook URL, saved as the DOKPLOY_DEPLOY_WEBHOOK repository secret."
             exit 0
           fi

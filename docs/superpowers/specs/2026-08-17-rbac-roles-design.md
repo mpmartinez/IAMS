@@ -5,10 +5,10 @@
 
 ## Problem
 
-Authorization in IAMS is hard-coded in three places that drift apart:
+Authorization in AssetDesk is hard-coded in three places that drift apart:
 
-1. `src/IAMS.Api/Entities/Roles.cs` — six role name constants.
-2. `src/IAMS.Api/Program.cs:113-139` — about twenty policies, each a literal `RequireRole(...)` list.
+1. `src/AssetDesk.Api/Entities/Roles.cs` — six role name constants.
+2. `src/AssetDesk.Api/Program.cs:113-139` — about twenty policies, each a literal `RequireRole(...)` list.
 3. The Blazor UI — `AuthorizeView Roles="Admin,Staff,Management,Auditor,SuperAdmin"` strings scattered
    through `Layout/MainLayout.razor`, plus a hand-maintained role dropdown in `Pages/Users.razor:176`
    that already carries a comment admitting it drifts from `Roles.TenantAssignable`.
@@ -32,7 +32,7 @@ edit what the built-in roles grant and may define its own roles.
 
 ## Permission Catalog
 
-The catalog lives in code at `src/IAMS.Api/Authorization/Permissions.cs` as static
+The catalog lives in code at `src/AssetDesk.Api/Authorization/Permissions.cs` as static
 `{ Key, Group, Label, Description }` descriptors. Only the **grants** (role to permission) are stored
 in the database.
 
@@ -179,7 +179,7 @@ Without that step the API would enforce permissions the UI cannot see.
 filter `TenantId` explicitly. `TokenService` runs during login, when the HTTP context is still
 unauthenticated, so `TenantProvider.GetCurrentTenantId()` returns null and `IsSuperAdmin()` returns
 false. EF evaluates the filter's provider call eagerly into a query parameter, so the
-`_tenantProvider == null` guard does not short-circuit (see the comment in `tests/IAMS.Api.Tests/TestDb.cs:21-26`).
+`_tenantProvider == null` guard does not short-circuit (see the comment in `tests/AssetDesk.Api.Tests/TestDb.cs:21-26`).
 A filtered `RolePermission` would therefore match zero rows at login and hand every user an empty
 permission set.
 
@@ -231,7 +231,7 @@ New `RolesController`:
 | `DELETE /api/roles/{id}` | `roles.manage` | Custom roles only. Returns 409 with the user count if any user holds it. |
 | `GET /api/permissions` | `roles.view` | The catalog, grouped, for the matrix UI. |
 
-New DTOs in `IAMS.Shared/DTOs/RoleDto.cs`: `RoleDto`, `CreateRoleDto`, `UpdateRoleDto`,
+New DTOs in `AssetDesk.Shared/DTOs/RoleDto.cs`: `RoleDto`, `CreateRoleDto`, `UpdateRoleDto`,
 `PermissionDto`, `PermissionGroupDto`.
 
 ### Guardrails
@@ -282,7 +282,7 @@ and its drift comment at line 176.
 
 ### `PermissionView` component (already exists — must be fixed)
 
-`src/IAMS.Web/Shared/PermissionView.razor` already exists and already reads a `permission` claim. It is
+`src/AssetDesk.Web/Shared/PermissionView.razor` already exists and already reads a `permission` claim. It is
 **modified, not created**.
 
 Today nothing emits a `permission` claim, so the check on line 33 always fails and the component falls
@@ -302,7 +302,7 @@ page-level `[Authorize(Roles = "...")]` attributes.
 
 ## Testing
 
-In `tests/IAMS.Api.Tests`, using the existing SQLite-backed `TestDb` and `FakeTenantProvider`:
+In `tests/AssetDesk.Api.Tests`, using the existing SQLite-backed `TestDb` and `FakeTenantProvider`:
 
 - Permission resolution returns only rows matching both role and tenant.
 - The migration backfill reproduces current access for all six built-in roles, asserted against the
@@ -330,7 +330,7 @@ In `tests/IAMS.Api.Tests`, using the existing SQLite-backed `TestDb` and `FakeTe
 The repo already contains a half-built version of this feature, which this design absorbs rather than
 duplicates:
 
-- `src/IAMS.Web/Shared/PermissionView.razor` — reads a `permission` claim nothing emits.
+- `src/AssetDesk.Web/Shared/PermissionView.razor` — reads a `permission` claim nothing emits.
 - Two live call sites using `iams:reports:view` and `iams:assets:delete`.
 - Comments at `AssetsController.cs:84,155,224,287` and `UsersController.cs:235` naming
   `iams:assets:create`, `iams:assets:edit`, `iams:assets:delete`, `iams:reports:view`,

@@ -23,23 +23,23 @@
 
 | File | Responsibility |
 |---|---|
-| `src/IAMS.Shared/DTOs/AuthDto.cs` (modify) | Add `UpdateProfileDto` — the two-field self-service contract |
-| `src/IAMS.Api/Controllers/AuthController.cs` (modify) | Add `PUT me` action |
-| `tests/IAMS.Api.Tests/ProfileSelfServiceTests.cs` (create) | Cover the endpoint's happy path, validation, and the escalation boundary |
-| `src/IAMS.Web/Services/ApiClient.cs` (modify) | `GetMyProfileAsync`, `UpdateProfileAsync`, `LogoutAllAsync` |
-| `src/IAMS.Web/Services/AuthService.cs` (modify) | `UpdateCachedUserAsync` — refresh stored user + notify auth state |
-| `src/IAMS.Web/Components/UI/RoleBadge.razor` (create) | One place that maps a role name to its badge colours |
-| `src/IAMS.Web/Pages/Profile.razor` (create) | The page: identity, personal details, account, security |
-| `src/IAMS.Web/Layout/MainLayout.razor` (modify) | User card links to `/profile`; key icon and its dialog removed |
+| `src/AssetDesk.Shared/DTOs/AuthDto.cs` (modify) | Add `UpdateProfileDto` — the two-field self-service contract |
+| `src/AssetDesk.Api/Controllers/AuthController.cs` (modify) | Add `PUT me` action |
+| `tests/AssetDesk.Api.Tests/ProfileSelfServiceTests.cs` (create) | Cover the endpoint's happy path, validation, and the escalation boundary |
+| `src/AssetDesk.Web/Services/ApiClient.cs` (modify) | `GetMyProfileAsync`, `UpdateProfileAsync`, `LogoutAllAsync` |
+| `src/AssetDesk.Web/Services/AuthService.cs` (modify) | `UpdateCachedUserAsync` — refresh stored user + notify auth state |
+| `src/AssetDesk.Web/Components/UI/RoleBadge.razor` (create) | One place that maps a role name to its badge colours |
+| `src/AssetDesk.Web/Pages/Profile.razor` (create) | The page: identity, personal details, account, security |
+| `src/AssetDesk.Web/Layout/MainLayout.razor` (modify) | User card links to `/profile`; key icon and its dialog removed |
 
 ---
 
 ### Task 1: `PUT /api/auth/me` endpoint
 
 **Files:**
-- Modify: `src/IAMS.Shared/DTOs/AuthDto.cs` (append at end)
-- Modify: `src/IAMS.Api/Controllers/AuthController.cs` (insert after `GetCurrentUser`, which ends at line 79)
-- Test: `tests/IAMS.Api.Tests/ProfileSelfServiceTests.cs` (create)
+- Modify: `src/AssetDesk.Shared/DTOs/AuthDto.cs` (append at end)
+- Modify: `src/AssetDesk.Api/Controllers/AuthController.cs` (insert after `GetCurrentUser`, which ends at line 79)
+- Test: `tests/AssetDesk.Api.Tests/ProfileSelfServiceTests.cs` (create)
 
 **Interfaces:**
 - Consumes: `ApplicationUser` (has `FullName`, `Department`, `IsActive`, `UpdatedAt`), `UserDto`, `AuthController.MapToDto(ApplicationUser, string role, string? tenantName)` (private static, line 247).
@@ -47,7 +47,7 @@
 
 - [ ] **Step 1: Add the DTO**
 
-Append to `src/IAMS.Shared/DTOs/AuthDto.cs`:
+Append to `src/AssetDesk.Shared/DTOs/AuthDto.cs`:
 
 ```csharp
 // Deliberately narrower than UpdateUserDto: Role, Email, IsActive and TenantId are absent from
@@ -62,14 +62,14 @@ public record UpdateProfileDto
 
 - [ ] **Step 2: Write the failing tests**
 
-Create `tests/IAMS.Api.Tests/ProfileSelfServiceTests.cs`:
+Create `tests/AssetDesk.Api.Tests/ProfileSelfServiceTests.cs`:
 
 ```csharp
 using System.Security.Claims;
-using IAMS.Api.Controllers;
-using IAMS.Api.Data;
-using IAMS.Api.Entities;
-using IAMS.Shared.DTOs;
+using AssetDesk.Api.Controllers;
+using AssetDesk.Api.Data;
+using AssetDesk.Api.Entities;
+using AssetDesk.Shared.DTOs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -77,7 +77,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
-namespace IAMS.Api.Tests;
+namespace AssetDesk.Api.Tests;
 
 /// <summary>
 /// Covers PUT /api/auth/me, the self-service profile update. The endpoint takes no id - it
@@ -287,14 +287,14 @@ public class ProfileSelfServiceTests
 - [ ] **Step 3: Run the tests to verify they fail**
 
 ```bash
-dotnet test tests/IAMS.Api.Tests --filter FullyQualifiedName~ProfileSelfServiceTests
+dotnet test tests/AssetDesk.Api.Tests --filter FullyQualifiedName~ProfileSelfServiceTests
 ```
 
 Expected: compile error — `'AuthController' does not contain a definition for 'UpdateCurrentUser'`.
 
 - [ ] **Step 4: Implement the endpoint**
 
-In `src/IAMS.Api/Controllers/AuthController.cs`, insert directly after `GetCurrentUser` (after line 79, before the `ChangePassword` attributes):
+In `src/AssetDesk.Api/Controllers/AuthController.cs`, insert directly after `GetCurrentUser` (after line 79, before the `ChangePassword` attributes):
 
 ```csharp
     /// <summary>
@@ -348,7 +348,7 @@ In `src/IAMS.Api/Controllers/AuthController.cs`, insert directly after `GetCurre
 - [ ] **Step 5: Run the tests to verify they pass**
 
 ```bash
-dotnet test tests/IAMS.Api.Tests --filter FullyQualifiedName~ProfileSelfServiceTests
+dotnet test tests/AssetDesk.Api.Tests --filter FullyQualifiedName~ProfileSelfServiceTests
 ```
 
 Expected: PASS, 8 tests (the `[Theory]` contributes 2).
@@ -364,7 +364,7 @@ Expected: PASS, no failures.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/IAMS.Shared/DTOs/AuthDto.cs src/IAMS.Api/Controllers/AuthController.cs tests/IAMS.Api.Tests/ProfileSelfServiceTests.cs
+git add src/AssetDesk.Shared/DTOs/AuthDto.cs src/AssetDesk.Api/Controllers/AuthController.cs tests/AssetDesk.Api.Tests/ProfileSelfServiceTests.cs
 git commit -m "feat(api): let a user update their own name and department"
 ```
 
@@ -373,8 +373,8 @@ git commit -m "feat(api): let a user update their own name and department"
 ### Task 2: Client plumbing
 
 **Files:**
-- Modify: `src/IAMS.Web/Services/ApiClient.cs` (append the three methods after `GetUserListAsync`, which ends around line 220)
-- Modify: `src/IAMS.Web/Services/AuthService.cs` (add method after `ChangePasswordAsync`, which ends at line 193)
+- Modify: `src/AssetDesk.Web/Services/ApiClient.cs` (append the three methods after `GetUserListAsync`, which ends around line 220)
+- Modify: `src/AssetDesk.Web/Services/AuthService.cs` (add method after `ChangePasswordAsync`, which ends at line 193)
 
 **Interfaces:**
 - Consumes: `UpdateProfileDto` and `PUT api/auth/me` from Task 1; existing `POST api/auth/logout-all`; `ApiClient.GetAuthenticatedClient()` and `SafeGetAsync<T>` (private, already in the file).
@@ -386,7 +386,7 @@ git commit -m "feat(api): let a user update their own name and department"
 
 - [ ] **Step 1: Add the ApiClient methods**
 
-In `src/IAMS.Web/Services/ApiClient.cs`, add after `GetUserListAsync`:
+In `src/AssetDesk.Web/Services/ApiClient.cs`, add after `GetUserListAsync`:
 
 ```csharp
     // Reads the profile from the server rather than the copy AuthService cached at login, so a
@@ -429,7 +429,7 @@ In `src/IAMS.Web/Services/ApiClient.cs`, add after `GetUserListAsync`:
 
 - [ ] **Step 2: Add the AuthService method**
 
-In `src/IAMS.Web/Services/AuthService.cs`, add after `ChangePasswordAsync`:
+In `src/AssetDesk.Web/Services/AuthService.cs`, add after `ChangePasswordAsync`:
 
 ```csharp
     /// <summary>
@@ -457,7 +457,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/IAMS.Web/Services/ApiClient.cs src/IAMS.Web/Services/AuthService.cs
+git add src/AssetDesk.Web/Services/ApiClient.cs src/AssetDesk.Web/Services/AuthService.cs
 git commit -m "feat(web): add profile read, update and sign-out-everywhere client calls"
 ```
 
@@ -466,15 +466,15 @@ git commit -m "feat(web): add profile read, update and sign-out-everywhere clien
 ### Task 3: `RoleBadge` component
 
 **Files:**
-- Create: `src/IAMS.Web/Components/UI/RoleBadge.razor`
-- Modify: `src/IAMS.Web/Layout/MainLayout.razor:103-114` (the `<p class="text-xs text-slate-500 truncate">` block holding the inline role map)
+- Create: `src/AssetDesk.Web/Components/UI/RoleBadge.razor`
+- Modify: `src/AssetDesk.Web/Layout/MainLayout.razor:103-114` (the `<p class="text-xs text-slate-500 truncate">` block holding the inline role map)
 
 **Interfaces:**
 - Produces: `<RoleBadge Role="@someString" />`, and optional `Size` (`"sm"` default, `"md"`). Task 4 uses `Size="md"`.
 
 - [ ] **Step 1: Create the component**
 
-Create `src/IAMS.Web/Components/UI/RoleBadge.razor`:
+Create `src/AssetDesk.Web/Components/UI/RoleBadge.razor`:
 
 ```razor
 @* The single place a role name becomes a colour. MainLayout's sidebar and the profile page both
@@ -507,7 +507,7 @@ Create `src/IAMS.Web/Components/UI/RoleBadge.razor`:
 
 - [ ] **Step 2: Use it in MainLayout**
 
-In `src/IAMS.Web/Layout/MainLayout.razor`, replace lines 103–114 — the whole `<p class="text-xs text-slate-500 truncate">` element including its `@{ ... }` block and the `<span>` — with:
+In `src/AssetDesk.Web/Layout/MainLayout.razor`, replace lines 103–114 — the whole `<p class="text-xs text-slate-500 truncate">` element including its `@{ ... }` block and the `<span>` — with:
 
 ```razor
                                 <p class="text-xs text-slate-500 truncate">
@@ -515,7 +515,7 @@ In `src/IAMS.Web/Layout/MainLayout.razor`, replace lines 103–114 — the whole
                                 </p>
 ```
 
-`_Imports.razor:19` already carries `@using IAMS.Web.Components.UI`, so no using directive is needed.
+`_Imports.razor:19` already carries `@using AssetDesk.Web.Components.UI`, so no using directive is needed.
 
 - [ ] **Step 3: Build**
 
@@ -528,7 +528,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/IAMS.Web/Components/UI/RoleBadge.razor src/IAMS.Web/Layout/MainLayout.razor
+git add src/AssetDesk.Web/Components/UI/RoleBadge.razor src/AssetDesk.Web/Layout/MainLayout.razor
 git commit -m "refactor(web): extract the role badge into one component"
 ```
 
@@ -537,7 +537,7 @@ git commit -m "refactor(web): extract the role badge into one component"
 ### Task 4: The profile page
 
 **Files:**
-- Create: `src/IAMS.Web/Pages/Profile.razor`
+- Create: `src/AssetDesk.Web/Pages/Profile.razor`
 
 **Interfaces:**
 - Consumes: `ApiClient.GetMyProfileAsync`, `ApiClient.UpdateProfileAsync`, `ApiClient.LogoutAllAsync`, `AuthService.UpdateCachedUserAsync` (Task 2); `<RoleBadge Role Size>` (Task 3); the existing `<ChangePasswordDialog @bind-IsOpen>` and `SnackbarService.Success/Error`.
@@ -545,18 +545,18 @@ git commit -m "refactor(web): extract the role badge into one component"
 
 - [ ] **Step 1: Create the page**
 
-Create `src/IAMS.Web/Pages/Profile.razor`:
+Create `src/AssetDesk.Web/Pages/Profile.razor`:
 
 ```razor
 @page "/profile"
-@using IAMS.Web.Components
-@using IAMS.Web.Components.UI
+@using AssetDesk.Web.Components
+@using AssetDesk.Web.Components.UI
 @attribute [Authorize]
 @inject ApiClient Api
 @inject AuthService Auth
 @inject SnackbarService Snackbar
 
-<PageTitle>My Profile - IAMS</PageTitle>
+<PageTitle>My Profile - AssetDesk</PageTitle>
 
 <div class="max-w-3xl space-y-6">
     <div>
@@ -891,7 +891,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/IAMS.Web/Pages/Profile.razor
+git add src/AssetDesk.Web/Pages/Profile.razor
 git commit -m "feat(web): add the profile page"
 ```
 
@@ -900,7 +900,7 @@ git commit -m "feat(web): add the profile page"
 ### Task 5: Sidebar entry point
 
 **Files:**
-- Modify: `src/IAMS.Web/Layout/MainLayout.razor` — the user menu block (lines 94–129 before Task 3's edit shortened it), plus `_showChangePassword` (line 501), `OpenChangePassword` (line 598) and the `<ChangePasswordDialog>` element (line 494)
+- Modify: `src/AssetDesk.Web/Layout/MainLayout.razor` — the user menu block (lines 94–129 before Task 3's edit shortened it), plus `_showChangePassword` (line 501), `OpenChangePassword` (line 598) and the `<ChangePasswordDialog>` element (line 494)
 
 **Interfaces:**
 - Consumes: the `/profile` route from Task 4; `<RoleBadge>` from Task 3.
@@ -908,7 +908,7 @@ git commit -m "feat(web): add the profile page"
 
 - [ ] **Step 1: Make the user card a link and drop the key icon**
 
-In `src/IAMS.Web/Layout/MainLayout.razor`, replace the contents of the `<Authorized Context="userContext">` block in the user menu — the single `<div class="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/50">` element and everything inside it — with:
+In `src/AssetDesk.Web/Layout/MainLayout.razor`, replace the contents of the `<Authorized Context="userContext">` block in the user menu — the single `<div class="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/50">` element and everything inside it — with:
 
 ```razor
                         <div class="flex items-center gap-1">
@@ -954,7 +954,7 @@ and the method:
 - [ ] **Step 4: Verify nothing else referenced them**
 
 ```bash
-grep -n "_showChangePassword\|OpenChangePassword" src/IAMS.Web/Layout/MainLayout.razor
+grep -n "_showChangePassword\|OpenChangePassword" src/AssetDesk.Web/Layout/MainLayout.razor
 ```
 
 Expected: no output.
@@ -970,7 +970,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/IAMS.Web/Layout/MainLayout.razor
+git add src/AssetDesk.Web/Layout/MainLayout.razor
 git commit -m "feat(web): link the sidebar user card to the profile page"
 ```
 
@@ -991,7 +991,7 @@ Expected: PASS, no failures.
 - [ ] **Step 2: Start the API**
 
 ```bash
-cd src/IAMS.Api && dotnet run
+cd src/AssetDesk.Api && dotnet run
 ```
 
 Expected: listening on `https://localhost:5001`.
@@ -999,7 +999,7 @@ Expected: listening on `https://localhost:5001`.
 - [ ] **Step 3: Start the web app in a second terminal**
 
 ```bash
-cd src/IAMS.Web && dotnet run
+cd src/AssetDesk.Web && dotnet run
 ```
 
 Expected: listening on `https://localhost:5002`.

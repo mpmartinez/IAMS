@@ -25,7 +25,7 @@ services:
       - Smtp__Username=${SMTP_USERNAME}
       - Smtp__Password=${SMTP_PASSWORD}
       - Smtp__FromEmail=${SMTP_FROM_EMAIL}
-      - Smtp__FromName=${SMTP_FROM_NAME:-IAMS}
+      - Smtp__FromName=${SMTP_FROM_NAME:-AssetDesk}
       - App__WebUrl=${APP_WEB_URL:-https://m2netsolutions.com:5022}
     volumes:
       # No iams-data volume: the database is external, reached via DATABASE_CONNECTION.
