@@ -101,16 +101,7 @@
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@userContext.User.Identity?.Name</p>
                                 <p class="text-xs text-slate-500 truncate">
-                                    @{
-                                        var role = userContext.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Staff";
-                                        var roleBadgeClass = role switch
-                                        {
-                                            "Admin" => "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-                                            "Auditor" => "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
-                                            _ => "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                        };
-                                    }
-                                    <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium @roleBadgeClass">@role</span>
+                                    <RoleBadge Role="@(userContext.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Staff")" />
                                 </p>
                             </div>
                             <button @onclick="OpenChangePassword" title="Change Password" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-all duration-200">
