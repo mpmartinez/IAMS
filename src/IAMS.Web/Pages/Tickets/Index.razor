@@ -357,6 +357,8 @@
                 </div>
             }
 
+            <TicketAttachmentPicker @bind-Files="_pendingFiles" Disabled="@_creating" />
+
             @if (!string.IsNullOrEmpty(_createError))
             {
                 <div class="flex items-start gap-2 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50">
@@ -506,7 +508,34 @@
         _categories ??= await Api.GetTicketCategoriesAsync();
     }
 
-    private void HideCreateModal() => _showCreateModal = false;
+    private List<PendingAttachment> _pendingFiles = new();
+
+    /// Uploads the staged files against a ticket that now exists. Returns how many failed.
+    private async Task<int> UploadPendingAttachments(int ticketId)
+    {
+        var failed = 0;
+
+        // Sequential, not parallel: same reason as Report.razor - these offices are on poor
+        // connections and a batch of photos uploaded at once saturates the link.
+        foreach (var f in _pendingFiles)
+        {
+            using var stream = new MemoryStream(f.Data);
+            var (ok, _, _) = await Api.UploadTicketAttachmentAsync(
+                ticketId, stream, f.Name, f.ContentType, TicketAttachmentDefaults.Category);
+
+            if (!ok) failed++;
+        }
+
+        return failed;
+    }
+
+    private void HideCreateModal()
+    {
+        _showCreateModal = false;
+        // Drop anything staged but never uploaded, so cancelling does not carry files into the
+        // next ticket.
+        _pendingFiles = new();
+    }
 
     private void OnNewTypeChanged(string value)
     {
@@ -580,12 +609,29 @@
         // ticket-number collision, or a 400 once the tenant's monthly quota is hit;
         // CreateTicketAsync surfaces either as a readable Error rather than throwing, so
         // both land here instead of failing silently.
-        var (success, _, error) = await Api.CreateTicketAsync(request);
+        var (success, created, error) = await Api.CreateTicketAsync(request);
 
         if (success)
         {
             _showCreateModal = false;
-            Snackbar.Success("Ticket created");
+
+            // Attachments are keyed by ticket id, so they can only go up once the ticket exists.
+            // A failure here never undoes the ticket - one that was created but whose photos
+            // failed is still a filed ticket - so the two outcomes are reported separately.
+            var total = _pendingFiles.Count;
+            var failed = created is not null && total > 0
+                ? await UploadPendingAttachments(created.Id)
+                : 0;
+            _pendingFiles = new();
+
+            var attached = total - failed;
+            if (failed == 0)
+                Snackbar.Success("Ticket created");
+            else if (attached == 0)
+                Snackbar.Warning("Ticket created, but the attachment(s) couldn't be uploaded.");
+            else
+                Snackbar.Warning($"Ticket created. {attached} of {total} attachments uploaded.");
+
             await Task.WhenAll(LoadTickets(), LoadSummary(), LoadCategories());
         }
         else
