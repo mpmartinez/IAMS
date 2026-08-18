@@ -218,6 +218,43 @@ public class ApiClient(HttpClient http, AuthService authService)
         return await client.GetFromJsonAsync<List<UserListItem>>("api/users/list");
     }
 
+    // Reads the profile from the server rather than the copy AuthService cached at login, so a
+    // role or department an administrator changed since then shows correctly on /profile.
+    public async Task<UserDto?> GetMyProfileAsync()
+    {
+        var response = await SafeGetAsync<ApiResponse<UserDto>>("api/auth/me");
+        return response?.Data;
+    }
+
+    public async Task<(bool Success, UserDto? User, string? Error)> UpdateProfileAsync(UpdateProfileDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PutAsJsonAsync("api/auth/me", dto);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, null, error?.Message ?? "Failed to update profile");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<ApiResponse<UserDto>>();
+        return (true, result?.Data, null);
+    }
+
+    public async Task<(bool Success, string? Error)> LogoutAllAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync("api/auth/logout-all", new { });
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to sign out other sessions");
+        }
+
+        return (true, null);
+    }
+
     // Assignment APIs
     public async Task<(bool Success, string? Error)> AssignAssetAsync(int assetId, string userId, string? notes = null)
     {
