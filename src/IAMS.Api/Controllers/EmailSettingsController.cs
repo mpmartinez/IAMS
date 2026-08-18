@@ -20,27 +20,37 @@ namespace IAMS.Api.Controllers;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "SuperAdmin")]
 public class EmailSettingsController(
     ISystemSettingService settings,
+    IEmailSettingsResolver resolver,
     IEmailService emailService,
     ILogger<EmailSettingsController> logger) : ControllerBase
 {
+    /// <summary>
+    /// The settings actually in effect, not just the ones saved here. A container that supplies
+    /// Smtp__Host and friends as environment variables has working mail with an empty database,
+    /// and reading only the database would report that deployment as unconfigured - which is
+    /// precisely when someone is on this screen trying to work out why mail is not sending.
+    /// </summary>
     [HttpGet]
     public async Task<ActionResult<ApiResponse<EmailSettingsDto>>> Get(CancellationToken ct)
     {
-        var stored = await settings.GetByPrefixAsync(SystemSettingKeys.EmailPrefix, ct);
-
-        string? Value(string key) =>
-            stored.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v : null;
+        var resolved = await resolver.ResolveAsync(ct);
 
         var dto = new EmailSettingsDto
         {
-            SmtpHost = Value(SystemSettingKeys.SmtpHost) ?? "",
-            SmtpPort = int.TryParse(Value(SystemSettingKeys.SmtpPort), out var port) ? port : 587,
-            UseSsl = !bool.TryParse(Value(SystemSettingKeys.UseSsl), out var ssl) || ssl,
-            SenderEmail = Value(SystemSettingKeys.SenderEmail) ?? "",
-            SenderName = Value(SystemSettingKeys.SenderName) ?? "",
-            Username = Value(SystemSettingKeys.Username) ?? "",
-            HasPassword = Value(SystemSettingKeys.Password) is not null,
-            IsConfigured = Value(SystemSettingKeys.SmtpHost) is not null
+            SmtpHost = resolved.Host ?? "",
+            SmtpPort = resolved.Port,
+            UseSsl = resolved.UseSsl,
+            SenderEmail = resolved.SenderEmail ?? "",
+            SenderName = resolved.SenderName ?? "",
+            Username = resolved.Username ?? "",
+            HasPassword = !string.IsNullOrEmpty(resolved.Password),
+            IsConfigured = resolved.IsConfigured,
+            Source = resolved.Source switch
+            {
+                EmailSettingsSource.Database => "database",
+                EmailSettingsSource.Configuration => "configuration",
+                _ => "none"
+            }
         };
 
         return Ok(ApiResponse<EmailSettingsDto>.Ok(dto));

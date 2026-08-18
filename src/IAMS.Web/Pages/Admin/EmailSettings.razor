@@ -20,10 +20,27 @@
         @if (_settings is not null)
         {
             <Badge Variant="@(_settings.IsConfigured ? "Available" : "Lost")" Class="shrink-0">
-                @(_settings.IsConfigured ? "Configured" : "Not configured")
+                @(_settings.Source switch
+                {
+                    "database" => "Configured here",
+                    "configuration" => "Configured by environment",
+                    _ => "Not configured"
+                })
             </Badge>
         }
     </div>
+
+    @if (_settings?.IsFromConfiguration == true)
+    {
+        <div class="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+            <p class="text-sm text-blue-800 dark:text-blue-300">
+                These values come from this deployment's <code class="font-mono text-xs">Smtp__*</code>
+                environment variables, not from the form below - mail is already sending. Saving copies
+                them into the database, which then takes precedence over the environment for good.
+                If you only meant to check the configuration, leave without saving.
+            </p>
+        </div>
+    }
 
     @if (_settings is null)
     {

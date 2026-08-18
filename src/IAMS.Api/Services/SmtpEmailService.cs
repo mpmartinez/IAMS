@@ -1,4 +1,3 @@
-using IAMS.Api.Entities;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
@@ -6,24 +5,24 @@ using MimeKit;
 namespace IAMS.Api.Services;
 
 /// <summary>
-/// Sends mail over SMTP using settings a SuperAdmin enters at runtime (SystemSettings, the
-/// "email:" group), falling back to the Smtp:* keys in appsettings.json when a value is blank
-/// or missing. Runtime-first is what makes forgot-password work on a fresh deployment: the
-/// committed appsettings.json has no credentials in it, by design.
+/// Sends mail over SMTP. Which settings win - the SystemSettings table a SuperAdmin edits, or
+/// the Smtp:* configuration keys a container supplies as Smtp__* environment variables - is
+/// decided by IEmailSettingsResolver, not here, so the admin screen and this sender can never
+/// disagree about whether mail is configured.
 /// </summary>
 public class SmtpEmailService : IEmailService
 {
     private readonly IConfiguration _config;
-    private readonly ISystemSettingService _settings;
+    private readonly IEmailSettingsResolver _resolver;
     private readonly ILogger<SmtpEmailService> _logger;
 
     public SmtpEmailService(
         IConfiguration config,
-        ISystemSettingService settings,
+        IEmailSettingsResolver resolver,
         ILogger<SmtpEmailService> logger)
     {
         _config = config;
-        _settings = settings;
+        _resolver = resolver;
         _logger = logger;
     }
 
@@ -62,36 +61,24 @@ public class SmtpEmailService : IEmailService
 
     public async Task<bool> SendEmailAsync(string toEmail, string subject, string htmlContent, CancellationToken ct = default)
     {
-        var stored = await _settings.GetByPrefixAsync(SystemSettingKeys.EmailPrefix, ct);
+        var resolved = await _resolver.ResolveAsync(ct);
 
-        // A blank stored value falls through to appsettings rather than overriding it with
-        // nothing - an admin clearing a field should not silently break a configured server.
-        string? Resolve(string settingKey, string configKey) =>
-            stored.TryGetValue(settingKey, out var v) && !string.IsNullOrWhiteSpace(v)
-                ? v
-                : _config[configKey];
-
-        var host = Resolve(SystemSettingKeys.SmtpHost, "Smtp:Host");
-        var portStr = Resolve(SystemSettingKeys.SmtpPort, "Smtp:Port");
-        var username = Resolve(SystemSettingKeys.Username, "Smtp:Username");
-        var password = Resolve(SystemSettingKeys.Password, "Smtp:Password");
-        var fromEmail = Resolve(SystemSettingKeys.SenderEmail, "Smtp:FromEmail");
-        var fromName = Resolve(SystemSettingKeys.SenderName, "Smtp:FromName") ?? "IAMS";
-        var useSsl = bool.TryParse(Resolve(SystemSettingKeys.UseSsl, "Smtp:UseSsl"), out var ssl) ? ssl : true;
-
-        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(portStr))
+        if (!resolved.IsConfigured)
         {
             _logger.LogWarning(
-                "SMTP is not configured. Email not sent to {Email}. Set it up at /admin/email-settings.",
+                "SMTP is not configured. Email not sent to {Email}. Set it up at /admin/email-settings, "
+                + "or supply Smtp__Host and friends as environment variables.",
                 toEmail);
             return false;
         }
 
-        if (!int.TryParse(portStr, out var port))
-        {
-            _logger.LogError("Invalid SMTP port configuration: {Port}", portStr);
-            return false;
-        }
+        var host = resolved.Host!;
+        var port = resolved.Port;
+        var username = resolved.Username;
+        var password = resolved.Password;
+        var fromEmail = resolved.SenderEmail;
+        var fromName = resolved.SenderName ?? "IAMS";
+        var useSsl = resolved.UseSsl;
 
         try
         {
