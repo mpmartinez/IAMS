@@ -1,0 +1,593 @@
+using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+namespace AssetDesk.Api.Data;
+
+public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, string>
+{
+    private readonly ITenantProvider? _tenantProvider;
+
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    {
+    }
+
+    public AppDbContext(
+        DbContextOptions<AppDbContext> options,
+        ITenantProvider tenantProvider) : base(options)
+    {
+        _tenantProvider = tenantProvider;
+    }
+
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<AssetAssignment> AssetAssignments => Set<AssetAssignment>();
+    public DbSet<WarrantyAlert> WarrantyAlerts => Set<WarrantyAlert>();
+    public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Ticket> Tickets => Set<Ticket>();
+    public DbSet<TicketComment> TicketComments => Set<TicketComment>();
+    public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<LookupValue> LookupValues => Set<LookupValue>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Configure Tenant entity
+        modelBuilder.Entity<Tenant>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Slug).IsUnique();
+
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Slug).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.LogoUrl).HasMaxLength(500);
+            entity.Property(e => e.PrimaryColor).HasMaxLength(20);
+            entity.Property(e => e.SubscriptionTier).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.CreatedByUserId).HasMaxLength(450);
+        });
+
+        // Configure ApplicationUser with tenant relationship
+        modelBuilder.Entity<ApplicationUser>(entity =>
+        {
+            entity.Property(e => e.FullName).HasMaxLength(100);
+            entity.Property(e => e.Department).HasMaxLength(100);
+
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany(t => t.Users)
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Configure Asset with tenant
+        modelBuilder.Entity<Asset>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            // AssetTag is unique per tenant (not globally)
+            entity.HasIndex(e => new { e.TenantId, e.AssetTag }).IsUnique();
+            entity.HasIndex(e => e.TenantId);
+
+            // Primary fields
+            entity.Property(e => e.AssetTag).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Manufacturer).HasMaxLength(100);
+            entity.Property(e => e.Model).HasMaxLength(100);
+            entity.Property(e => e.SerialNumber).HasMaxLength(100);
+            entity.Property(e => e.DeviceType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.PurchasePrice).HasPrecision(18, 2);
+            entity.Property(e => e.Currency).HasMaxLength(3).HasDefaultValue("USD");
+            entity.Property(e => e.WarrantyProvider).HasMaxLength(200);
+            entity.Property(e => e.Status).HasMaxLength(50).IsRequired();
+
+            // Legacy/additional fields
+            entity.Property(e => e.Name).HasMaxLength(200);
+            entity.Property(e => e.Location).HasMaxLength(200);
+            entity.Property(e => e.Notes).HasMaxLength(2000);
+
+            // Ignore computed property
+            entity.Ignore(e => e.DisplayName);
+
+            // Tenant relationship
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.AssignedToUser)
+                .WithMany(u => u.AssignedAssets)
+                .HasForeignKey(e => e.AssignedToUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.OwnerUser)
+                .WithMany()
+                .HasForeignKey(e => e.OwnerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Global query filter for tenant isolation
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure AssetAssignment with tenant
+        modelBuilder.Entity<AssetAssignment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Notes).HasMaxLength(1000);
+            entity.Property(e => e.ReturnNotes).HasMaxLength(1000);
+            entity.Property(e => e.ReturnCondition).HasMaxLength(50);
+
+            // Ignore computed properties
+            entity.Ignore(e => e.IsActive);
+            entity.Ignore(e => e.Duration);
+
+            // Index for common queries
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.AssetId);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => new { e.UserId, e.ReturnedAt });
+
+            // Tenant relationship
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Asset)
+                .WithMany()
+                .HasForeignKey(e => e.AssetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.AssignedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.AssignedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.ReturnedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.ReturnedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Global query filter
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure WarrantyAlert with tenant
+        modelBuilder.Entity<WarrantyAlert>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.AlertType).HasMaxLength(50).IsRequired();
+
+            // Ignore computed property
+            entity.Ignore(e => e.IsAcknowledged);
+
+            // Index for common queries
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.AssetId);
+            entity.HasIndex(e => e.AlertType);
+            entity.HasIndex(e => e.AcknowledgedAt);
+            entity.HasIndex(e => new { e.AssetId, e.AlertType });
+
+            // Tenant relationship
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Asset)
+                .WithMany()
+                .HasForeignKey(e => e.AssetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.AcknowledgedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.AcknowledgedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Global query filter
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure Attachment with tenant
+        modelBuilder.Entity<Attachment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.FileName).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.StoredFileName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ContentType).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Category).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(500);
+
+            // Index for common queries
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.AssetId);
+            entity.HasIndex(e => e.Category);
+            entity.HasIndex(e => new { e.AssetId, e.Category });
+
+            // Tenant relationship
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Asset)
+                .WithMany()
+                .HasForeignKey(e => e.AssetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.UploadedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.UploadedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Global query filter
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure Notification with tenant
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Message).HasMaxLength(1000).IsRequired();
+            entity.Property(e => e.Type).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Link).HasMaxLength(500);
+            entity.Property(e => e.RelatedEntityType).HasMaxLength(50);
+
+            // Index for common queries
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.IsRead);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => new { e.UserId, e.IsRead });
+
+            // Tenant relationship
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Global query filter
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure RefreshToken (no tenant filter - tied to user)
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Token).HasMaxLength(500).IsRequired();
+            entity.Property(e => e.ReplacedByToken).HasMaxLength(500);
+            entity.Property(e => e.CreatedByIp).HasMaxLength(50);
+            entity.Property(e => e.RevokedByIp).HasMaxLength(50);
+
+            // Index for fast token lookup
+            entity.HasIndex(e => e.Token);
+            entity.HasIndex(e => e.UserId);
+
+            // Ignore computed properties
+            entity.Ignore(e => e.IsExpired);
+            entity.Ignore(e => e.IsRevoked);
+            entity.Ignore(e => e.IsActive);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure Ticket with tenant
+        modelBuilder.Entity<Ticket>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Type).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Category).HasMaxLength(50).IsRequired().HasDefaultValue(TicketCategory.Other);
+            entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(2000);
+            entity.Property(e => e.Status).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Priority).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Resolution).HasMaxLength(2000);
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.AssetId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.Type);
+            entity.HasIndex(e => e.Category);
+            entity.HasIndex(e => e.RequesterUserId);
+            entity.HasIndex(e => e.AssignedToUserId);
+            entity.HasIndex(e => new { e.TenantId, e.Status });
+
+            // Display number is unique per tenant, not globally.
+            entity.HasIndex(e => new { e.TenantId, e.TicketNumber }).IsUnique();
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // A Request has no asset until it is fulfilled, so this is optional
+            // and must not cascade-delete the ticket history when an asset goes.
+            entity.HasOne(e => e.Asset)
+                .WithMany()
+                .HasForeignKey(e => e.AssetId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.RequesterUser)
+                .WithMany()
+                .HasForeignKey(e => e.RequesterUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.AssignedToUser)
+                .WithMany()
+                .HasForeignKey(e => e.AssignedToUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.AssetAssignment)
+                .WithMany()
+                .HasForeignKey(e => e.AssetAssignmentId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure TicketComment with tenant
+        modelBuilder.Entity<TicketComment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Body).HasMaxLength(4000).IsRequired();
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.TicketId);
+            entity.HasIndex(e => new { e.TicketId, e.CreatedAt });
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Ticket)
+                .WithMany(t => t.Comments)
+                .HasForeignKey(e => e.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure TicketAttachment with tenant
+        modelBuilder.Entity<TicketAttachment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.FileName).HasMaxLength(255).IsRequired();
+            entity.Property(e => e.StoredFileName).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ContentType).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Category).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(500);
+
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => e.TicketId);
+            entity.HasIndex(e => e.Category);
+            entity.HasIndex(e => new { e.TicketId, e.Category });
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Ticket)
+                .WithMany(t => t.Attachments)
+                .HasForeignKey(e => e.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.UploadedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.UploadedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure AuditLog with tenant. Append-only: no update or delete path exists.
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.EntityType).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.EntityId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Action).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.UserId).HasMaxLength(450);
+
+            // Tenant-prefixed: every read passes the tenant query filter, so real
+            // queries are always WHERE TenantId = X AND ... . This table only grows.
+            entity.HasIndex(e => e.TenantId);
+            entity.HasIndex(e => new { e.TenantId, e.EntityType, e.EntityId });
+            entity.HasIndex(e => new { e.TenantId, e.Timestamp });
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        // Configure ApplicationRole. Built-in roles have a null TenantId and are shared; custom
+        // roles belong to exactly one tenant.
+        modelBuilder.Entity<ApplicationRole>(entity =>
+        {
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.HasIndex(e => e.TenantId);
+        });
+
+        // Configure RolePermission. No query filter by design - see the class comment.
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.RoleId).HasMaxLength(450).IsRequired();
+            entity.Property(e => e.Permission).HasMaxLength(100).IsRequired();
+
+            entity.HasIndex(e => new { e.RoleId, e.TenantId, e.Permission }).IsUnique();
+            entity.HasIndex(e => e.TenantId);
+
+            entity.HasOne(e => e.Role)
+                .WithMany()
+                .HasForeignKey(e => e.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure LookupValue. Deliberately global: no TenantId, no ITenantEntity, no query
+        // filter. One shared vocabulary across every tenant, managed centrally by a
+        // SuperAdmin - see LookupsController.
+        modelBuilder.Entity<LookupValue>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.LookupType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Value).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Label).HasMaxLength(100).IsRequired();
+
+            entity.HasIndex(e => e.LookupType);
+            entity.HasIndex(e => new { e.LookupType, e.Value }).IsUnique();
+
+            entity.HasData(LookupValueSeed.Rows);
+        });
+
+        // Configure SystemSetting. Global like LookupValue: no TenantId, no query filter. One
+        // SMTP server for the whole platform, managed by a SuperAdmin - see
+        // EmailSettingsController.
+        modelBuilder.Entity<SystemSetting>(entity =>
+        {
+            entity.HasKey(e => e.Key);
+
+            entity.Property(e => e.Key).HasMaxLength(100);
+            entity.Property(e => e.Value).HasMaxLength(1000);
+        });
+
+        // Normalise every DateTime to UTC on the way to the database.
+        //
+        // Npgsql refuses the mismatch in both directions: timestamptz rejects Kind=Unspecified,
+        // and plain timestamp rejects Kind=Utc. This app writes both - DateTime.UtcNow gives
+        // Utc, while .Date truncation and dates deserialised from JSON without an offset (every
+        // <input type="date"> in the client) give Unspecified. No column type accepts both, so
+        // convert the values instead and keep the timestamptz default.
+        //
+        // Unspecified is treated as UTC, which is the convention this codebase already follows
+        // everywhere it stores a date.
+        //
+        // Must stay last: it applies to the DateTime properties configured above.
+        foreach (var property in modelBuilder.Model.GetEntityTypes()
+            .SelectMany(t => t.GetProperties()))
+        {
+            if (property.ClrType == typeof(DateTime))
+                property.SetValueConverter(UtcDateTimeConverter);
+            else if (property.ClrType == typeof(DateTime?))
+                property.SetValueConverter(NullableUtcDateTimeConverter);
+        }
+    }
+
+    private static DateTime ToUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
+
+    private static readonly ValueConverter<DateTime, DateTime> UtcDateTimeConverter =
+        new(v => ToUtc(v), v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+    private static readonly ValueConverter<DateTime?, DateTime?> NullableUtcDateTimeConverter =
+        new(v => v.HasValue ? ToUtc(v.Value) : null,
+            v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : null);
+
+    public override int SaveChanges()
+    {
+        SetTenantIdOnNewEntities();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        SetTenantIdOnNewEntities();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void SetTenantIdOnNewEntities()
+    {
+        var tenantId = _tenantProvider?.GetCurrentTenantId();
+        if (!tenantId.HasValue) return;
+
+        foreach (var entry in ChangeTracker.Entries<ITenantEntity>()
+            .Where(e => e.State == EntityState.Added && e.Entity.TenantId == Guid.Empty))
+        {
+            entry.Entity.TenantId = tenantId.Value;
+        }
+
+        // Also set TenantId for ApplicationUser (not ITenantEntity)
+        foreach (var entry in ChangeTracker.Entries<ApplicationUser>()
+            .Where(e => e.State == EntityState.Added && e.Entity.TenantId == Guid.Empty))
+        {
+            entry.Entity.TenantId = tenantId.Value;
+        }
+    }
+}

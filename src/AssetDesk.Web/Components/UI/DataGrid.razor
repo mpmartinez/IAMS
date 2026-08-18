@@ -1,0 +1,108 @@
+@namespace AssetDesk.Web.Components.UI
+@typeparam TItem
+
+<div class="datagrid @Class">
+    @if (ShowToolbar)
+    {
+        <div class="datagrid-toolbar mb-4">
+            @if (ShowSearch)
+            {
+                <div class="w-64">
+                    <AssetDesk.Web.Components.UI.Input @bind-Value="_searchTerm" Placeholder="Search..." @bind-Value:after="OnSearchChanged" />
+                </div>
+            }
+            @ToolbarContent
+        </div>
+    }
+
+    <div class="rounded-md border overflow-hidden">
+        <table class="table w-full">
+            <thead class="table-header">
+                <tr>
+                    @HeaderTemplate
+                </tr>
+            </thead>
+            <tbody class="table-body">
+                @if (Loading)
+                {
+                    <tr>
+                        <td colspan="100" class="text-center py-8">
+                            <div class="flex justify-center">
+                                <svg class="animate-spin h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                else if (Items == null || !Items.Any())
+                {
+                    <tr>
+                        <td colspan="100" class="text-center py-8">
+                            @if (EmptyContent != null)
+                            {
+                                @EmptyContent
+                            }
+                            else
+                            {
+                                <span class="text-muted-foreground">No data available</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var item in PagedItems)
+                    {
+                        <tr class="table-row cursor-pointer hover:bg-muted/50" @onclick="() => OnRowClick.InvokeAsync(item)">
+                            @RowTemplate!(item)
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (ShowPagination && TotalPages > 1)
+    {
+        <Pagination CurrentPage="_currentPage" TotalPages="TotalPages" OnPageChange="HandlePageChange" />
+    }
+</div>
+
+@code {
+    [Parameter] public IEnumerable<TItem>? Items { get; set; }
+    [Parameter] public RenderFragment? HeaderTemplate { get; set; }
+    [Parameter] public RenderFragment<TItem>? RowTemplate { get; set; }
+    [Parameter] public RenderFragment? ToolbarContent { get; set; }
+    [Parameter] public RenderFragment? EmptyContent { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public bool ShowToolbar { get; set; } = true;
+    [Parameter] public bool ShowSearch { get; set; } = true;
+    [Parameter] public bool ShowPagination { get; set; } = true;
+    [Parameter] public int PageSize { get; set; } = 10;
+    [Parameter] public EventCallback<TItem> OnRowClick { get; set; }
+    [Parameter] public EventCallback<string> OnSearch { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string _searchTerm = "";
+    private int _currentPage = 1;
+
+    private IEnumerable<TItem> PagedItems => Items?
+        .Skip((_currentPage - 1) * PageSize)
+        .Take(PageSize) ?? Enumerable.Empty<TItem>();
+
+    private int TotalPages => Items == null ? 0 : (int)Math.Ceiling(Items.Count() / (double)PageSize);
+
+    private async Task HandlePageChange(int page)
+    {
+        _currentPage = page;
+        await Task.CompletedTask;
+    }
+
+    private async Task OnSearchChanged()
+    {
+        _currentPage = 1;
+        await OnSearch.InvokeAsync(_searchTerm);
+    }
+}

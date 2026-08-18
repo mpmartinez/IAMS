@@ -2,16 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "iams-api",
+      "name": "assetdesk-api",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/IAMS.Api"],
+      "runtimeArgs": ["run", "--project", "src/AssetDesk.Api"],
       "port": 5021,
       "url": "https://localhost:5021"
     },
     {
-      "name": "iams-web",
+      "name": "assetdesk-web",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/IAMS.Web"],
+      "runtimeArgs": ["run", "--project", "src/AssetDesk.Web"],
       "port": 5022,
       "url": "https://localhost:5022"
     }

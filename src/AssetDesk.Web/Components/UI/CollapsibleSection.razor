@@ -1,0 +1,39 @@
+@namespace AssetDesk.Web.Components.UI
+
+<div class="border rounded-lg overflow-hidden">
+    <button type="button"
+            class="w-full flex items-center justify-between px-4 py-3 text-left bg-muted/50 hover:bg-muted transition-colors"
+            @onclick="Toggle">
+        <span class="font-medium text-sm">@Title</span>
+        <svg class="h-4 w-4 transition-transform duration-200 @(_isOpen ? "rotate-180" : "")"
+             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+    </button>
+    @if (_isOpen)
+    {
+        <div class="p-4 border-t">
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public bool DefaultOpen { get; set; } = false;
+    [Parameter] public EventCallback<bool> OnToggle { get; set; }
+
+    private bool _isOpen;
+
+    protected override void OnInitialized()
+    {
+        _isOpen = DefaultOpen;
+    }
+
+    private async Task Toggle()
+    {
+        _isOpen = !_isOpen;
+        await OnToggle.InvokeAsync(_isOpen);
+    }
+}

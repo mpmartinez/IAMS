@@ -1,0 +1,180 @@
+@namespace AssetDesk.Web.Components.UI
+@using AssetDesk.Shared.DTOs
+@using AssetDesk.Web.Services
+@implements IDisposable
+@inject NotificationService Notifications
+@inject NavigationManager Navigation
+
+<div class="relative inline-block @Class">
+    <!-- Bell Button -->
+    <button
+        @onclick="Toggle"
+        @onclick:stopPropagation="true"
+        class="relative inline-flex items-center justify-center h-9 w-9 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+        title="Notifications">
+        <!-- Bell Icon -->
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+
+        <!-- Unread Badge -->
+        @if (Notifications.UnreadCount > 0)
+        {
+            <span class="absolute -top-1 -right-1 h-5 min-w-[1.25rem] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-xs font-medium px-1">
+                @(Notifications.UnreadCount > 99 ? "99+" : Notifications.UnreadCount)
+            </span>
+        }
+
+        <!-- Connection indicator -->
+        @if (Notifications.IsConnected)
+        {
+            <span class="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-green-500 ring-2 ring-background"></span>
+        }
+    </button>
+
+    @if (_isOpen)
+    {
+        <!-- Backdrop -->
+        <div class="fixed inset-0 z-40" @onclick="Close"></div>
+
+        <!-- Dropdown Panel -->
+        <div class="absolute right-0 mt-2 w-80 max-h-[28rem] z-50 rounded-lg border bg-popover shadow-lg overflow-hidden">
+            <!-- Header -->
+            <div class="flex items-center justify-between p-3 border-b bg-muted/30">
+                <h3 class="font-semibold text-sm">Notifications</h3>
+                @if (Notifications.UnreadCount > 0)
+                {
+                    <button
+                        @onclick="MarkAllAsRead"
+                        class="text-xs text-primary hover:underline">
+                        Mark all read
+                    </button>
+                }
+            </div>
+
+            <!-- Notification List -->
+            <div class="max-h-80 overflow-y-auto divide-y">
+                @if (_isLoading)
+                {
+                    <div class="flex items-center justify-center py-8">
+                        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                    </div>
+                }
+                else if (Notifications.Notifications.Any())
+                {
+                    @foreach (var notification in Notifications.Notifications)
+                    {
+                        <NotificationItem
+                            Notification="@notification"
+                            OnClick="HandleNotificationClick" />
+                    }
+                }
+                else
+                {
+                    <div class="py-8 text-center text-muted-foreground">
+                        <svg class="h-10 w-10 mx-auto mb-2 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <p class="text-sm">No notifications</p>
+                    </div>
+                }
+            </div>
+
+            <!-- Footer -->
+            @if (Notifications.Notifications.Any())
+            {
+                <div class="p-2 border-t text-center">
+                    <button
+                        @onclick="ViewAll"
+                        class="text-sm text-primary hover:underline">
+                        View all notifications
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Class { get; set; }
+
+    private bool _isOpen;
+    private bool _isLoading;
+
+    // Unlike the MaritimeOne original, this component does not own the SSE connection lifecycle.
+    // NotificationService is a shared (scoped-as-singleton in WASM) service that MainLayout starts
+    // once via InitializeAsync(). The bell only reads its already-loaded state and refreshes the
+    // list on demand, so dropping multiple bells on a page — or disposing this one — never
+    // interferes with the app-wide connection.
+    protected override void OnInitialized()
+    {
+        Notifications.OnNotificationsChanged += HandleNotificationsChanged;
+        Notifications.OnConnectionChanged += HandleConnectionChanged;
+    }
+
+    private async Task Toggle()
+    {
+        _isOpen = !_isOpen;
+
+        if (_isOpen)
+        {
+            await LoadNotifications();
+        }
+    }
+
+    private void Close()
+    {
+        _isOpen = false;
+    }
+
+    private async Task LoadNotifications()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            await Notifications.RefreshNotificationsAsync();
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleNotificationClick(NotificationDto notification)
+    {
+        if (!notification.IsRead)
+        {
+            await Notifications.MarkAsReadAsync(notification.Id);
+        }
+
+        if (!string.IsNullOrEmpty(notification.Link))
+        {
+            Close();
+            Navigation.NavigateTo(notification.Link);
+        }
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        await Notifications.MarkAllAsReadAsync();
+    }
+
+    private void ViewAll()
+    {
+        Close();
+        Navigation.NavigateTo("/notifications");
+    }
+
+    private Task HandleNotificationsChanged() => InvokeAsync(StateHasChanged);
+
+    private Task HandleConnectionChanged(bool isConnected) => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Notifications.OnNotificationsChanged -= HandleNotificationsChanged;
+        Notifications.OnConnectionChanged -= HandleConnectionChanged;
+    }
+}

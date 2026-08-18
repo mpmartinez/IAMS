@@ -1,0 +1,18 @@
+@namespace AssetDesk.Web.Components.UI
+
+<span role="link" aria-disabled="true" aria-current="page" class="@GetClasses()" @attributes="AdditionalAttributes">
+    @ChildContent
+</span>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "font-normal text-foreground";
+
+    private string GetClasses()
+    {
+        return $"{BaseClasses} {Class}".Trim();
+    }
+}

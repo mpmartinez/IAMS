@@ -1,0 +1,49 @@
+@namespace AssetDesk.Web.Components.UI
+
+<button type="button"
+        class="@GetClasses()"
+        role="menuitem"
+        disabled="@Disabled"
+        @onclick="HandleClick"
+        @attributes="AdditionalAttributes">
+    @if (Icon != null)
+    {
+        <span class="mr-2 h-4 w-4">@Icon</span>
+    }
+    @ChildContent
+    @if (!string.IsNullOrEmpty(Shortcut))
+    {
+        <span class="ml-auto text-xs tracking-widest text-muted-foreground">@Shortcut</span>
+    }
+</button>
+
+@code {
+    [CascadingParameter] public DropdownMenu? Parent { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Icon { get; set; }
+    [Parameter] public string? Shortcut { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool Destructive { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0 w-full whitespace-nowrap";
+
+    private string GetVariantClasses() => Destructive
+        ? "text-destructive focus:bg-destructive/10 focus:text-destructive"
+        : "hover:bg-accent hover:text-accent-foreground";
+
+    private string GetClasses()
+    {
+        return $"{BaseClasses} {GetVariantClasses()} {Class}".Trim();
+    }
+
+    private async Task HandleClick()
+    {
+        if (Disabled) return;
+        await OnClick.InvokeAsync();
+        Parent?.CloseMenu();
+    }
+}

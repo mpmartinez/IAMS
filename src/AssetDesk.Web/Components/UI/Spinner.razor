@@ -1,0 +1,25 @@
+@namespace AssetDesk.Web.Components.UI
+
+<svg class="@GetClasses()" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" fill="none" role="status" aria-label="Loading" @attributes="AdditionalAttributes">
+    <circle cx="25" cy="25" r="20" stroke="currentColor" stroke-opacity="0.15" stroke-width="5"></circle>
+    <circle cx="25" cy="25" r="20" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-dasharray="90 150"></circle>
+</svg>
+
+@code {
+    [Parameter] public string Size { get; set; } = "default";
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string GetSizeClasses() => Size switch
+    {
+        "sm" => "h-4 w-4",
+        "lg" => "h-8 w-8",
+        "xl" => "h-12 w-12",
+        _ => "h-6 w-6"
+    };
+
+    private string GetClasses()
+    {
+        return $"animate-spin {GetSizeClasses()} {Class}".Trim();
+    }
+}

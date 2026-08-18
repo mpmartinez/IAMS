@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AssetDesk - IT Asset &amp; Service Management</title>
+    <base href="/" />
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icon.svg" />
+    <meta name="theme-color" content="#0f172a" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            DEFAULT: 'hsl(var(--primary))',
+                            foreground: 'hsl(var(--primary-foreground))',
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            200: '#c7d2fe',
+                            300: '#a5b4fc',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            800: '#3730a3',
+                            900: '#312e81',
+                            950: '#1e1b4b',
+                        },
+                        // shadcn/ui tokens consumed by Components/UI/* (Card, Button, Badge,
+                        // Dialog, Select, Input, Table, ...). Values come from the CSS
+                        // variables defined in css/app.css, which supplies both the light
+                        // (:root) and dark (.dark) values.
+                        background: 'hsl(var(--background))',
+                        foreground: 'hsl(var(--foreground))',
+                        card: {
+                            DEFAULT: 'hsl(var(--card))',
+                            foreground: 'hsl(var(--card-foreground))',
+                        },
+                        popover: {
+                            DEFAULT: 'hsl(var(--popover))',
+                            foreground: 'hsl(var(--popover-foreground))',
+                        },
+                        secondary: {
+                            DEFAULT: 'hsl(var(--secondary))',
+                            foreground: 'hsl(var(--secondary-foreground))',
+                        },
+                        muted: {
+                            DEFAULT: 'hsl(var(--muted))',
+                            foreground: 'hsl(var(--muted-foreground))',
+                        },
+                        accent: {
+                            DEFAULT: 'hsl(var(--accent))',
+                            foreground: 'hsl(var(--accent-foreground))',
+                        },
+                        destructive: {
+                            DEFAULT: 'hsl(var(--destructive))',
+                            foreground: 'hsl(var(--destructive-foreground))',
+                        },
+                        border: 'hsl(var(--border))',
+                        input: 'hsl(var(--input))',
+                        ring: 'hsl(var(--ring))',
+                    },
+                    // Tailwind's preflight paints every element's border-color with
+                    // borderColor.DEFAULT (gray-200) and divideColor.DEFAULT likewise. Extending
+                    // `colors` above does NOT change those defaults, so the many components that
+                    // use a bare `border` / `border-b` / `divide-y` (Card, Dialog, Alert, Badge,
+                    // Table, DropdownMenu, ...) drew a near-white edge that ignored the theme and
+                    // stood out badly in dark mode. Point both defaults at the themed token so an
+                    // uncoloured border follows --border in light and dark alike.
+                    borderColor: {
+                        DEFAULT: 'hsl(var(--border))',
+                    },
+                    divideColor: {
+                        DEFAULT: 'hsl(var(--border))',
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'slide-down': 'slideDown 0.2s ease-out',
+                        'scale-in': 'scaleIn 0.2s ease-out',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        slideDown: {
+                            '0%': { opacity: '0', transform: 'translateY(-10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        scaleIn: {
+                            '0%': { opacity: '0', transform: 'scale(0.95)' },
+                            '100%': { opacity: '1', transform: 'scale(1)' },
+                        },
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="js/theme.js"></script>
+    <!-- The ?v= is load-bearing. app.css is a plain static file with no content hash, and the
+         published service worker puts it in its cache at install (service-worker.published.js),
+         so without a changing URL an edit here can sit invisible behind both the browser HTTP
+         cache and the SW cache. Bump this whenever app.css changes, and bump cacheName in
+         service-worker.published.js alongside it. -->
+    <link rel="stylesheet" href="css/app.css?v=3" />
+</head>
+<body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 antialiased">
+    <div id="app" class="h-full">
+        <div class="flex items-center justify-center h-full">
+            <div class="text-center">
+                <div class="relative w-16 h-16 mx-auto mb-4">
+                    <div class="absolute inset-0 rounded-full border-4 border-slate-200 dark:border-slate-700"></div>
+                    <div class="absolute inset-0 rounded-full border-4 border-primary-500 border-t-transparent animate-spin"></div>
+                </div>
+                <p class="text-slate-600 dark:text-slate-400 text-sm">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui" class="fixed bottom-0 inset-x-0 p-4 bg-red-500 text-white text-center hidden">
+        An error has occurred. <a href="" class="underline">Reload</a>
+    </div>
+
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="js/qrScanner.js"></script>
+    <script src="js/offline-storage.js"></script>
+    <script src="js/print.js"></script>
+    <script src="js/fileUtils.js"></script>
+    <script src="js/notifications.js"></script>
+    <script src="_content/Microsoft.AspNetCore.Components.WebAssembly.Authentication/AuthenticationService.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script>navigator.serviceWorker.register('service-worker.js');</script>
+</body>
+</html>

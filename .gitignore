@@ -427,12 +427,12 @@ iams.db
 
 # User-uploaded attachment files. In production these live in the iams-uploads volume,
 # never in the repo - and they are unrecoverable if lost, so they need their own backup.
-src/IAMS.Api/Uploads/
+src/AssetDesk.Api/Uploads/
 
 # `nul` is a reserved Windows device name; these appear from a stray `> nul` redirect
 # and break `git add -A` because git cannot open them.
 nul
 
 # Components copied from the MaritimeOne app, parked out of the build.
-# The layout shell here depends on MaritimeOne services IAMS does not have.
+# The layout shell here depends on MaritimeOne services AssetDesk does not have.
 _dropin-from-maritimeone/

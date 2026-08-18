@@ -1,0 +1,110 @@
+@namespace AssetDesk.Web.Components.UI
+
+@* A bare Label/Error-free usage renders just the control, so existing layouts that position
+   the element directly are unaffected. Supplying Label or Error wraps it in a field group,
+   which is the shape the component this replaced had. *@
+@if (HasField)
+{
+    <div class="space-y-1.5">
+        @if (!string.IsNullOrEmpty(Label))
+        {
+            <label class="block text-sm font-medium text-foreground">@Label</label>
+        }
+        @Control
+        @if (!string.IsNullOrEmpty(Error))
+        {
+            <p class="text-sm text-destructive">@Error</p>
+        }
+    </div>
+}
+else
+{
+    @Control
+}
+
+@code {
+    private RenderFragment Control => __builder =>
+    {
+        <input type="@Type"
+               id="@Id"
+               name="@Name"
+               class="@GetClasses()"
+               placeholder="@Placeholder"
+               value="@Value"
+               disabled="@Disabled"
+               readonly="@ReadOnly"
+               required="@Required"
+               min="@Min"
+               max="@Max"
+               step="@Step"
+               maxlength="@MaxLength"
+               pattern="@Pattern"
+               autocomplete="@AutoComplete"
+               aria-invalid="@(HasError ? "true" : null)"
+               @oninput="HandleInput"
+               @onblur="HandleBlur"
+               @onfocus="HandleFocus"
+               @onkeydown="HandleKeyDown"
+               @attributes="AdditionalAttributes" />
+    };
+
+    /// <summary>Optional field label. Supplying it wraps the control in a field group.</summary>
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>Optional validation message, shown under the control.</summary>
+    [Parameter] public string? Error { get; set; }
+
+    private bool HasField => !string.IsNullOrEmpty(Label) || !string.IsNullOrEmpty(Error);
+
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public string Type { get; set; } = "text";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool Required { get; set; }
+    [Parameter] public bool HasError { get; set; }
+    [Parameter] public string? Min { get; set; }
+    [Parameter] public string? Max { get; set; }
+    [Parameter] public string? Step { get; set; }
+    [Parameter] public int? MaxLength { get; set; }
+    [Parameter] public string? Pattern { get; set; }
+    [Parameter] public string? AutoComplete { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public EventCallback OnBlur { get; set; }
+    [Parameter] public EventCallback OnFocus { get; set; }
+    [Parameter] public EventCallback<KeyboardEventArgs> OnKeyDown { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+
+    private string ErrorClasses => (HasError || !string.IsNullOrEmpty(Error)) ? "border-destructive focus-visible:ring-destructive" : "";
+
+    private string GetClasses()
+    {
+        return $"{BaseClasses} {ErrorClasses} {Class}".Trim();
+    }
+
+    private async Task HandleInput(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private async Task HandleBlur()
+    {
+        await OnBlur.InvokeAsync();
+    }
+
+    private async Task HandleFocus()
+    {
+        await OnFocus.InvokeAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        await OnKeyDown.InvokeAsync(e);
+    }
+}

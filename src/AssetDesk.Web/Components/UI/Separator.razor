@@ -1,0 +1,23 @@
+@namespace AssetDesk.Web.Components.UI
+
+<div class="@GetClasses()" role="separator" aria-orientation="@Orientation" @attributes="AdditionalAttributes"></div>
+
+@code {
+    [Parameter] public string Orientation { get; set; } = "horizontal";
+    [Parameter] public bool Decorative { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "shrink-0 bg-border";
+
+    private string GetOrientationClasses() => Orientation switch
+    {
+        "vertical" => "h-full w-[1px]",
+        _ => "h-[1px] w-full"
+    };
+
+    private string GetClasses()
+    {
+        return $"{BaseClasses} {GetOrientationClasses()} {Class}".Trim();
+    }
+}

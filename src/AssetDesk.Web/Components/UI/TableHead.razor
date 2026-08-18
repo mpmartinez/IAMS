@@ -1,0 +1,18 @@
+@namespace AssetDesk.Web.Components.UI
+
+<th class="@GetClasses()" @attributes="AdditionalAttributes">
+    @ChildContent
+</th>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "h-10 px-2 text-left align-middle text-xs font-medium text-muted-foreground font-display [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]";
+
+    private string GetClasses()
+    {
+        return $"{BaseClasses} {Class}".Trim();
+    }
+}

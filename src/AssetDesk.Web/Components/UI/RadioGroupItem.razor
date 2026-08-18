@@ -1,0 +1,51 @@
+@namespace AssetDesk.Web.Components.UI
+
+<div class="flex items-center space-x-2 @Class">
+    <button type="button"
+            role="radio"
+            aria-checked="@IsSelected"
+            class="@GetRadioClasses()"
+            disabled="@IsDisabled"
+            @onclick="HandleClick"
+            @attributes="AdditionalAttributes">
+        @if (IsSelected)
+        {
+            <span class="flex items-center justify-center">
+                <span class="h-2 w-2 rounded-full bg-current"></span>
+            </span>
+        }
+    </button>
+    @if (ChildContent != null)
+    {
+        <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 @(IsDisabled ? "cursor-not-allowed opacity-70" : "cursor-pointer")"
+               @onclick="HandleClick">
+            @ChildContent
+        </label>
+    }
+</div>
+
+@code {
+    [CascadingParameter] public RadioGroup? RadioGroup { get; set; }
+
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private bool IsSelected => RadioGroup?.IsSelected(Value) ?? false;
+    private bool IsDisabled => Disabled || (RadioGroup?.IsDisabled ?? false);
+
+    private string BaseClasses => "aspect-square h-4 w-4 rounded-full border border-primary text-primary shadow focus:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+
+    private string GetRadioClasses()
+    {
+        return $"{BaseClasses} flex items-center justify-center".Trim();
+    }
+
+    private async Task HandleClick()
+    {
+        if (IsDisabled || RadioGroup == null) return;
+        await RadioGroup.SetValue(Value);
+    }
+}

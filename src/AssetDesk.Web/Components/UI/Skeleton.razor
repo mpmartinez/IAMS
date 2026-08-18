@@ -1,0 +1,33 @@
+@namespace AssetDesk.Web.Components.UI
+
+<div class="@GetClasses()" style="@GetStyle()" @attributes="AdditionalAttributes"></div>
+
+@code {
+    [Parameter] public string? Width { get; set; }
+    [Parameter] public string? Height { get; set; }
+    [Parameter] public bool Circle { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "animate-pulse bg-primary/10";
+
+    private string GetShapeClasses() => Circle ? "rounded-full" : "rounded-md";
+
+    private string GetClasses()
+    {
+        return $"{BaseClasses} {GetShapeClasses()} {Class}".Trim();
+    }
+
+    private string GetStyle()
+    {
+        var styles = new List<string>();
+
+        if (!string.IsNullOrEmpty(Width))
+            styles.Add($"width: {Width}");
+
+        if (!string.IsNullOrEmpty(Height))
+            styles.Add($"height: {Height}");
+
+        return string.Join("; ", styles);
+    }
+}

@@ -1,0 +1,47 @@
+@namespace AssetDesk.Web.Components.UI.Sidebar
+
+<button type="button"
+        class="@GetClasses()"
+        @onclick="HandleClick"
+        @attributes="AdditionalAttributes">
+    @if (ChildContent != null)
+    {
+        @ChildContent
+    }
+    else
+    {
+        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M9 3v18" />
+        </svg>
+    }
+    <span class="sr-only">Toggle Sidebar</span>
+</button>
+
+@code {
+    [CascadingParameter] public ShadcnSidebar? Sidebar { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string BaseClasses => "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-7 w-7";
+
+    private string GetClasses()
+    {
+        return $"{BaseClasses} {Class}".Trim();
+    }
+
+    private async Task HandleClick()
+    {
+        if (OnClick.HasDelegate)
+        {
+            await OnClick.InvokeAsync();
+        }
+        else if (Sidebar != null)
+        {
+            await Sidebar.Toggle();
+        }
+    }
+}

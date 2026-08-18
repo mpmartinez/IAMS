@@ -1,0 +1,20 @@
+@namespace AssetDesk.Web.Components.UI
+
+<div class="@Class" style="position: relative; width: 100%; padding-bottom: @GetPaddingBottom();" @attributes="AdditionalAttributes">
+    <div style="position: absolute; inset: 0;">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public double Ratio { get; set; } = 1;
+    [Parameter] public string? Class { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string GetPaddingBottom()
+    {
+        if (Ratio <= 0) Ratio = 1;
+        return $"{(1 / Ratio) * 100}%";
+    }
+}
