@@ -94,31 +94,21 @@
             <div class="p-3 border-t border-slate-200 dark:border-slate-700">
                 <AuthorizeView>
                     <Authorized Context="userContext">
-                        <div class="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-sm font-medium">
-                                @userContext.User.Identity?.Name?.FirstOrDefault()
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@userContext.User.Identity?.Name</p>
-                                <p class="text-xs text-slate-500 truncate">
-                                    @{
-                                        var role = userContext.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Staff";
-                                        var roleBadgeClass = role switch
-                                        {
-                                            "Admin" => "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-                                            "Auditor" => "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
-                                            _ => "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                        };
-                                    }
-                                    <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium @roleBadgeClass">@role</span>
-                                </p>
-                            </div>
-                            <button @onclick="OpenChangePassword" title="Change Password" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-all duration-200">
-                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                                </svg>
-                            </button>
-                            <button @onclick="Logout" title="Logout" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-all duration-200">
+                        <div class="flex items-center gap-1">
+                            <NavLink href="/profile" @onclick="CloseMobileMenu"
+                                     class="flex items-center gap-3 flex-1 min-w-0 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                                     ActiveClass="ring-1 ring-primary-500">
+                                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-sm font-medium shrink-0">
+                                    @userContext.User.Identity?.Name?.FirstOrDefault()
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@userContext.User.Identity?.Name</p>
+                                    <p class="text-xs text-slate-500 truncate">
+                                        <RoleBadge Role="@(userContext.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Staff")" />
+                                    </p>
+                                </div>
+                            </NavLink>
+                            <button @onclick="Logout" title="Logout" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-all duration-200 shrink-0">
                                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                                 </svg>
@@ -489,16 +479,12 @@
 
             <!-- Global Snackbar -->
             <Snackbar />
-
-            <!-- Change Password Dialog -->
-            <ChangePasswordDialog @bind-IsOpen="_showChangePassword" />
         </div>
 
 @code {
     private bool _mobileMenuOpen;
     private bool _showAdminGroup;
     private int _alertCount;
-    private bool _showChangePassword;
     private SyncStatus? _syncStatus;
     private bool _showNotifications;
     private bool _showSearch;
@@ -595,7 +581,6 @@
             ? "flex flex-col items-center justify-center text-primary-600 dark:text-primary-400"
             : "flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300";
     }
-    private void OpenChangePassword() => _showChangePassword = true;
 
     private void ToggleNotifications()
     {

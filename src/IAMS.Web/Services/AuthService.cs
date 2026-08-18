@@ -192,6 +192,19 @@ public class AuthService(
         return (true, null);
     }
 
+    /// <summary>
+    /// Overwrite the cached user after a profile edit. AuthStateProvider builds its
+    /// ClaimTypes.Name claim from this stored UserDto, so notifying afterwards is what makes the
+    /// sidebar pick up a new name immediately - without it the old name persists until the next
+    /// token refresh or page reload. The token itself is untouched: nothing editable here is
+    /// something the API authorises against.
+    /// </summary>
+    public async Task UpdateCachedUserAsync(UserDto user)
+    {
+        await localStorage.SetItemAsync(UserKey, user);
+        ((AuthStateProvider)authStateProvider).NotifyAuthenticationStateChanged();
+    }
+
     private async Task StoreTokensAsync(LoginResponseDto data)
     {
         await localStorage.SetItemAsync(TokenKey, data.Token);

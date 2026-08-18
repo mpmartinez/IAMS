@@ -78,6 +78,53 @@ public class AuthController(
         return Ok(ApiResponse<UserDto>.Ok(MapToDto(user, roles.FirstOrDefault() ?? "Staff", tenant?.Name)));
     }
 
+    /// <summary>
+    /// Update the signed-in user's own profile. Takes no id - the account is resolved from the
+    /// caller's token, so this can never be aimed at someone else's record. UpdateProfileDto
+    /// carries only FullName and Department; role, email and active status stay administrator-only.
+    /// </summary>
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [HttpPut("me")]
+    public async Task<ActionResult<ApiResponse<UserDto>>> UpdateCurrentUser(UpdateProfileDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await userManager.FindByIdAsync(userId!);
+
+        if (user is null)
+            return NotFound();
+
+        var fullName = dto.FullName?.Trim();
+        if (string.IsNullOrEmpty(fullName))
+            return BadRequest(ApiResponse<UserDto>.Fail("Full name is required"));
+
+        if (fullName.Length > 100)
+            return BadRequest(ApiResponse<UserDto>.Fail("Full name must be 100 characters or fewer"));
+
+        var department = dto.Department?.Trim();
+        if (department?.Length > 100)
+            return BadRequest(ApiResponse<UserDto>.Fail("Department must be 100 characters or fewer"));
+
+        user.FullName = fullName;
+        user.Department = string.IsNullOrEmpty(department) ? null : department;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        var result = await userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            return BadRequest(ApiResponse<UserDto>.Fail(errors));
+        }
+
+        var tenant = await db.Tenants
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == user.TenantId);
+
+        var roles = await userManager.GetRolesAsync(user);
+        return Ok(ApiResponse<UserDto>.Ok(
+            MapToDto(user, roles.FirstOrDefault() ?? "Staff", tenant?.Name),
+            "Profile updated"));
+    }
+
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
     [HttpPost("change-password")]
     public async Task<ActionResult<ApiResponse<object>>> ChangePassword(ChangePasswordDto dto)

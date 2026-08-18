@@ -1,0 +1,26 @@
+@* The single place a role name becomes a colour. MainLayout's sidebar and the profile page both
+   render a role badge; keeping the map here stops the two from drifting when a role is added. *@
+
+<span class="@BadgeClasses">@Role</span>
+
+@code {
+    [Parameter, EditorRequired] public string Role { get; set; } = "";
+
+    /// "sm" for the sidebar's tight footer, "md" for page headers.
+    [Parameter] public string Size { get; set; } = "sm";
+
+    private string BadgeClasses =>
+        $"inline-flex items-center font-medium rounded {SizeClasses} {ColorClasses}";
+
+    private string SizeClasses => Size == "md"
+        ? "px-2.5 py-1 text-xs"
+        : "px-1.5 py-0.5 text-[10px]";
+
+    private string ColorClasses => Role switch
+    {
+        "SuperAdmin" => "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+        "Admin" => "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+        "Auditor" => "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
+        _ => "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+    };
+}
