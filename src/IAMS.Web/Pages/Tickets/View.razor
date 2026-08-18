@@ -77,6 +77,35 @@ else
                     </CardContent>
                 </Card>
 
+                <!-- Attachments -->
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Attachments</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="space-y-4">
+                            <TicketAttachmentGallery @ref="_gallery" TicketId="_ticket.Id" />
+
+                            @if (CanAddAttachments)
+                            {
+                                <div class="pt-3 border-t border-slate-200 dark:border-slate-700">
+                                    <TicketAttachmentPicker @bind-Files="_pendingFiles" Disabled="@_uploadingAttachments" />
+
+                                    @if (_pendingFiles.Count > 0)
+                                    {
+                                        <div class="flex items-center gap-2 pt-3">
+                                            <Button OnClick="UploadPendingAttachments" Loading="@_uploadingAttachments">
+                                                Upload @_pendingFiles.Count file@(_pendingFiles.Count == 1 ? "" : "s")
+                                            </Button>
+                                            <Button Variant="ghost" OnClick="ClearPendingAttachments" Disabled="@_uploadingAttachments">Cancel</Button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <!-- Activity -->
                 <Card>
                     <CardHeader>
@@ -308,10 +337,8 @@ else
     private string _resolutionText = "";
     private string _resolveError = "";
 
-    private static readonly string[] OpenStatuses = ["New", "Assigned", "InProgress", "OnHold"];
-
     private bool CanAssignToMe => _ticket is not null
-        && OpenStatuses.Contains(_ticket.Status)
+        && _ticket.IsOpen
         && _ticket.AssignedToUserId != _currentUserId;
 
     private bool CanStart => _ticket is not null
@@ -320,6 +347,56 @@ else
     private bool CanResolve => _ticket is not null && _ticket.Status == "InProgress";
 
     private bool CanClose => _ticket is not null && _ticket.Status == "Resolved";
+
+    private TicketAttachmentGallery? _gallery;
+    private List<PendingAttachment> _pendingFiles = new();
+    private bool _uploadingAttachments;
+
+    // The creator uploads: the requester may add to their own ticket while it is still open.
+    // Staff working the queue see the gallery but are not offered an upload control, even though
+    // UploadAttachment would accept one from them - a deliberate UI/API asymmetry, recorded in the
+    // design doc, so that a staff-side affordance can be added later without an API change.
+    private bool CanAddAttachments =>
+        _ticket is not null
+        && !string.IsNullOrEmpty(_currentUserId)
+        && _ticket.RequesterUserId == _currentUserId
+        && _ticket.IsOpen;
+
+    private void ClearPendingAttachments() => _pendingFiles = new();
+
+    private async Task UploadPendingAttachments()
+    {
+        if (_ticket is null || _pendingFiles.Count == 0) return;
+
+        _uploadingAttachments = true;
+        var total = _pendingFiles.Count;
+        var failed = 0;
+
+        // Sequential, not parallel: same reason as Report.razor - these offices are on poor
+        // connections and a batch of photos uploaded at once saturates the link.
+        foreach (var f in _pendingFiles)
+        {
+            using var stream = new MemoryStream(f.Data);
+            var (ok, _, _) = await Api.UploadTicketAttachmentAsync(
+                _ticket.Id, stream, f.Name, f.ContentType, TicketAttachmentDefaults.Category);
+
+            if (!ok) failed++;
+        }
+
+        _uploadingAttachments = false;
+        _pendingFiles = new();
+
+        var attached = total - failed;
+        if (failed == 0)
+            Snackbar.Success(attached == 1 ? "1 attachment added" : $"{attached} attachments added");
+        else if (attached == 0)
+            Snackbar.Error("The attachment(s) couldn't be uploaded.");
+        else
+            Snackbar.Warning($"{attached} of {total} attachments uploaded.");
+
+        if (_gallery is not null)
+            await _gallery.ReloadAsync();
+    }
 
     protected override async Task OnInitializedAsync()
     {
