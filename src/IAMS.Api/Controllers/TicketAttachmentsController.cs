@@ -181,7 +181,6 @@ public class TicketAttachmentsController(
     /// Delete an attachment
     /// </summary>
     [HttpDelete("{attachmentId:int}")]
-    [Authorize(Policy = "CanManageTicketQueue")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAttachment(
         int ticketId, int attachmentId, CancellationToken ct)
     {
@@ -190,6 +189,15 @@ public class TicketAttachmentsController(
 
         if (attachment is null)
             return NotFound(ApiResponse<object>.Fail("Attachment not found"));
+
+        // Uploader-only, deliberately narrower than the rest of this controller. An attachment is
+        // often the requester's own photo and may be sensitive, so the person who attached it is
+        // the only one who can take it back - a queue manager can view it but not quietly drop it
+        // from the ticket. Note this REMOVED the manage-permission delete that used to live in an
+        // [Authorize] attribute here: it is a swap, not a widening. The requester gains the
+        // ability, queue managers lose it for other people's files.
+        if (attachment.UploadedByUserId != CurrentUserId)
+            return Forbid();
 
         // Delete file from storage
         await fileStorage.DeleteFileAsync(attachment.StoredFileName);
