@@ -1050,6 +1050,70 @@ public class ApiClient(HttpClient http, AuthService authService)
             _ => $"Failed to {action} role."
         };
     }
+
+    // Ticket attachments: reading, downloading and removing. The API has had these endpoints all
+    // along; only UploadTicketAttachmentAsync was ever written here, which is why nothing in the
+    // app could display an attachment that had been uploaded.
+
+    public async Task<List<TicketAttachmentDto>?> GetTicketAttachmentsAsync(int ticketId)
+    {
+        var client = await GetAuthenticatedClient();
+        try
+        {
+            return await client.GetFromJsonAsync<List<TicketAttachmentDto>>(
+                $"api/tickets/{ticketId}/attachments");
+        }
+        catch
+        {
+            // GetFromJsonAsync throws on any non-success status. A caller showing a gallery wants
+            // an empty/error state, not an unhandled exception that blanks the whole page.
+            return null;
+        }
+    }
+
+    public async Task<(bool Success, byte[]? Data, string? ContentType, string? Error)> DownloadTicketAttachmentAsync(
+        int ticketId, int attachmentId)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetAsync($"api/tickets/{ticketId}/attachments/{attachmentId}/download");
+
+        if (!response.IsSuccessStatusCode)
+            return (false, null, null, $"Download failed ({(int)response.StatusCode}).");
+
+        var data = await response.Content.ReadAsByteArrayAsync();
+        return (true, data, response.Content.Headers.ContentType?.MediaType, null);
+    }
+
+    public async Task<(bool Success, string? Error)> DeleteTicketAttachmentAsync(int ticketId, int attachmentId)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.DeleteAsync($"api/tickets/{ticketId}/attachments/{attachmentId}");
+
+        if (response.IsSuccessStatusCode)
+            return (true, null);
+
+        // Read the body defensively: a 403 from the authorization middleware has an empty body,
+        // and ReadFromJsonAsync throws on that.
+        var body = await response.Content.ReadAsStringAsync();
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            try
+            {
+                var payload = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<object>>(
+                    body, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+                if (!string.IsNullOrWhiteSpace(payload?.Message))
+                    return (false, payload.Message);
+            }
+            catch
+            {
+                // Non-JSON body (a proxy error page). Fall through to the status-derived message.
+            }
+        }
+
+        return (false, response.StatusCode == System.Net.HttpStatusCode.Forbidden
+            ? "You can only remove attachments you uploaded."
+            : $"Couldn't remove the attachment ({(int)response.StatusCode}).");
+    }
 }
 
 public record UserListItem(string Id, string FullName, string? Department);
