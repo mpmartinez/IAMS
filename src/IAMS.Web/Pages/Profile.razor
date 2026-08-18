@@ -5,6 +5,7 @@
 @inject ApiClient Api
 @inject AuthService Auth
 @inject SnackbarService Snackbar
+@inject NavigationManager Navigation
 
 <PageTitle>My Profile - IAMS</PageTitle>
 
@@ -183,8 +184,8 @@
                 </div>
                 <div class="flex flex-wrap items-center justify-between gap-3 pt-4">
                     <div>
-                        <p class="text-sm font-medium text-slate-900 dark:text-white">Other sessions</p>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Sign out everywhere else you're signed in. This device stays signed in.</p>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">All sessions</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Sign out of every device, including this one. You'll need to sign in again.</p>
                     </div>
                     @if (_confirmingLogoutAll)
                     {
@@ -314,12 +315,17 @@
             var (success, error) = await Api.LogoutAllAsync();
             if (success)
             {
-                Snackbar.Success("Signed out of your other sessions");
-                _confirmingLogoutAll = false;
+                // RevokeAllUserTokensAsync revokes every refresh token for the user with no
+                // exclusion for the caller, so this session is dead too - its access token just
+                // hasn't expired yet. Signing out here and now beats leaving the user in a
+                // session that works for up to Jwt:ExpireMinutes and then drops them at login
+                // with no explanation.
+                await Auth.LogoutAsync();
+                Navigation.NavigateTo("/login", forceLoad: true);
             }
             else
             {
-                Snackbar.Error(error ?? "Failed to sign out other sessions");
+                Snackbar.Error(error ?? "Failed to sign out");
             }
         }
         finally
