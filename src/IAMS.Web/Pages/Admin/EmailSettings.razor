@@ -1,0 +1,287 @@
+@page "/admin/email-settings"
+@using IAMS.Web.Components.UI
+@using IAMS.Shared.DTOs
+@attribute [Authorize(Roles = "SuperAdmin")]
+@inject ApiClient Api
+@inject SnackbarService Snackbar
+
+<PageTitle>Email Settings - IAMS</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Email Settings</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">
+                The SMTP server IAMS sends from. Password reset emails go nowhere until this is
+                filled in. One mail server for the whole platform - these settings are not per-tenant.
+            </p>
+        </div>
+        @if (_settings is not null)
+        {
+            <Badge Variant="@(_settings.IsConfigured ? "Available" : "Lost")" Class="shrink-0">
+                @(_settings.IsConfigured ? "Configured" : "Not configured")
+            </Badge>
+        }
+    </div>
+
+    @if (_settings is null)
+    {
+        <Card Class="p-4 sm:p-5">
+            <div class="space-y-3">
+                @for (int i = 0; i < 4; i++)
+                {
+                    <div class="h-10 w-full rounded-lg skeleton"></div>
+                }
+            </div>
+        </Card>
+    }
+    else
+    {
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Settings form -->
+            <div class="lg:col-span-2 space-y-6">
+                <Card Class="p-4 sm:p-5">
+                    <h2 class="font-semibold text-slate-900 dark:text-white mb-4">Server</h2>
+                    <div class="space-y-4">
+                        <FormField LabelText="SMTP host" Error="@_hostError">
+                            <Input @bind-Value="_host" Placeholder="smtp.example.com"
+                                   HasError="@(!string.IsNullOrEmpty(_hostError))" Disabled="@_saving" />
+                        </FormField>
+
+                        <FormField LabelText="Port" Error="@_portError"
+                                   Description="587 for STARTTLS, 465 for implicit SSL, 25 unencrypted.">
+                            <Input Type="number" @bind-Value="_port" Placeholder="587"
+                                   HasError="@(!string.IsNullOrEmpty(_portError))" Disabled="@_saving" />
+                        </FormField>
+
+                        <div class="flex items-start justify-between gap-4 pt-1">
+                            <div>
+                                <p class="text-sm font-medium text-slate-900 dark:text-white">Use SSL/TLS</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Ports 465 and 587 negotiate encryption on their own regardless of this
+                                    switch; it only decides what happens on other ports.
+                                </p>
+                            </div>
+                            <Switch Value="_useSsl" ValueChanged="v => _useSsl = v" Disabled="@_saving" />
+                        </div>
+                    </div>
+                </Card>
+
+                <Card Class="p-4 sm:p-5">
+                    <h2 class="font-semibold text-slate-900 dark:text-white mb-4">Sender and credentials</h2>
+                    <div class="space-y-4">
+                        <FormField LabelText="From address" Error="@_senderError">
+                            <Input Type="email" @bind-Value="_senderEmail" Placeholder="no-reply@example.com"
+                                   HasError="@(!string.IsNullOrEmpty(_senderError))" Disabled="@_saving" />
+                        </FormField>
+
+                        <FormField LabelText="From name">
+                            <Input @bind-Value="_senderName" Placeholder="IAMS" Disabled="@_saving" />
+                        </FormField>
+
+                        <FormField LabelText="Username"
+                                   Description="Leave blank if the server accepts unauthenticated relay.">
+                            <Input @bind-Value="_username" Placeholder="SMTP username"
+                                   AutoComplete="off" Disabled="@_saving" />
+                        </FormField>
+
+                        <FormField LabelText="Password"
+                                   Description="@(_settings.HasPassword ? "A password is already stored. Leave blank to keep it." : null)">
+                            <PasswordInput @bind-Value="_password"
+                                           Placeholder="@(_settings.HasPassword ? "Unchanged" : "SMTP password")"
+                                           AutoComplete="new-password"
+                                           Disabled="@(_saving || _clearPassword)" />
+                        </FormField>
+
+                        @if (_settings.HasPassword)
+                        {
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <Checkbox Value="_clearPassword" ValueChanged="OnClearPasswordChanged" Disabled="@_saving" />
+                                <span class="text-sm text-slate-600 dark:text-slate-400">
+                                    Remove the stored password (for a relay that needs no authentication)
+                                </span>
+                            </label>
+                        }
+                    </div>
+                </Card>
+
+                <div class="flex justify-end gap-3">
+                    <Button Variant="ghost" OnClick="Reset" Disabled="@_saving">Discard changes</Button>
+                    <Button OnClick="Save" Loading="@_saving" Disabled="@_saving">Save settings</Button>
+                </div>
+            </div>
+
+            <!-- Test send -->
+            <div class="lg:col-span-1">
+                <Card Class="p-4 sm:p-5">
+                    <h2 class="font-semibold text-slate-900 dark:text-white">Send a test</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">
+                        Uses the saved settings, not what's typed above - save first, then test.
+                    </p>
+
+                    <div class="space-y-4">
+                        <FormField LabelText="Send to">
+                            <Input Type="email" @bind-Value="_testEmail" Placeholder="you@example.com"
+                                   Disabled="@_testing" />
+                        </FormField>
+
+                        <Button Variant="outline" Class="w-full" OnClick="SendTest"
+                                Loading="@_testing"
+                                Disabled="@(_testing || string.IsNullOrWhiteSpace(_testEmail))">
+                            Send test email
+                        </Button>
+
+                        @if (_testResult is not null)
+                        {
+                            <div class="@(_testOk
+                                ? "p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800"
+                                : "p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800")">
+                                <p class="@(_testOk
+                                    ? "text-sm text-emerald-700 dark:text-emerald-400"
+                                    : "text-sm text-red-600 dark:text-red-400")">@_testResult</p>
+                            </div>
+                        }
+                    </div>
+                </Card>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private EmailSettingsDto? _settings;
+
+    private string _host = "";
+    private string _port = "587";
+    private bool _useSsl = true;
+    private string _senderEmail = "";
+    private string _senderName = "";
+    private string _username = "";
+    private string _password = "";
+    private bool _clearPassword;
+
+    private string _testEmail = "";
+    private string? _testResult;
+    private bool _testOk;
+
+    private bool _saving;
+    private bool _testing;
+
+    private string? _hostError;
+    private string? _portError;
+    private string? _senderError;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _settings = await Api.GetEmailSettingsAsync();
+
+        if (_settings is null)
+        {
+            Snackbar.Error("Couldn't load the email settings.");
+            return;
+        }
+
+        Reset();
+    }
+
+    // Also the "discard changes" handler: both mean "put the form back to what the server has".
+    private void Reset()
+    {
+        if (_settings is null)
+            return;
+
+        _host = _settings.SmtpHost;
+        _port = _settings.SmtpPort.ToString();
+        _useSsl = _settings.UseSsl;
+        _senderEmail = _settings.SenderEmail;
+        _senderName = _settings.SenderName;
+        _username = _settings.Username;
+        _password = "";
+        _clearPassword = false;
+
+        _hostError = _portError = _senderError = null;
+    }
+
+    // Ticking "remove" disables the password box, so drop anything half-typed in it - otherwise
+    // the request would carry a new password, which takes precedence and silently ignores the tick.
+    private void OnClearPasswordChanged(bool value)
+    {
+        _clearPassword = value;
+        if (value)
+            _password = "";
+    }
+
+    private async Task Save()
+    {
+        _hostError = _portError = _senderError = null;
+
+        if (string.IsNullOrWhiteSpace(_host))
+            _hostError = "An SMTP host is required for email to send.";
+
+        if (!int.TryParse(_port, out var port) || port is < 1 or > 65535)
+            _portError = "Enter a port between 1 and 65535.";
+
+        if (!string.IsNullOrWhiteSpace(_senderEmail) && !_senderEmail.Contains('@'))
+            _senderError = "Enter a valid email address.";
+
+        if (_hostError is not null || _portError is not null || _senderError is not null)
+            return;
+
+        _saving = true;
+        try
+        {
+            var (success, error) = await Api.UpdateEmailSettingsAsync(new UpdateEmailSettingsDto
+            {
+                SmtpHost = _host,
+                SmtpPort = port,
+                UseSsl = _useSsl,
+                SenderEmail = _senderEmail,
+                SenderName = _senderName,
+                Username = _username,
+                Password = string.IsNullOrEmpty(_password) ? null : _password,
+                ClearPassword = _clearPassword
+            });
+
+            if (!success)
+            {
+                Snackbar.Error(error ?? "Couldn't save the email settings.");
+                return;
+            }
+
+            Snackbar.Success("Email settings saved.");
+
+            // Re-read rather than patching locally, so HasPassword and IsConfigured reflect
+            // what the server actually stored.
+            await Load();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task SendTest()
+    {
+        _testing = true;
+        _testResult = null;
+        try
+        {
+            var (success, message) = await Api.SendTestEmailAsync(_testEmail);
+
+            _testOk = success;
+            _testResult = message ?? (success ? "Test email sent." : "Couldn't send the test email.");
+
+            if (success)
+                Snackbar.Success(_testResult);
+            else
+                Snackbar.Error(_testResult);
+        }
+        finally
+        {
+            _testing = false;
+        }
+    }
+}

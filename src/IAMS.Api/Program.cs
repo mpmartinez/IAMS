@@ -156,6 +156,7 @@ builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IAssetImportService, AssetImportService>();
 builder.Services.AddSingleton<IPdfReportService, PdfReportService>();
 builder.Services.AddSingleton<INotificationService, NotificationService>();
+builder.Services.AddScoped<ISystemSettingService, SystemSettingService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<ITicketNumberAllocator, TicketNumberAllocator>();
 builder.Services.AddScoped<ITicketService, TicketService>();

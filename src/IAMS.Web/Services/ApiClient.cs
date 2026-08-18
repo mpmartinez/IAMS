@@ -997,6 +997,42 @@ public class ApiClient(HttpClient http, AuthService authService)
         return (true, null);
     }
 
+    // Platform SMTP settings (SuperAdmin only) - what makes forgot-password mail actually
+    // send. The stored password is never returned by the API; HasPassword is the only signal
+    // the UI gets, and an empty Password on save means "keep the current one".
+    // SafeGetAsync rather than GetFromJsonAsync: this is the first call the admin page makes
+    // from OnInitializedAsync, where a throw (an expired token gives a 401) escapes as an
+    // unhandled exception and drops Blazor's error bar over the app instead of the page's own
+    // "couldn't load" message.
+    public async Task<EmailSettingsDto?> GetEmailSettingsAsync()
+    {
+        var response = await SafeGetAsync<ApiResponse<EmailSettingsDto>>("api/settings/email");
+        return response?.Data;
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateEmailSettingsAsync(UpdateEmailSettingsDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PutAsJsonAsync("api/settings/email", dto);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to save email settings.");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Message)> SendTestEmailAsync(string testEmail)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync("api/settings/email/test", new TestEmailDto { TestEmail = testEmail });
+
+        var payload = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        return (response.IsSuccessStatusCode, payload?.Message);
+    }
+
     // Roles and permissions.
 
     public async Task<List<RoleDto>?> GetRolesAsync()

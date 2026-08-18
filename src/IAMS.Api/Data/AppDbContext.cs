@@ -34,6 +34,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<LookupValue> LookupValues => Set<LookupValue>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -510,6 +511,17 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
             entity.HasIndex(e => new { e.LookupType, e.Value }).IsUnique();
 
             entity.HasData(LookupValueSeed.Rows);
+        });
+
+        // Configure SystemSetting. Global like LookupValue: no TenantId, no query filter. One
+        // SMTP server for the whole platform, managed by a SuperAdmin - see
+        // EmailSettingsController.
+        modelBuilder.Entity<SystemSetting>(entity =>
+        {
+            entity.HasKey(e => e.Key);
+
+            entity.Property(e => e.Key).HasMaxLength(100);
+            entity.Property(e => e.Value).HasMaxLength(1000);
         });
 
         // Normalise every DateTime to UTC on the way to the database.
