@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using AssetDesk.Api.Authorization;
 using AssetDesk.Api.Data;
 using AssetDesk.Api.Entities;
 using AssetDesk.Shared.DTOs;
@@ -139,9 +140,25 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     /// <summary>
     /// Get all assets currently assigned to a user
     /// </summary>
+    /// <remarks>
+    /// Deliberately not decorated with the "CanViewAssignments" policy the neighbouring
+    /// offboarding endpoint uses. A self-service principal - Employee, Management, anyone
+    /// holding only iams:tickets:file - legitimately needs to see their own assets here, and a
+    /// blanket policy would lock them out. So the rule is self-or-permission, enforced in the
+    /// body where the route's userId can be compared against the caller's own id.
+    /// </remarks>
     [HttpGet("users/{userId}/assets")]
     public async Task<ActionResult<UserAssetsDto>> GetUserAssets(string userId)
     {
+        // Runs before the user lookup on purpose: answering 404 for an unknown id and 403 for a
+        // real one would hand an unprivileged caller an id oracle. Both cases get the same 403.
+        // A principal with no NameIdentifier matches nobody and so falls to the permission
+        // check - it fails closed.
+        var callerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!string.Equals(userId, callerId, StringComparison.Ordinal)
+            && !User.HasPermission(Permissions.AssignmentsView))
+            return Forbid();
+
         var user = await db.Users.FindAsync(userId);
         if (user is null)
             return NotFound(ApiResponse<UserAssetsDto>.Fail("User not found"));
