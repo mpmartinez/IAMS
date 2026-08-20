@@ -380,6 +380,18 @@ public class ApiClient(HttpClient http, AuthService authService)
         return response?.Data;
     }
 
+    /// <summary>
+    /// The self-service dashboard, for users without iams:assets:view. The estate endpoint above
+    /// returns 403 for them, so callers must pick one or the other on the permission - see
+    /// Index.razor.
+    /// </summary>
+    public async Task<MyDashboardDto?> GetMyDashboardAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<MyDashboardDto>>("api/dashboard/me");
+        return response?.Data;
+    }
+
     // Status update for offline sync
     public async Task<bool> UpdateAssetStatusAsync(int assetId, string status)
     {

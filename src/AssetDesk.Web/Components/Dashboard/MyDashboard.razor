@@ -1,0 +1,272 @@
+@* The self-service dashboard, for users without iams:assets:view - Employee, Management, and any
+   custom role that only files tickets. Everything here is the signed-in user's own data, served by
+   GET /api/dashboard/me, which needs no permission beyond being signed in.
+
+   Nothing on this page links into /assets - a user who lands here cannot open those pages. Assets
+   route to /report?assetId= instead, which is the one thing they can do with a device. *@
+@using AssetDesk.Web.Components.UI
+@inject ApiClient Api
+@inject NavigationManager Navigation
+
+<div class="space-y-4 sm:space-y-6">
+    @if (_loading)
+    {
+        <!-- Loading skeleton -->
+        <div class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                @for (int i = 0; i < 2; i++)
+                {
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-2xl skeleton"></div>
+                            <div class="flex-1 space-y-2">
+                                <div class="h-6 w-16 rounded skeleton"></div>
+                                <div class="h-4 w-24 rounded skeleton"></div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 space-y-3">
+                @for (int i = 0; i < 3; i++)
+                {
+                    <div class="h-12 rounded-xl skeleton"></div>
+                }
+            </div>
+        </div>
+    }
+    else if (_dashboard is not null)
+    {
+        <!-- Primary stats -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- My Devices -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5">
+                <div class="flex items-center gap-4">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                        <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-3xl font-bold text-slate-900 dark:text-white">@_dashboard.MyAssets.Count</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">@(_dashboard.MyAssets.Count == 1 ? "Device assigned to me" : "Devices assigned to me")</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Open Reports -->
+            <a href="/my-tickets" class="group">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border @(_dashboard.OpenTicketCount > 0 ? "border-amber-200 dark:border-amber-900/50" : "border-slate-200 dark:border-slate-700") p-5 card-hover">
+                    <div class="flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-2xl @(_dashboard.OpenTicketCount > 0 ? "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30" : "bg-gradient-to-br from-slate-400 to-slate-500 shadow-slate-500/20") flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
+                            <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                            </svg>
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-3xl font-bold @(_dashboard.OpenTicketCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-white")">@_dashboard.OpenTicketCount</span>
+                                @if (_dashboard.ResolvedTicketCount > 0)
+                                {
+                                    <span class="text-sm text-slate-400 dark:text-slate-500">@_dashboard.ResolvedTicketCount closed</span>
+                                }
+                            </div>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">@(_dashboard.OpenTicketCount == 1 ? "Open report" : "Open reports")</p>
+                        </div>
+                        <svg class="w-5 h-5 text-slate-300 dark:text-slate-600 group-hover:text-slate-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Primary actions -->
+        <div class="grid grid-cols-2 gap-3">
+            <a href="/report" class="flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press">
+                <svg class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span class="truncate">Report a problem</span>
+            </a>
+            <a href="/scan" class="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 btn-press">
+                <svg class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h2M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                <span class="truncate">Scan QR</span>
+            </a>
+        </div>
+
+        <!-- My Devices -->
+        <Card>
+            <CardHeader>
+                <CardTitle>My Devices</CardTitle>
+            </CardHeader>
+            <CardContent>
+                @if (_dashboard.MyAssets.Count > 0)
+                {
+                    <div class="divide-y divide-slate-100 dark:divide-slate-700 -mx-6 -mb-6">
+                        @foreach (var asset in _dashboard.MyAssets)
+                        {
+                            <div @key="asset.Id" class="flex items-center gap-4 px-6 py-4">
+                                <div class="w-10 h-10 rounded-xl @DeviceTypeVisuals.GetBackgroundClass(asset.DeviceType) flex items-center justify-center shrink-0">
+                                    @DeviceTypeVisuals.GetIcon(asset.DeviceType)
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-medium text-slate-900 dark:text-white truncate">@asset.DisplayName</p>
+                                    <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
+                                        <span class="font-mono">@asset.AssetTag</span>
+                                        @if (asset.AssignedAt is not null)
+                                        {
+                                            <span class="mx-1">•</span>
+                                            <span>Since @asset.AssignedAt.Value.ToLocalTime().ToString("d MMM yyyy")</span>
+                                        }
+                                    </p>
+                                    @{
+                                        var warranty = GetWarrantyNote(asset.WarrantyEndDate);
+                                    }
+                                    @if (warranty is not null)
+                                    {
+                                        <p class="text-xs mt-1 @warranty.Value.CssClass">@warranty.Value.Text</p>
+                                    }
+                                </div>
+                                <div class="flex flex-col items-end gap-2 shrink-0">
+                                    <Badge Variant="@asset.Status" Pulse="@(asset.Status == "InUse")">@asset.Status</Badge>
+                                    <a href="/report?assetId=@asset.Id" class="text-xs font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 transition-colors">
+                                        Report issue
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <EmptyState Title="No devices on your name"
+                                Description="When IT assigns you a laptop, phone, or other equipment, it will show up here." />
+                }
+            </CardContent>
+        </Card>
+
+        <!-- My Recent Reports -->
+        <Card>
+            <div class="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
+                <CardTitle>My Recent Reports</CardTitle>
+                @if (_dashboard.RecentTickets.Count > 0)
+                {
+                    <a href="/my-tickets" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
+                        View all
+                    </a>
+                }
+            </div>
+            <CardContent>
+                @if (_dashboard.RecentTickets.Count > 0)
+                {
+                    <div class="divide-y divide-slate-100 dark:divide-slate-700 -mx-6 -mb-6">
+                        @foreach (var ticket in _dashboard.RecentTickets)
+                        {
+                            <div @key="ticket.Id" @onclick="() => NavigateToTicket(ticket.Id)"
+                                 class="flex items-start justify-between gap-3 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <Badge Variant="@ticket.Type">@GetTypeLabel(ticket.Type)</Badge>
+                                        <span class="text-xs text-slate-400 dark:text-slate-500 font-mono">@ticket.Reference</span>
+                                    </div>
+                                    <p class="font-medium text-slate-900 dark:text-white mt-1.5 truncate">@ticket.Title</p>
+                                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1.5">Submitted @GetAge(ticket.CreatedAt)</p>
+                                </div>
+                                <Badge Variant="@ticket.Status">@GetStatusLabel(ticket.Status)</Badge>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <EmptyState Title="No reports yet" Description="Problems and requests you send to IT will show up here.">
+                        <a href="/report" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Report a Problem
+                        </a>
+                    </EmptyState>
+                }
+            </CardContent>
+        </Card>
+    }
+    else
+    {
+        <Card Class="p-6">
+            <EmptyState Title="Couldn't load your dashboard"
+                        Description="Check your connection and try again. You can still report a problem.">
+                <a href="/report" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                    Report a Problem
+                </a>
+            </EmptyState>
+        </Card>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private MyDashboardDto? _dashboard;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _dashboard = await Api.GetMyDashboardAsync();
+        }
+        catch
+        {
+            // Offline or a failed call leaves _dashboard null, which renders the fallback above
+            // rather than an empty page - matching how Mine.razor swallows the same failure.
+            _dashboard = null;
+        }
+
+        _loading = false;
+    }
+
+    private void NavigateToTicket(int id) => Navigation.NavigateTo($"/tickets/{id}");
+
+    /// The warranty line under a device, or null when there is nothing worth saying. Mirrors the
+    /// 90-day "expiring soon" window DashboardController uses for the estate figures.
+    private (string Text, string CssClass)? GetWarrantyNote(DateTime? warrantyEndDate)
+    {
+        if (warrantyEndDate is null) return null;
+
+        var days = (warrantyEndDate.Value.Date - DateTime.UtcNow.Date).Days;
+
+        if (days < 0)
+            return ("Warranty expired", "text-red-600 dark:text-red-400");
+
+        if (days <= 90)
+            return (days == 0 ? "Warranty ends today" : $"Warranty ends in {days} day{(days == 1 ? "" : "s")}",
+                "text-amber-600 dark:text-amber-400");
+
+        return null;
+    }
+
+    private string GetAge(DateTime createdAt)
+    {
+        var span = DateTime.UtcNow - createdAt;
+        if (span.TotalMinutes < 1) return "just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        if (span.TotalDays < 30) return $"{(int)span.TotalDays}d ago";
+        return $"{(int)(span.TotalDays / 30)}mo ago";
+    }
+
+    private string GetTypeLabel(string type) => type switch
+    {
+        "SecurityEvent" => "Security Event",
+        _ => type
+    };
+
+    private string GetStatusLabel(string status) => status switch
+    {
+        "InProgress" => "In Progress",
+        "OnHold" => "On Hold",
+        _ => status
+    };
+}

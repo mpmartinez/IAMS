@@ -48,11 +48,15 @@
             <nav class="flex-1 overflow-y-auto p-2 space-y-1">
                 <NavItem Href="/" Icon="home" Label="Dashboard" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
 
-                <!-- Employee: self-service portal only, no asset/queue management -->
-                <AuthorizeView Roles="Employee">
+                @* Self-service portal, for anyone who files tickets but does not work the queue.
+                   Keyed on permissions rather than the Employee role name so Management, Auditor,
+                   and any custom file-only role get the links too - all three can already use
+                   /report and /my-tickets, they just had no way to reach them. *@
+                @if (_showSelfServiceLinks)
+                {
                     <NavItem Href="/report" Icon="alert-triangle" Label="Report a problem" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                     <NavItem Href="/my-tickets" Icon="clipboard-list" Label="My reports" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
-                </AuthorizeView>
+                }
 
                 <PermissionView Permission="iams:assets:view">
                     <NavItem Href="/assets" Icon="cube" Label="Assets" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
@@ -447,7 +451,8 @@
                             <span class="text-xs mt-1">Assets</span>
                         </a>
                     </PermissionView>
-                    <AuthorizeView Roles="Employee">
+                    @if (_showSelfServiceLinks)
+                    {
                         <!-- Report a problem -->
                         <a href="/report" class="@GetFooterNavClass("/report")">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -455,7 +460,7 @@
                             </svg>
                             <span class="text-xs mt-1">Report</span>
                         </a>
-                    </AuthorizeView>
+                    }
 
                     <!-- Scan (Primary/Center) -->
                     <a href="/scan" class="flex flex-col items-center justify-center -mt-5">
@@ -481,7 +486,8 @@
                             }
                             <span class="text-xs mt-1">Alerts</span>
                         </a>
-                    <AuthorizeView Roles="Employee">
+                    @if (_showSelfServiceLinks)
+                    {
                         <!-- My reports -->
                         <a href="/my-tickets" class="@GetFooterNavClass("/my-tickets")">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -489,7 +495,7 @@
                             </svg>
                             <span class="text-xs mt-1">My Reports</span>
                         </a>
-                    </AuthorizeView>
+                    }
 
                     <!-- More (opens sidebar) -->
                     <button @onclick="OpenMobileMenu" class="flex flex-col items-center justify-center text-muted-foreground transition-colors hover:text-foreground">
@@ -511,6 +517,7 @@
     private bool _mobileMenuOpen;
     private bool _sidebarCollapsed;
     private bool _showAdminGroup;
+    private bool _showSelfServiceLinks;
     private int _alertCount;
     private bool _showNotifications;
     private bool _showSearch;
@@ -603,6 +610,12 @@
         // /admin/roles, and a bare heading with no links under it would look broken.
         _showAdminGroup = await PermissionChecker.HasPermissionAsync("iams:users:view")
             || await PermissionChecker.HasPermissionAsync("iams:roles:view");
+
+        // File tickets but do not work the queue. Excluding queue holders is what keeps these out
+        // of Staff's and Admin's sidebar - they reach the same tickets through /tickets, and a
+        // second personal entry point beside the queue would just be noise.
+        _showSelfServiceLinks = await PermissionChecker.HasPermissionAsync("iams:tickets:file")
+            && !await PermissionChecker.HasPermissionAsync("iams:tickets:queue");
 
         await LoadAlertCount();
 

@@ -281,6 +281,39 @@ public record DeviceTypeCountDto
     public decimal TotalValue { get; init; }
 }
 
+/// <summary>
+/// The dashboard for a user who does not hold iams:assets:view. Deliberately a separate shape
+/// rather than a trimmed <see cref="DashboardDto"/>: the Web project is Blazor WebAssembly, so
+/// anything the API sends is readable in the browser regardless of what the markup renders.
+/// Estate counts and TotalAssetValue therefore must not be in the payload at all.
+/// </summary>
+public record MyDashboardDto
+{
+    /// Assets currently on this user's name.
+    public List<MyAssetDto> MyAssets { get; init; } = new();
+
+    public int OpenTicketCount { get; init; }
+    public int ResolvedTicketCount { get; init; }
+
+    /// The user's own most recent tickets, newest first.
+    public List<TicketListItemDto> RecentTickets { get; init; } = new();
+}
+
+/// <summary>
+/// One asset assigned to the current user. Carries no purchase price - a self-service user has no
+/// business reading what their laptop cost.
+/// </summary>
+public record MyAssetDto
+{
+    public int Id { get; init; }
+    public required string AssetTag { get; init; }
+    public required string DisplayName { get; init; }
+    public required string DeviceType { get; init; }
+    public required string Status { get; init; }
+    public DateTime? WarrantyEndDate { get; init; }
+    public DateTime? AssignedAt { get; init; }
+}
+
 // Report DTOs
 
 /// <summary>
