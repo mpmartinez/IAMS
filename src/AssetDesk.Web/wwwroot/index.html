@@ -65,6 +65,18 @@
                         border: 'hsl(var(--border))',
                         input: 'hsl(var(--input))',
                         ring: 'hsl(var(--ring))',
+                        // Sidebar surface tokens - the nav is its own surface in shadcn, a
+                        // shade off the page background with its own border and accent.
+                        sidebar: {
+                            DEFAULT: 'hsl(var(--sidebar))',
+                            foreground: 'hsl(var(--sidebar-foreground))',
+                            primary: 'hsl(var(--sidebar-primary))',
+                            'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+                            accent: 'hsl(var(--sidebar-accent))',
+                            'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+                            border: 'hsl(var(--sidebar-border))',
+                            ring: 'hsl(var(--sidebar-ring))',
+                        },
                     },
                     // Tailwind's preflight paints every element's border-color with
                     // borderColor.DEFAULT (gray-200) and divideColor.DEFAULT likewise. Extending
@@ -113,7 +125,7 @@
          so without a changing URL an edit here can sit invisible behind both the browser HTTP
          cache and the SW cache. Bump this whenever app.css changes, and bump cacheName in
          service-worker.published.js alongside it. -->
-    <link rel="stylesheet" href="css/app.css?v=3" />
+    <link rel="stylesheet" href="css/app.css?v=4" />
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 antialiased">
     <div id="app" class="h-full">

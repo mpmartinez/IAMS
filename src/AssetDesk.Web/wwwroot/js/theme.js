@@ -28,6 +28,17 @@ window.themeManager = {
 // Initialize theme on page load (before Blazor renders to prevent flash)
 window.themeManager.initTheme();
 
+// Sidebar minimize preference (desktop icon rail)
+window.sidebarManager = {
+    getCollapsed: function () {
+        return localStorage.getItem('sidebarCollapsed') === 'true';
+    },
+
+    setCollapsed: function (collapsed) {
+        localStorage.setItem('sidebarCollapsed', collapsed ? 'true' : 'false');
+    }
+};
+
 // Auth guard - checks if user is logged out and redirects
 window.authGuard = {
     isAuthenticated: function() {

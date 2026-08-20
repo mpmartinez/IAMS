@@ -1,6 +1,6 @@
 // Bump this whenever a precached asset below changes. The activate handler deletes every cache
 // whose key differs, so a new name is what actually evicts the old copies.
-const cacheName = 'iams-cache-v3';
+const cacheName = 'iams-cache-v4';
 const offlineUrl = 'offline.html';
 
 self.addEventListener('install', event => {

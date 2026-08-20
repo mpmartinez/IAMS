@@ -11,7 +11,7 @@
 @using AssetDesk.Web.Components
 @implements IAsyncDisposable
 
-<div class="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-900">
+<div class="flex h-screen overflow-hidden bg-background text-foreground">
     <AuthorizeView>
         <Authorized Context="sidebarAuth">
             <!-- Mobile menu overlay -->
@@ -23,98 +23,106 @@
             <!-- Sidebar -->
             <aside class="@SidebarClasses">
         <div class="flex flex-col h-full">
-            <!-- Logo -->
-            <div class="flex items-center gap-3 px-6 h-16 border-b border-slate-200 dark:border-slate-700">
-                <span class="font-bold text-2xl"><span class="text-primary-600 dark:text-primary-400">IA</span><span class="text-slate-900 dark:text-white">MS</span></span>
-                <button class="lg:hidden ml-auto p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" @onclick="CloseMobileMenu">
-                    <svg class="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            @* shadcn SidebarHeader: a brand "menu button" - square mark plus stacked name and
+               caption. On the rail only the square survives. *@
+            <div class="@LogoBarClasses">
+                <a href="/" @onclick="CloseMobileMenu" class="@BrandClasses">
+                    <div class="flex aspect-square h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                    </div>
+                    <div class="@BrandTextClasses">
+                        <span class="truncate font-semibold text-sidebar-accent-foreground">IAMS</span>
+                        <span class="truncate text-xs text-sidebar-foreground/70">Asset &amp; Service</span>
+                    </div>
+                </a>
+                <button class="lg:hidden ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" @onclick="CloseMobileMenu">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
             </div>
 
             <!-- Navigation -->
-            <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-                <NavItem Href="/" Icon="home" Label="Dashboard" OnNavigation="CloseMobileMenu" />
+            <nav class="flex-1 overflow-y-auto p-2 space-y-1">
+                <NavItem Href="/" Icon="home" Label="Dashboard" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
 
                 <!-- Employee: self-service portal only, no asset/queue management -->
                 <AuthorizeView Roles="Employee">
-                    <NavItem Href="/report" Icon="alert-triangle" Label="Report a problem" OnNavigation="CloseMobileMenu" />
-                    <NavItem Href="/my-tickets" Icon="clipboard-list" Label="My reports" OnNavigation="CloseMobileMenu" />
+                    <NavItem Href="/report" Icon="alert-triangle" Label="Report a problem" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
+                    <NavItem Href="/my-tickets" Icon="clipboard-list" Label="My reports" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                 </AuthorizeView>
 
                 <PermissionView Permission="iams:assets:view">
-                    <NavItem Href="/assets" Icon="cube" Label="Assets" OnNavigation="CloseMobileMenu" />
+                    <NavItem Href="/assets" Icon="cube" Label="Assets" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                 </PermissionView>
                 <PermissionView Permission="iams:tickets:queue">
-                    <NavItem Href="/tickets" Icon="wrench" Label="Tickets" OnNavigation="CloseMobileMenu" />
+                    <NavItem Href="/tickets" Icon="wrench" Label="Tickets" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                 </PermissionView>
-                <NavItem Href="/scan" Icon="qr-scan" Label="Scan QR" OnNavigation="CloseMobileMenu" />
+                <NavItem Href="/scan" Icon="qr-scan" Label="Scan QR" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                 @* Ungated on purpose: WarrantyAlertsController's reads carry only a bare [Authorize],
                    so every authenticated user may see this page. Gating the link on
                    iams:warranty:manage would hide it from Auditor and Management, who can reach it
                    today - the acknowledge and delete controls on the page itself are what carry
                    that permission. Add an iams:warranty:view key if reads should ever be gated. *@
-                <NavItem Href="/warranty-alerts" Icon="shield-exclamation" Label="Warranty Alerts" BadgeCount="@_alertCount" OnNavigation="CloseMobileMenu" />
-                <NavItem Href="/notifications" Icon="bell" Label="Notifications" BadgeCount="@Notifications.UnreadCount" OnNavigation="CloseMobileMenu" />
+                <NavItem Href="/warranty-alerts" Icon="shield-exclamation" Label="Warranty Alerts" BadgeCount="@_alertCount" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
+                <NavItem Href="/notifications" Icon="bell" Label="Notifications" BadgeCount="@Notifications.UnreadCount" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                 @* Ungated for the same reason: /categories is a bare [Authorize] page reading
                    endpoints that require no permission. *@
-                <NavItem Href="/categories" Icon="tag" Label="Categories" OnNavigation="CloseMobileMenu" />
+                <NavItem Href="/categories" Icon="tag" Label="Categories" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
 
                 @if (_showAdminGroup)
                 {
-                    <div class="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
-                        <p class="px-3 mb-2 text-xs font-medium text-slate-400 uppercase tracking-wider">Admin</p>
+                    <div class="mt-2 space-y-1">
+                        <div class="mx-2 my-2 h-px bg-sidebar-border"></div>
+                        <p class="@SectionLabelClasses">Admin</p>
                         <PermissionView Permission="iams:users:view">
-                            <NavItem Href="/users" Icon="users" Label="Users" OnNavigation="CloseMobileMenu" />
+                            <NavItem Href="/users" Icon="users" Label="Users" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                         </PermissionView>
                         <PermissionView Permission="iams:roles:view">
-                            <NavItem Href="/admin/roles" Icon="users" Label="Roles" OnNavigation="CloseMobileMenu" />
+                            <NavItem Href="/admin/roles" Icon="users" Label="Roles" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                         </PermissionView>
                     </div>
                 }
 
                 <AuthorizeView Roles="SuperAdmin">
-                    <div class="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
-                        <p class="px-3 mb-2 text-xs font-medium text-slate-400 uppercase tracking-wider">Platform</p>
-                        <NavItem Href="/admin/tenants" Icon="building" Label="Tenants" OnNavigation="CloseMobileMenu" />
-                        <NavItem Href="/admin/lookups" Icon="tag" Label="Reference Data" OnNavigation="CloseMobileMenu" />
-                        <NavItem Href="/admin/email-settings" Icon="mail" Label="Email Settings" OnNavigation="CloseMobileMenu" />
+                    <div class="mt-2 space-y-1">
+                        <div class="mx-2 my-2 h-px bg-sidebar-border"></div>
+                        <p class="@SectionLabelClasses">Platform</p>
+                        <NavItem Href="/admin/tenants" Icon="building" Label="Tenants" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
+                        <NavItem Href="/admin/lookups" Icon="tag" Label="Reference Data" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
+                        <NavItem Href="/admin/email-settings" Icon="mail" Label="Email Settings" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                     </div>
                 </AuthorizeView>
 
                 <PermissionView Permission="iams:reports:view">
-                    <div class="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
-                        <p class="px-3 mb-2 text-xs font-medium text-slate-400 uppercase tracking-wider">Reports</p>
-                        <NavItem Href="/reports" Icon="chart" Label="Asset Reports" OnNavigation="CloseMobileMenu" />
+                    <div class="mt-2 space-y-1">
+                        <div class="mx-2 my-2 h-px bg-sidebar-border"></div>
+                        <p class="@SectionLabelClasses">Reports</p>
+                        <NavItem Href="/reports" Icon="chart" Label="Asset Reports" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                     </div>
                 </PermissionView>
             </nav>
 
-            <!-- User menu -->
-            <div class="p-3 border-t border-slate-200 dark:border-slate-700">
+            @* Logout lives in the top bar's user menu now - this is the profile shortcut only. *@
+            <div class="border-t border-sidebar-border p-2">
                 <AuthorizeView>
                     <Authorized Context="userContext">
-                        <div class="flex items-center gap-1">
-                            <NavLink href="/profile" @onclick="CloseMobileMenu"
-                                     class="flex items-center gap-3 flex-1 min-w-0 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
-                                     ActiveClass="ring-1 ring-primary-500">
-                                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-sm font-medium shrink-0">
-                                    @userContext.User.Identity?.Name?.FirstOrDefault()
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@userContext.User.Identity?.Name</p>
-                                    <p class="text-xs text-slate-500 truncate">
-                                        <RoleBadge Role="@(userContext.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Staff")" />
-                                    </p>
-                                </div>
-                            </NavLink>
-                            <button @onclick="Logout" title="Logout" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-all duration-200 shrink-0">
-                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                                </svg>
-                            </button>
-                        </div>
+                        <NavLink href="/profile" @onclick="CloseMobileMenu"
+                                 class="@ProfileCardClasses"
+                                 title="@(_sidebarCollapsed ? userContext.User.Identity?.Name : null)"
+                                 ActiveClass="bg-sidebar-accent text-sidebar-accent-foreground">
+                            <div class="flex aspect-square h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-sm font-medium text-sidebar-accent-foreground">
+                                @userContext.User.Identity?.Name?.FirstOrDefault()
+                            </div>
+                            <div class="@ProfileDetailsClasses">
+                                <p class="truncate text-sm font-medium text-sidebar-accent-foreground">@userContext.User.Identity?.Name</p>
+                                <p class="truncate text-xs text-sidebar-foreground/70">
+                                    <RoleBadge Role="@(userContext.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Staff")" />
+                                </p>
+                            </div>
+                        </NavLink>
                     </Authorized>
                 </AuthorizeView>
             </div>
@@ -128,10 +136,24 @@
         <AuthorizeView>
             <Authorized Context="headerAuth">
                 <!-- Top bar -->
-                <header class="flex items-center gap-4 px-4 lg:px-6 h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm">
-            <button class="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" @onclick="OpenMobileMenu">
-                <svg class="w-6 h-6 text-slate-600 dark:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                <header class="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4 lg:px-6">
+            @* shadcn SidebarTrigger: one ghost square that opens the drawer on mobile and
+               minimizes the rail on desktop, followed by a vertical separator. *@
+            <button class="@TriggerClasses lg:hidden" @onclick="OpenMobileMenu" aria-label="Open menu">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4v16" />
+                </svg>
+            </button>
+
+            <button class="@TriggerClasses hidden lg:inline-flex"
+                    @onclick="ToggleSidebar"
+                    title="@(_sidebarCollapsed ? "Expand menu" : "Minimize menu")"
+                    aria-label="@(_sidebarCollapsed ? "Expand menu" : "Minimize menu")"
+                    aria-expanded="@((!_sidebarCollapsed).ToString().ToLowerInvariant())">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4v16" />
                 </svg>
             </button>
 
@@ -143,60 +165,21 @@
                     }
                     @if (!string.IsNullOrEmpty(tenantName))
                     {
-                        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/50">
-                            <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
-                            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">@tenantName</span>
-                        </div>
+                        <div class="mx-1 hidden h-4 w-px shrink-0 bg-border sm:block"></div>
+                        <span class="hidden truncate text-sm font-medium sm:block">@tenantName</span>
                     }
                 </Authorized>
             </AuthorizeView>
 
             <div class="flex-1"></div>
 
-            <!-- Sync Status Indicator -->
-            @if (_syncStatus is not null)
-            {
-                <button @onclick="TriggerSync" disabled="@_syncStatus.IsSyncing" class="@GetSyncButtonClasses()" title="@GetSyncTooltip()">
-                    @if (_syncStatus.IsSyncing)
-                    {
-                        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                    }
-                    else if (!_syncStatus.IsOnline)
-                    {
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
-                        </svg>
-                    }
-                    else if (_syncStatus.PendingActionCount > 0)
-                    {
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                    }
-                    else
-                    {
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                        </svg>
-                    }
-                    @if (_syncStatus.PendingActionCount > 0)
-                    {
-                        <span class="text-xs font-medium">@_syncStatus.PendingActionCount</span>
-                    }
-                </button>
-            }
-
             <!-- Theme toggle -->
             <ThemeToggle />
 
             <!-- Quick actions -->
             <div class="relative">
-                <button @onclick="ToggleSearch" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <button @onclick="ToggleSearch" class="@IconButtonClasses" aria-label="Search assets">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </button>
@@ -205,10 +188,10 @@
                 @if (_showSearch)
                 {
                     <div class="fixed inset-0 z-40" @onclick="CloseSearch"></div>
-                    <div class="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 animate-slide-down overflow-hidden">
-                        <div class="p-3 border-b border-slate-200 dark:border-slate-700">
+                    <div class="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md animate-slide-down sm:w-96">
+                        <div class="p-3 border-b border-border">
                             <div class="relative">
-                                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                                 <input @ref="_searchInput"
@@ -217,10 +200,10 @@
                                        @onkeyup="HandleSearchKeyUp"
                                        type="text"
                                        placeholder="Search assets..."
-                                       class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-700 border-0 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-primary-500 transition-all" />
+                                       class="h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
                                 @if (_searchLoading)
                                 {
-                                    <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <svg class="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" fill="none" viewBox="0 0 24 24">
                                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
@@ -233,13 +216,13 @@
                             {
                                 @foreach (var asset in _searchResults)
                                 {
-                                    <a href="/assets/@asset.Id" @onclick="CloseSearch" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                    <a href="/assets/@asset.Id" @onclick="CloseSearch" class="flex items-center gap-3 px-4 py-3 hover:bg-accent transition-colors">
                                         <div class="w-10 h-10 rounded-xl @GetDeviceTypeBg(asset.DeviceType) flex items-center justify-center shrink-0">
                                             @GetDeviceTypeIcon(asset.DeviceType)
                                         </div>
                                         <div class="flex-1 min-w-0">
-                                            <p class="font-medium text-slate-900 dark:text-white truncate">@asset.DisplayName</p>
-                                            <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
+                                            <p class="font-medium text-foreground truncate">@asset.DisplayName</p>
+                                            <p class="text-sm text-muted-foreground truncate">
                                                 @asset.AssetTag
                                                 @if (!string.IsNullOrEmpty(asset.SerialNumber))
                                                 {
@@ -255,17 +238,17 @@
                             else if (!string.IsNullOrWhiteSpace(_searchQuery) && !_searchLoading)
                             {
                                 <div class="py-8 text-center">
-                                    <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg class="w-12 h-12 mx-auto text-muted-foreground/40 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
-                                    <p class="text-sm text-slate-500 dark:text-slate-400">No assets found</p>
+                                    <p class="text-sm text-muted-foreground">No assets found</p>
                                 </div>
                             }
                             else if (!_searchLoading)
                             {
                                 <div class="py-6 text-center">
-                                    <p class="text-sm text-slate-500 dark:text-slate-400">Type to search for assets</p>
-                                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">Search by name, tag, or serial number</p>
+                                    <p class="text-sm text-muted-foreground">Type to search for assets</p>
+                                    <p class="text-xs text-muted-foreground mt-1">Search by name, tag, or serial number</p>
                                 </div>
                             }
                         </div>
@@ -273,8 +256,8 @@
                         <!-- View All Link -->
                         @if (_searchResults.Any())
                         {
-                            <div class="border-t border-slate-200 dark:border-slate-700">
-                                <a href="/assets?search=@Uri.EscapeDataString(_searchQuery)" @onclick="CloseSearch" class="block px-4 py-3 text-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                            <div class="border-t border-border">
+                                <a href="/assets?search=@Uri.EscapeDataString(_searchQuery)" @onclick="CloseSearch" class="block px-4 py-2.5 text-center text-sm font-medium text-primary transition-colors hover:bg-accent">
                                     View all results
                                 </a>
                             </div>
@@ -285,13 +268,13 @@
 
             <!-- Notifications -->
             <div class="relative">
-                <button @onclick="ToggleNotifications" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200 relative">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <button @onclick="ToggleNotifications" class="@IconButtonClasses relative" aria-label="Notifications">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                     </svg>
                     @if (Notifications.UnreadCount > 0)
                     {
-                        <span class="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                        <span class="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium tabular-nums text-destructive-foreground">
                             @(Notifications.UnreadCount > 9 ? "9+" : Notifications.UnreadCount.ToString())
                         </span>
                     }
@@ -301,20 +284,20 @@
                 @if (_showNotifications)
                 {
                     <div class="fixed inset-0 z-40" @onclick="CloseNotifications"></div>
-                    <div class="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 animate-slide-down overflow-hidden">
+                    <div class="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md animate-slide-down sm:w-96">
                         <!-- Header -->
-                        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-                            <h3 class="font-semibold text-slate-900 dark:text-white">Notifications</h3>
+                        <div class="flex items-center justify-between px-4 py-3 border-b border-border">
+                            <h3 class="font-semibold text-foreground">Notifications</h3>
                             <div class="flex items-center gap-2">
                                 @if (Notifications.UnreadCount > 0)
                                 {
-                                    <button @onclick="MarkAllAsRead" class="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium">
+                                    <button @onclick="MarkAllAsRead" class="text-xs font-medium text-primary hover:underline">
                                         Mark all read
                                     </button>
                                 }
                                 @if (!Notifications.IsConnected)
                                 {
-                                    <span class="w-2 h-2 bg-amber-500 rounded-full" title="Reconnecting..."></span>
+                                    <span class="h-2 w-2 rounded-full bg-amber-500" title="Reconnecting..."></span>
                                 }
                             </div>
                         </div>
@@ -324,10 +307,10 @@
                             @if (Notifications.Notifications.Count == 0)
                             {
                                 <div class="py-12 text-center">
-                                    <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg class="w-12 h-12 mx-auto text-muted-foreground/40 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                                     </svg>
-                                    <p class="text-sm text-slate-500 dark:text-slate-400">No notifications yet</p>
+                                    <p class="text-sm text-muted-foreground">No notifications yet</p>
                                 </div>
                             }
                             else
@@ -365,13 +348,13 @@
                                                 }
                                             </div>
                                             <div class="flex-1 min-w-0">
-                                                <p class="text-sm font-medium text-slate-900 dark:text-white">@notification.Title</p>
-                                                <p class="text-sm text-slate-600 dark:text-slate-400 line-clamp-2">@notification.Message</p>
-                                                <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">@notification.TimeAgo</p>
+                                                <p class="text-sm font-medium text-foreground">@notification.Title</p>
+                                                <p class="text-sm text-muted-foreground line-clamp-2">@notification.Message</p>
+                                                <p class="text-xs text-muted-foreground mt-1">@notification.TimeAgo</p>
                                             </div>
                                             @if (!notification.IsRead)
                                             {
-                                                <div class="w-2 h-2 bg-primary-500 rounded-full flex-shrink-0 mt-2"></div>
+                                                <div class="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary"></div>
                                             }
                                         </div>
                                     </div>
@@ -380,10 +363,52 @@
                         </div>
 
                         <!-- View All Link -->
-                        <div class="border-t border-slate-200 dark:border-slate-700">
-                            <a href="/notifications" @onclick="CloseNotifications" class="block px-4 py-3 text-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                        <div class="border-t border-border">
+                            <a href="/notifications" @onclick="CloseNotifications" class="block px-4 py-2.5 text-center text-sm font-medium text-primary transition-colors hover:bg-accent">
                                 View all notifications
                             </a>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- User menu -->
+            <div class="relative">
+                <button @onclick="ToggleUserMenu" class="flex items-center gap-2 rounded-md p-1 transition-colors hover:bg-accent"
+                        title="Account" aria-label="Account menu">
+                    <div class="flex aspect-square h-8 w-8 items-center justify-center rounded-lg bg-muted text-sm font-medium text-foreground">
+                        @headerAuth.User.Identity?.Name?.FirstOrDefault()
+                    </div>
+                    <svg class="hidden h-4 w-4 text-muted-foreground sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+
+                @if (_showUserMenu)
+                {
+                    <div class="fixed inset-0 z-40" @onclick="CloseUserMenu"></div>
+                    <div class="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md animate-slide-down">
+                        <div class="px-4 py-3 border-b border-border">
+                            <p class="text-sm font-medium text-foreground truncate">@headerAuth.User.Identity?.Name</p>
+                            <p class="text-xs mt-1">
+                                <RoleBadge Role="@(headerAuth.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Staff")" />
+                            </p>
+                        </div>
+
+                        <a href="/profile" @onclick="CloseUserMenu" class="mx-1 my-1 flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+                            <svg class="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            My profile
+                        </a>
+
+                        <div class="border-t border-border">
+                            <button @onclick="LogoutFromMenu" class="mx-1 my-1 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/10">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                                Logout
+                            </button>
                         </div>
                     </div>
                 }
@@ -403,7 +428,7 @@
     <!-- Mobile Bottom Navigation -->
     <AuthorizeView>
         <Authorized Context="mobileNavAuth">
-            <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 pb-safe">
+            <nav class="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background pb-safe lg:hidden">
                 <div class="flex items-center justify-around h-16">
                     <!-- Dashboard -->
                     <a href="/" class="@GetFooterNavClass("/", true)">
@@ -434,12 +459,12 @@
 
                     <!-- Scan (Primary/Center) -->
                     <a href="/scan" class="flex flex-col items-center justify-center -mt-5">
-                        <div class="w-14 h-14 bg-primary-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-primary-500/30">
+                        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30">
                             <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h2M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                             </svg>
                         </div>
-                        <span class="text-xs mt-1 text-primary-600 dark:text-primary-400 font-medium">Scan</span>
+                        <span class="mt-1 text-xs font-medium text-primary">Scan</span>
                     </a>
 
                     @* Ungated, matching the desktop nav above - the warranty reads require no permission. *@
@@ -450,7 +475,7 @@
                             </svg>
                             @if (_alertCount > 0)
                             {
-                                <span class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                <span class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium tabular-nums text-destructive-foreground">
                                     @(_alertCount > 9 ? "9+" : _alertCount.ToString())
                                 </span>
                             }
@@ -467,7 +492,7 @@
                     </AuthorizeView>
 
                     <!-- More (opens sidebar) -->
-                    <button @onclick="OpenMobileMenu" class="flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    <button @onclick="OpenMobileMenu" class="flex flex-col items-center justify-center text-muted-foreground transition-colors hover:text-foreground">
                         <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
@@ -484,25 +509,91 @@
 
 @code {
     private bool _mobileMenuOpen;
+    private bool _sidebarCollapsed;
     private bool _showAdminGroup;
     private int _alertCount;
-    private SyncStatus? _syncStatus;
     private bool _showNotifications;
     private bool _showSearch;
+    private bool _showUserMenu;
     private string _searchQuery = "";
     private bool _searchLoading;
     private List<AssetDesk.Shared.DTOs.AssetDto> _searchResults = new();
     private ElementReference _searchInput;
     private CancellationTokenSource? _searchCts;
 
-    private string SidebarClasses => _mobileMenuOpen
-        ? "fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 shadow-xl sidebar-transition lg:relative lg:shadow-none"
-        : "fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 shadow-xl sidebar-transition -translate-x-full lg:translate-x-0 lg:relative lg:shadow-none";
+    // shadcn's ghost icon button, used for the sidebar trigger and the header actions.
+    private const string TriggerClasses =
+        "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground "
+        + "transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none "
+        + "focus-visible:ring-1 focus-visible:ring-ring";
+
+    private const string IconButtonClasses =
+        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground "
+        + "transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none "
+        + "focus-visible:ring-1 focus-visible:ring-ring";
+
+    // Minimize is a desktop-only affordance: below lg the sidebar is an off-canvas drawer that is
+    // always full width, so every collapsed style is gated behind lg:. Widths come from the
+    // --sidebar-width / --sidebar-width-icon tokens so the nav and Components/UI/Sidebar/* agree.
+    private string SidebarClasses
+    {
+        get
+        {
+            var width = _sidebarCollapsed
+                ? "w-[--sidebar-width] lg:w-[--sidebar-width-icon]"
+                : "w-[--sidebar-width]";
+            var slide = _mobileMenuOpen ? "" : "-translate-x-full lg:translate-x-0 ";
+            return $"fixed inset-y-0 left-0 z-50 {width} bg-sidebar text-sidebar-foreground "
+                + $"border-r border-sidebar-border shadow-xl sidebar-transition {slide}lg:relative lg:shadow-none";
+        }
+    }
+
+    private string LogoBarClasses => _sidebarCollapsed
+        ? "flex h-16 items-center gap-2 border-b border-sidebar-border px-2 lg:justify-center"
+        : "flex h-16 items-center gap-2 border-b border-sidebar-border px-2";
+
+    private const string BrandBase =
+        "flex min-w-0 items-center gap-2 rounded-md p-1 transition-colors hover:bg-sidebar-accent";
+
+    private string BrandClasses => _sidebarCollapsed ? $"{BrandBase} lg:p-0" : BrandBase;
+
+    private string BrandTextClasses => _sidebarCollapsed
+        ? "grid min-w-0 flex-1 text-left text-sm leading-tight lg:hidden"
+        : "grid min-w-0 flex-1 text-left text-sm leading-tight";
+
+    // shadcn's SidebarGroupLabel: same 2rem row height as a menu button, muted and un-shouty.
+    private const string SectionLabelBase =
+        "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70";
+
+    private string SectionLabelClasses => _sidebarCollapsed
+        ? $"{SectionLabelBase} lg:hidden"
+        : SectionLabelBase;
+
+    private const string ProfileCardBase =
+        "flex min-w-0 items-center gap-2 rounded-md p-1 transition-colors hover:bg-sidebar-accent "
+        + "hover:text-sidebar-accent-foreground";
+
+    private string ProfileCardClasses => _sidebarCollapsed
+        ? $"{ProfileCardBase} lg:justify-center"
+        : ProfileCardBase;
+
+    private string ProfileDetailsClasses => _sidebarCollapsed
+        ? "grid min-w-0 flex-1 leading-tight lg:hidden"
+        : "grid min-w-0 flex-1 leading-tight";
 
     protected override async Task OnInitializedAsync()
     {
         // Initialize theme service
         await Theme.InitializeAsync();
+
+        try
+        {
+            _sidebarCollapsed = await JS.InvokeAsync<bool>("sidebarManager.getCollapsed");
+        }
+        catch
+        {
+            // Fallback to expanded if JS/localStorage is unavailable
+        }
 
         // Subscribe to authentication failure events
         Api.OnAuthenticationFailed += OnAuthenticationFailedAsync;
@@ -515,12 +606,11 @@
 
         await LoadAlertCount();
 
-        // Initialize sync services
+        // Initialize sync services. The status indicator was removed from the top bar, but the
+        // offline queue still has to come up so queued actions replay when the app is back online.
         try
         {
             await Sync.InitializeAsync();
-            Sync.OnSyncStatusChanged += OnSyncStatusChangedAsync;
-            _syncStatus = Sync.Status;
         }
         catch
         {
@@ -545,12 +635,6 @@
         await InvokeAsync(() => Navigation.NavigateTo("/login", forceLoad: true));
     }
 
-    private async Task OnSyncStatusChangedAsync(SyncStatus status)
-    {
-        _syncStatus = status;
-        await InvokeAsync(StateHasChanged);
-    }
-
     private async Task OnNotificationsChangedAsync()
     {
         await InvokeAsync(StateHasChanged);
@@ -572,6 +656,19 @@
     private void OpenMobileMenu() => _mobileMenuOpen = true;
     private void CloseMobileMenu() => _mobileMenuOpen = false;
 
+    private async Task ToggleSidebar()
+    {
+        _sidebarCollapsed = !_sidebarCollapsed;
+        try
+        {
+            await JS.InvokeVoidAsync("sidebarManager.setCollapsed", _sidebarCollapsed);
+        }
+        catch
+        {
+            // Preference just won't persist if localStorage is unavailable
+        }
+    }
+
     private string GetFooterNavClass(string href, bool exact = false)
     {
         var isActive = exact
@@ -579,22 +676,39 @@
             : Navigation.Uri.Contains(href);
 
         return isActive
-            ? "flex flex-col items-center justify-center text-primary-600 dark:text-primary-400"
-            : "flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300";
+            ? "flex flex-col items-center justify-center text-primary"
+            : "flex flex-col items-center justify-center text-muted-foreground transition-colors hover:text-foreground";
     }
 
     private void ToggleNotifications()
     {
         _showNotifications = !_showNotifications;
         _showSearch = false;
+        _showUserMenu = false;
     }
 
     private void CloseNotifications() => _showNotifications = false;
+
+    private void ToggleUserMenu()
+    {
+        _showUserMenu = !_showUserMenu;
+        _showNotifications = false;
+        _showSearch = false;
+    }
+
+    private void CloseUserMenu() => _showUserMenu = false;
+
+    private void LogoutFromMenu()
+    {
+        _showUserMenu = false;
+        Logout();
+    }
 
     private async Task ToggleSearch()
     {
         _showSearch = !_showSearch;
         _showNotifications = false;
+        _showUserMenu = false;
         if (_showSearch)
         {
             _searchQuery = "";
@@ -690,7 +804,7 @@
             "Tablet" => builder => { builder.AddMarkupContent(0, "<svg class=\"w-5 h-5 text-green-600 dark:text-green-400\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z\" /></svg>"); },
             "Printer" => builder => { builder.AddMarkupContent(0, "<svg class=\"w-5 h-5 text-orange-600 dark:text-orange-400\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z\" /></svg>"); },
             "Network" or "Server" => builder => { builder.AddMarkupContent(0, "<svg class=\"w-5 h-5 text-red-600 dark:text-red-400\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01\" /></svg>"); },
-            _ => builder => { builder.AddMarkupContent(0, "<svg class=\"w-5 h-5 text-slate-600 dark:text-slate-400\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4\" /></svg>"); }
+            _ => builder => { builder.AddMarkupContent(0, "<svg class=\"w-5 h-5 text-muted-foreground\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4\" /></svg>"); }
         };
     }
 
@@ -718,9 +832,9 @@
         var baseClasses = "px-4 py-3 cursor-pointer transition-colors duration-200";
         if (notification.IsRead)
         {
-            return $"{baseClasses} hover:bg-slate-50 dark:hover:bg-slate-700/50";
+            return $"{baseClasses} hover:bg-accent";
         }
-        return $"{baseClasses} bg-primary-50/50 dark:bg-primary-900/10 hover:bg-primary-50 dark:hover:bg-primary-900/20";
+        return $"{baseClasses} bg-accent/60 hover:bg-accent";
     }
 
     private string GetNotificationIconClasses(string type)
@@ -748,49 +862,9 @@
         }
     }
 
-    private async Task TriggerSync()
-    {
-        if (_syncStatus?.IsOnline == true && !_syncStatus.IsSyncing)
-        {
-            await Sync.SyncAsync();
-        }
-    }
-
-    private string GetSyncButtonClasses()
-    {
-        var baseClasses = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200";
-
-        if (_syncStatus?.IsSyncing == true)
-        {
-            return $"{baseClasses} bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
-        }
-        if (_syncStatus?.IsOnline == false)
-        {
-            return $"{baseClasses} bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
-        }
-        if (_syncStatus?.PendingActionCount > 0)
-        {
-            return $"{baseClasses} bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/50 cursor-pointer";
-        }
-        return $"{baseClasses} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
-    }
-
-    private string GetSyncTooltip()
-    {
-        if (_syncStatus is null) return "";
-
-        if (_syncStatus.IsSyncing) return "Syncing...";
-        if (!_syncStatus.IsOnline) return "Offline - changes will sync when back online";
-        if (_syncStatus.PendingActionCount > 0) return $"{_syncStatus.PendingActionCount} pending changes - click to sync";
-
-        var lastSync = _syncStatus.LastSyncTime?.ToString("g") ?? "Never";
-        return $"All synced. Last sync: {lastSync}";
-    }
-
     public async ValueTask DisposeAsync()
     {
         Api.OnAuthenticationFailed -= OnAuthenticationFailedAsync;
-        Sync.OnSyncStatusChanged -= OnSyncStatusChangedAsync;
         Notifications.OnNotificationsChanged -= OnNotificationsChangedAsync;
         _searchCts?.Cancel();
         _searchCts?.Dispose();
