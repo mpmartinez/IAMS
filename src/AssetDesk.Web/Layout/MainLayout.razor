@@ -8,6 +8,7 @@
 @inject ThemeService Theme
 @inject IJSRuntime JS
 @inject PermissionChecker PermissionChecker
+@inject AuthenticationStateProvider AuthStateProvider
 @using AssetDesk.Web.Components
 @implements IAsyncDisposable
 
@@ -602,6 +603,18 @@
             // Fallback to expanded if JS/localStorage is unavailable
         }
 
+        // AuthorizeRouteView renders BOTH its Authorizing and NotAuthorized fragments inside
+        // DefaultLayout - which is this layout - so MainLayout mounts even on anonymous pages
+        // such as /login, for as long as the auth state is resolving. Everything below this
+        // point talks to the API as the signed-in user. Run anonymously it produced a certain
+        // 401, OnAuthenticationFailedAsync turned that 401 into a forceLoad back to /login, the
+        // reload remounted this layout, and it 401'd again - the login page reloading itself
+        // forever. Nothing below has anything to populate when no one is signed in: the sidebar
+        // it feeds is already behind <AuthorizeView> in the markup above.
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated != true)
+            return;
+
         // Subscribe to authentication failure events
         Api.OnAuthenticationFailed += OnAuthenticationFailedAsync;
 
@@ -644,6 +657,13 @@
 
     private async Task OnAuthenticationFailedAsync()
     {
+        // A forceLoad to /login from /login is not a redirect, it is a restart of the whole app -
+        // which is how a single stray 401 becomes an endless reload loop. There is nowhere to
+        // send someone who is already at the login page, so leave them on it.
+        if (Navigation.ToBaseRelativePath(Navigation.Uri)
+                .StartsWith("login", StringComparison.OrdinalIgnoreCase))
+            return;
+
         // Redirect to login when authentication fails
         await InvokeAsync(() => Navigation.NavigateTo("/login", forceLoad: true));
     }
