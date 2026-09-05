@@ -53,7 +53,8 @@ public interface ITicketService
 
     Task<ServiceResult> ChangeStatusAsync(int id, string status, CancellationToken ct = default);
 
-    Task<ServiceResult> ResolveAsync(int id, string resolution, CancellationToken ct = default);
+    Task<ServiceResult> ResolveAsync(
+        int id, string resolution, string resolvedByUserId, CancellationToken ct = default);
 
     Task<ServiceResult<TicketComment>> AddCommentAsync(
         int ticketId, string userId, string body, bool isInternal, CancellationToken ct = default);
@@ -82,21 +83,26 @@ public partial class TicketService : ITicketService
     private readonly ITenantProvider _tenants;
     private readonly ILogger<TicketService> _logger;
     private readonly ILookupService _lookups;
+    private readonly INotificationService? _notifications;
 
-    // The logger and lookup service are optional so the many tests that construct this
-    // service directly stay readable; every composition-root path resolves real ones from DI.
+    // The logger, lookup service and notification service are optional so the many tests that
+    // construct this service directly stay readable; every composition-root path resolves real
+    // ones from DI. A null notification service means the ticket work still happens and simply
+    // raises nothing - see TicketService.Notifications.cs.
     public TicketService(
         AppDbContext db,
         ITicketNumberAllocator numbers,
         ITenantProvider tenants,
         ILogger<TicketService>? logger = null,
-        ILookupService? lookups = null)
+        ILookupService? lookups = null,
+        INotificationService? notifications = null)
     {
         _db = db;
         _numbers = numbers;
         _tenants = tenants;
         _logger = logger ?? NullLogger<TicketService>.Instance;
         _lookups = lookups ?? new LookupService(db);
+        _notifications = notifications;
     }
 
     // Raises `priority` to `floor` when it ranks lower, but never lowers a priority that

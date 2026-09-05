@@ -81,7 +81,7 @@ public partial class TicketService
     }
 
     public async Task<ServiceResult> ResolveAsync(
-        int id, string resolution, CancellationToken ct = default)
+        int id, string resolution, string resolvedByUserId, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(resolution))
             return ServiceResult.Fail("A resolution note is required.");
@@ -110,6 +110,16 @@ public partial class TicketService
         }
 
         await _db.SaveChangesAsync(ct);
+
+        // After the save, not before: the filer should never be told about a resolution that
+        // then failed to commit.
+        await NotifyRequesterAsync(
+            ticket,
+            resolvedByUserId,
+            "Ticket resolved",
+            $"{Reference(ticket)} \"{ticket.Title}\" was resolved: {Excerpt(ticket.Resolution!)}",
+            NotificationTypes.Success);
+
         return ServiceResult.Ok();
     }
 
@@ -150,6 +160,18 @@ public partial class TicketService
 
         _db.TicketComments.Add(comment);
         await _db.SaveChangesAsync(ct);
+
+        // Internal comments are the queue talking among itself - TicketCommentsController
+        // hides them from the filer, so notifying them about one would leak that it exists.
+        if (!isInternal)
+        {
+            await NotifyRequesterAsync(
+                ticket,
+                userId,
+                "New reply on your ticket",
+                $"{Reference(ticket)} \"{ticket.Title}\": {Excerpt(trimmedBody)}",
+                NotificationTypes.Info);
+        }
 
         return ServiceResult<TicketComment>.Ok(comment);
     }

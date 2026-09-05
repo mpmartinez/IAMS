@@ -36,6 +36,10 @@ public class NotificationService : INotificationService
 
         var notification = new Notification
         {
+            // Guid.Empty leaves it to AppDbContext's ambient stamp, which reads the tenant
+            // from the JWT claim - correct for the request-scoped test endpoint, unavailable
+            // anywhere off the request thread. Callers that know their tenant say so.
+            TenantId = dto.TenantId ?? Guid.Empty,
             UserId = dto.UserId,
             Title = dto.Title,
             Message = dto.Message,

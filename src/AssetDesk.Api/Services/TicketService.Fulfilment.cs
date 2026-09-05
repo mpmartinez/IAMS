@@ -32,7 +32,13 @@ public partial class TicketService
 
         var strategy = _db.Database.CreateExecutionStrategy();
 
-        return await strategy.ExecuteAsync(async () =>
+        // Captured by the successful attempt and used after the strategy is done. The delegate
+        // below is retryable, so a notification raised inside it would be raised again on every
+        // replay - and the requester would be told twice about one machine.
+        Ticket? fulfilled = null;
+        string? issuedAssetTag = null;
+
+        var result = await strategy.ExecuteAsync(async () =>
         {
             // A retry re-runs this delegate on the same DbContext, which still tracks the
             // failed attempt's mutations (a Closed ticket, an InUse asset, an assignment
@@ -195,6 +201,8 @@ public partial class TicketService
                 await _db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
 
+                fulfilled = ticket;
+                issuedAssetTag = asset.AssetTag;
                 return ServiceResult.Ok();
             }
             // Only a durable failure becomes a failure result. A transient one (a database
@@ -227,6 +235,20 @@ public partial class TicketService
                 throw;
             }
         });
+
+        // Outside the strategy, so this runs once for a fulfilment however many times the
+        // transaction had to be replayed to land it.
+        if (result.Success && fulfilled is not null)
+        {
+            await NotifyRequesterAsync(
+                fulfilled,
+                actingUserId,
+                "Request fulfilled",
+                $"{Reference(fulfilled)} \"{fulfilled.Title}\" was fulfilled - {issuedAssetTag} has been issued to you.",
+                NotificationTypes.Success);
+        }
+
+        return result;
     }
 
     /// <summary>

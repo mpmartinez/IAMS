@@ -118,10 +118,10 @@ public class TicketServiceWorkflowTests
             await service.AssignAsync(ticket.Id, "staff-1", default);
             await service.ChangeStatusAsync(ticket.Id, TicketStatus.InProgress, default);
 
-            var blank = await service.ResolveAsync(ticket.Id, "   ", default);
+            var blank = await service.ResolveAsync(ticket.Id, "   ", "staff-1", default);
             Assert.False(blank.Success);
 
-            var ok = await service.ResolveAsync(ticket.Id, "Replaced the fuser.", default);
+            var ok = await service.ResolveAsync(ticket.Id, "Replaced the fuser.", "staff-1", default);
             Assert.True(ok.Success);
 
             var saved = await db.Tickets.SingleAsync(t => t.Id == ticket.Id);
@@ -142,7 +142,7 @@ public class TicketServiceWorkflowTests
             var (service, ticket) = await SetupAsync(db, tenantId);
             await service.AssignAsync(ticket.Id, "staff-1", default);
             await service.ChangeStatusAsync(ticket.Id, TicketStatus.InProgress, default);
-            await service.ResolveAsync(ticket.Id, "Replaced the fuser.", default);
+            await service.ResolveAsync(ticket.Id, "Replaced the fuser.", "staff-1", default);
 
             var result = await service.ChangeStatusAsync(ticket.Id, TicketStatus.Closed, default);
 
@@ -252,7 +252,7 @@ public class TicketServiceWorkflowTests
 
             await service.AssignAsync(ticket.Id, "staff-1", default);
             await service.ChangeStatusAsync(ticket.Id, TicketStatus.InProgress, default);
-            await service.ResolveAsync(ticket.Id, "Replaced the fuser.", default);
+            await service.ResolveAsync(ticket.Id, "Replaced the fuser.", "staff-1", default);
             await service.ChangeStatusAsync(ticket.Id, TicketStatus.Closed, default);
 
             var result = await service.AssignAsync(ticket.Id, "staff-2", default);
@@ -300,7 +300,7 @@ public class TicketServiceWorkflowTests
             await service.AssignAsync(ticket.Id, "staff-1", default);
             await service.ChangeStatusAsync(ticket.Id, TicketStatus.InProgress, default);
 
-            var result = await service.ResolveAsync(ticket.Id, "Replaced the fuser.", default);
+            var result = await service.ResolveAsync(ticket.Id, "Replaced the fuser.", "staff-1", default);
 
             Assert.True(result.Success);
             db.ChangeTracker.Clear();
@@ -322,7 +322,7 @@ public class TicketServiceWorkflowTests
             await service.AssignAsync(ticket.Id, "staff-1", default);
             await service.ChangeStatusAsync(ticket.Id, TicketStatus.InProgress, default);
 
-            var result = await service.ResolveAsync(ticket.Id, "Replaced the fuser.", default);
+            var result = await service.ResolveAsync(ticket.Id, "Replaced the fuser.", "staff-1", default);
 
             Assert.True(result.Success);
             db.ChangeTracker.Clear();
@@ -348,7 +348,7 @@ public class TicketServiceWorkflowTests
             await service.AssignAsync(ticket.Id, "staff-1", default);
             await service.ChangeStatusAsync(ticket.Id, TicketStatus.InProgress, default);
 
-            var result = await service.ResolveAsync(ticket.Id, "Replaced the fuser.", default);
+            var result = await service.ResolveAsync(ticket.Id, "Replaced the fuser.", "staff-1", default);
 
             Assert.True(result.Success);
             db.ChangeTracker.Clear();

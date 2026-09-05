@@ -29,6 +29,16 @@ public record NotificationDto
 
 public record CreateNotificationDto
 {
+    /// <summary>
+    /// The tenant the notification belongs to. Server-side callers set this explicitly:
+    /// AppDbContext only stamps the tenant from the JWT claim when the column is still empty,
+    /// and that ambient stamp is unavailable off the request thread - a notification written
+    /// without a tenant is hidden by the query filter forever, with nothing to show it failed.
+    ///
+    /// Never bound from a request body; the public endpoint takes its own request record.
+    /// </summary>
+    public Guid? TenantId { get; init; }
+
     public string UserId { get; init; } = "";
     public string Title { get; init; } = "";
     public string Message { get; init; } = "";

@@ -185,7 +185,7 @@ public class TicketsController : ControllerBase
     public async Task<ActionResult<ApiResponse<object>>> Resolve(
         int id, [FromBody] ResolveTicketRequest request, CancellationToken ct)
     {
-        var result = await _tickets.ResolveAsync(id, request.Resolution, ct);
+        var result = await _tickets.ResolveAsync(id, request.Resolution, CurrentUserId, ct);
 
         return result.Success
             ? Ok(ApiResponse<object>.Ok(new { }, "Ticket resolved."))
