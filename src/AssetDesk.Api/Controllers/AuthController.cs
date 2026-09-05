@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace AssetDesk.Api.Controllers;
@@ -22,6 +23,7 @@ public class AuthController(
     IConfiguration config) : ControllerBase
 {
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
     public async Task<ActionResult<ApiResponse<LoginResponseDto>>> Login(LoginDto dto)
     {
         var user = await userManager.FindByEmailAsync(dto.Email);
@@ -225,6 +227,7 @@ public class AuthController(
     /// </summary>
     [AllowAnonymous]
     [HttpPost("forgot-password")]
+    [EnableRateLimiting(RateLimitPolicies.PasswordReset)]
     public async Task<ActionResult<ApiResponse<object>>> ForgotPassword(ForgotPasswordDto dto)
     {
         var user = await userManager.FindByEmailAsync(dto.Email);
@@ -256,6 +259,7 @@ public class AuthController(
     /// </summary>
     [AllowAnonymous]
     [HttpPost("reset-password")]
+    [EnableRateLimiting(RateLimitPolicies.PasswordReset)]
     public async Task<ActionResult<ApiResponse<object>>> ResetPassword(ResetPasswordDto dto)
     {
         var user = await userManager.FindByEmailAsync(dto.Email);

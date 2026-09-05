@@ -1,4 +1,5 @@
 using System.Text;
+using AssetDesk.Api;
 using AssetDesk.Api.Authorization;
 using AssetDesk.Api.Data;
 using AssetDesk.Api.Entities;
@@ -146,6 +147,9 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("SuperAdmin", policy => policy.RequireRole(Roles.SuperAdmin))
     .AddPolicy("CanManageTenants", policy => policy.RequireRole(Roles.SuperAdmin));
 
+// Rate limiting for the credential surface (login, password reset) - see RateLimitPolicies.
+builder.Services.AddAppRateLimiting();
+
 // Services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ITenantProvider, TenantProvider>();
@@ -279,6 +283,9 @@ app.UseCors("AllowBlazor");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+// After authentication: the admin-password-reset policy partitions on the caller's user id,
+// which is only populated once the JWT has been validated.
+app.UseRateLimiter();
 app.MapControllers();
 app.MapHealthChecks("/health");
 
