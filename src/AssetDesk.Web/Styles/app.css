@@ -1,0 +1,360 @@
+/* AssetDesk - Tailwind source.
+
+   Build with `npm --prefix src/AssetDesk.Web run build:css`; the compiled sheet lands in
+   wwwroot/css/app.css and is committed. `dotnet build` does NOT regenerate it, so a new
+   utility class - especially an arbitrary value like w-[130px] - is missing at runtime until
+   this is run.
+
+   The hand-written layer below sits AFTER @tailwind utilities on purpose. Under the Play CDN
+   the generated styles were injected at the position of the <script> in <head>, which is
+   above the <link> to this sheet, so these rules already won against the utilities they
+   collide with (.animate-slide-up, the focus ring on input/select/textarea, .skeleton).
+   Keeping them last preserves exactly that order.
+*/
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* shadcn/ui design tokens for Components/UI/*.
+   These components (Card, Button, Badge, Dialog, Select, Input, Table, ...) were added to
+   the codebase but never wired to this app's Tailwind config, so bg-background,
+   text-muted-foreground, border-input etc. resolved to nothing - the components rendered
+   with no border/background/text color, effectively invisible in both themes. --primary and
+   --ring are tuned to the app's existing indigo-600 brand color so components built on the
+   token system match the legacy hand-styled components already in use. Values otherwise
+   follow the standard shadcn/ui "slate" palette. Keep in sync with the `colors` block in
+   wwwroot/index.html, which maps these variables onto Tailwind utility classes. */
+:root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 243 75% 59%;
+
+    /* shadcn/ui sidebar tokens. The sidebar is its own surface in shadcn - a shade off the
+       page background with its own border/accent - so it gets a parallel token set rather
+       than reusing --background/--accent. Hues follow the slate family used above (not
+       shadcn's default zinc) so the nav sits in the same palette as the rest of the app, and
+       --sidebar-primary is the app's indigo brand color. Components/UI/Sidebar/* reference
+       these names, so they resolve now too. */
+    --sidebar: 210 40% 98%;
+    --sidebar-foreground: 215.3 25% 26.7%;
+    --sidebar-primary: 243 75% 59%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 96.1%;
+    --sidebar-accent-foreground: 222.2 47.4% 11.2%;
+    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-ring: 243 75% 59%;
+
+    /* Consumed by the nav's width utilities and by Components/UI/Sidebar/ShadcnSidebar. */
+    --sidebar-width: 16rem;
+    --sidebar-width-icon: 3rem;
+}
+
+.dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 243 75% 65%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 243 75% 65%;
+
+    /* Lighter than --background (4.9%) on purpose - in dark mode shadcn lifts the sidebar off
+       the page rather than sinking it. */
+    --sidebar: 222.2 47.4% 11.2%;
+    --sidebar-foreground: 215 20.2% 65.1%;
+    --sidebar-primary: 243 75% 65%;
+    --sidebar-primary-foreground: 222.2 47.4% 11.2%;
+    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 243 75% 65%;
+}
+
+/* Tell the browser which scheme its own widgets should render in.
+   The popup list a native <select> opens is painted by the browser, not by the page, so no
+   amount of dark: utility classes on the <select> reaches it - the closed control went dark
+   while its dropdown stayed white with near-invisible option text (see the Category field on
+   the New Ticket dialog). color-scheme is the only hook that reaches those widgets. It also
+   fixes the <input type="date"> calendar pickers on the asset warranty fields and the default
+   scrollbars, which had the same problem for the same reason.
+   .dark is set on <html> by wwwroot/js/theme.js, so :root is the right place for this. */
+:root {
+    color-scheme: light;
+}
+
+:root.dark {
+    color-scheme: dark;
+}
+
+/* Paint the option list explicitly as well, rather than trusting color-scheme alone.
+   Chromium on Windows honours background-color/color on <option>, and doing it here means the
+   popup matches the dialog surface instead of the browser's generic dark grey. Where the
+   platform ignores option colours (macOS, iOS) the color-scheme rule above still carries the
+   fix, so the two together cover every target. option:checked keeps the highlighted row
+   readable - without it the selected entry inherits the same background as its neighbours and
+   the selection becomes invisible. */
+:root.dark select option,
+:root.dark select optgroup {
+    background-color: #1e293b;
+    color: #f1f5f9;
+}
+
+:root.dark select option:checked,
+:root.dark select option:hover {
+    background-color: #4f46e5;
+    color: #ffffff;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
+/* Page transitions */
+.page-enter {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.page-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+
+/* Smooth link transitions */
+a {
+    transition: color 0.15s ease;
+}
+
+/* Button press effect */
+.btn-press:active {
+    transform: scale(0.97);
+}
+
+/* Card hover lift */
+.card-hover {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+
+/* Menu slide animation */
+.menu-slide {
+    transform-origin: top;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.menu-slide.hidden {
+    transform: scaleY(0.95);
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Sidebar transition */
+.sidebar-transition {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+
+/* Input focus ring */
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+/* Table row hover */
+.table-row-hover {
+    transition: background-color 0.15s ease;
+}
+
+/* Skeleton loading */
+.skeleton {
+    background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+}
+
+.dark .skeleton {
+    background: linear-gradient(90deg, #334155 25%, #475569 50%, #334155 75%);
+    background-size: 200% 100%;
+}
+
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Toast animation */
+.toast-enter {
+    animation: toast-in 0.3s ease-out forwards;
+}
+
+.toast-exit {
+    animation: toast-out 0.2s ease-in forwards;
+}
+
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes toast-out {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+
+/* Status badge pulse */
+.status-pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Dropdown animation */
+.dropdown-content {
+    transform-origin: top right;
+    transition: transform 0.15s ease-out, opacity 0.15s ease-out;
+}
+
+/* Focus visible for accessibility */
+.focus-ring:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+}
+
+/* Stagger animation for lists */
+.stagger-item {
+    opacity: 0;
+    animation: stagger-in 0.3s ease-out forwards;
+}
+
+.stagger-item:nth-child(1) { animation-delay: 0.05s; }
+.stagger-item:nth-child(2) { animation-delay: 0.1s; }
+.stagger-item:nth-child(3) { animation-delay: 0.15s; }
+.stagger-item:nth-child(4) { animation-delay: 0.2s; }
+.stagger-item:nth-child(5) { animation-delay: 0.25s; }
+.stagger-item:nth-child(6) { animation-delay: 0.3s; }
+.stagger-item:nth-child(7) { animation-delay: 0.35s; }
+.stagger-item:nth-child(8) { animation-delay: 0.4s; }
+
+@keyframes stagger-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mobile menu overlay */
+.menu-overlay {
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    transition: opacity 0.3s ease;
+}
+
+/* Snackbar slide up animation */
+.animate-slide-up {
+    animation: slide-up 0.3s ease-out forwards;
+}
+
+@keyframes slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Snackbar progress bar shrink */
+.animate-shrink-width {
+    animation: shrink-width linear forwards;
+}
+
+@keyframes shrink-width {
+    from {
+        width: 100%;
+    }
+    to {
+        width: 0%;
+    }
+}
+
+/* Safe area padding for notched phones (iPhone X+) */
+.pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+}

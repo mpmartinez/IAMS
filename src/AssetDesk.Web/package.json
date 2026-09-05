@@ -1,0 +1,12 @@
+{
+  "name": "assetdesk.web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:css": "npx tailwindcss -i ./Styles/app.css -o ./wwwroot/css/app.css --minify",
+    "watch:css": "npx tailwindcss -i ./Styles/app.css -o ./wwwroot/css/app.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

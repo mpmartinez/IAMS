@@ -1,6 +1,6 @@
 // Bump this whenever a precached asset below changes. The activate handler deletes every cache
 // whose key differs, so a new name is what actually evicts the old copies.
-const cacheName = 'iams-cache-v4';
+const cacheName = 'iams-cache-v5';
 const offlineUrl = 'offline.html';
 
 self.addEventListener('install', event => {
@@ -11,7 +11,7 @@ self.addEventListener('install', event => {
                 // Must match the ?v= in index.html exactly. A cache entry is keyed by full URL,
                 // so precaching the bare path would store something the page never asks for and
                 // leave the stylesheet unavailable offline.
-                'css/app.css?v=3',
+                'css/app.css?v=5',
                 'manifest.webmanifest'
             ]);
         })

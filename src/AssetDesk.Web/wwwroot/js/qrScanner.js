@@ -4,11 +4,23 @@ window.QrScanner = {
     dotNetRef: null,
     isScanning: false,
 
+    // html5-qrcode is only ever needed by /scan, so it is no longer a <script> in index.html
+    // competing with the WASM payload on every boot. Every entry point below that touches
+    // Html5Qrcode awaits this first; it resolves immediately once the library is in.
+    libraryUrl: 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+
+    ensureLibrary: async function () {
+        if (typeof Html5Qrcode !== 'undefined') return;
+        await window.loadScriptOnce(this.libraryUrl);
+    },
+
     // Initialize the scanner
     init: async function (dotNetReference, videoElementId) {
         this.dotNetRef = dotNetReference;
 
         try {
+            await this.ensureLibrary();
+
             // Check if camera is available
             const devices = await navigator.mediaDevices.enumerateDevices();
             const cameras = devices.filter(d => d.kind === 'videoinput');
@@ -177,6 +189,8 @@ window.QrScanner = {
         if (!file) return null;
 
         try {
+            await this.ensureLibrary();
+
             // Create a temporary scanner instance for file scanning
             const html5QrCode = new Html5Qrcode("qr-file-scanner-temp");
 
@@ -244,6 +258,8 @@ window.QrScanner = {
         if (!file) return null;
 
         try {
+            await this.ensureLibrary();
+
             // Create temporary element for scanner
             let tempDiv = document.getElementById('qr-file-scanner-temp');
             if (!tempDiv) {

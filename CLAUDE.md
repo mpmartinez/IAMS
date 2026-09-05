@@ -23,9 +23,24 @@ cd src/AssetDesk.Api && dotnet run
 
 # Run Web (https://localhost:5022)
 cd src/AssetDesk.Web && dotnet run
+
+# Rebuild the stylesheet (scans .razor -> regenerates wwwroot/css/app.css)
+npm --prefix src/AssetDesk.Web run build:css
+# Or keep it watching while doing UI work
+npm --prefix src/AssetDesk.Web run watch:css
 ```
 
 Both projects need to run simultaneously for full functionality.
+
+**Tailwind CSS:** the source is `src/AssetDesk.Web/Styles/app.css`, the config is
+`tailwind.config.js`, and `wwwroot/css/app.css` is a committed, precompiled artifact.
+`dotnet build`/`dotnet run` do **not** regenerate it - Tailwind used to run in the browser via
+the Play CDN, and it does not any more. A *new* utility class, especially an arbitrary value
+like `w-[130px]`, is simply missing at runtime (the element renders unstyled) until
+`build:css` runs. Keep `watch:css` running while doing UI work, and bump the `?v=` on the
+stylesheet link in `wwwroot/index.html` plus `cacheName` in `service-worker.published.js`
+whenever the compiled sheet changes - it is served unhashed and the service worker precaches
+it by exact URL.
 
 Stop a running server before `dotnet build` - it holds a lock on the output DLLs and the build
 fails with MSB3027 "file is locked by AssetDesk.Api", which reads like a code error but is not.
