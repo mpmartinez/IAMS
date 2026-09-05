@@ -10,11 +10,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace AssetDesk.Api.Tests;
 
 /// <summary>
-/// The whole point of the notification wiring is that the person who filed a ticket hears
-/// about it when someone else works on it. Every delivery piece (the SSE stream, the bell,
+/// The whole point of the notification wiring is that both sides of a ticket hear about it when
+/// the other one acts: the filer when someone works on their ticket, and whoever is holding it
+/// when it lands on them or the filer replies. Every delivery piece (the SSE stream, the bell,
 /// the read/unread endpoints) already existed and was exercised by hand; what had no producer
-/// at all was the ticket workflow, so these cover the three moments that now raise one and,
-/// just as importantly, the moments that must stay silent.
+/// at all was the ticket workflow, so these cover the moments that now raise one and, just as
+/// importantly, the moments that must stay silent.
 /// </summary>
 public class TicketNotificationTests
 {
@@ -75,7 +76,7 @@ public class TicketNotificationTests
 
     private static async Task ProgressAsync(TicketService service, Ticket ticket)
     {
-        await service.AssignAsync(ticket.Id, "staff-1", default);
+        await service.AssignAsync(ticket.Id, "staff-1", actingUserId: "staff-1", default);
         await service.ChangeStatusAsync(ticket.Id, TicketStatus.InProgress, default);
     }
 
@@ -189,8 +190,10 @@ public class TicketNotificationTests
         }
     }
 
+    /// Only while nobody is holding it. Once assigned, the same comment reaches the assignee -
+    /// see FilerReply_TellsTheAssignee_AsWellAsTheFiler.
     [Fact]
-    public async Task A_comment_from_the_requester_notifies_nobody()
+    public async Task A_comment_on_an_unassigned_ticket_notifies_nobody()
     {
         var tenantId = Guid.NewGuid();
         var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
@@ -282,7 +285,7 @@ public class TicketNotificationTests
                 TicketPriority.High, null, "emp-1", default);
             var ticket = created.Value!;
 
-            await service.AssignAsync(ticket.Id, "staff-1", default);
+            await service.AssignAsync(ticket.Id, "staff-1", actingUserId: "staff-1", default);
             await service.ChangeStatusAsync(ticket.Id, TicketStatus.InProgress, default);
             await service.ResolveAsync(ticket.Id, "Replaced the fuser.", "staff-1", default);
 
@@ -308,5 +311,112 @@ public class TicketNotificationTests
             Assert.EndsWith("…", sent.Message);
             Assert.DoesNotContain(new string('x', 200), sent.Message);
         }
+    }
+
+    [Fact]
+    public async Task Assigning_TellsTheNewAssignee()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, connection) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using var _ = connection;
+        var (service, ticket, notifications) = await SetupAsync(db, tenantId);
+
+        var result = await service.AssignAsync(ticket.Id, "staff-1", actingUserId: "emp-1");
+
+        Assert.True(result.Success);
+        var sent = Assert.Single(notifications.Sent);
+        Assert.Equal("staff-1", sent.UserId);
+        Assert.Equal("Ticket assigned to you", sent.Title);
+        Assert.Contains("Printer jams", sent.Message);
+        Assert.Equal($"/tickets/{ticket.Id}", sent.Link);
+    }
+
+    /// Picking a ticket up yourself is not news to you.
+    [Fact]
+    public async Task AssigningToYourself_StaysSilent()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, connection) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using var _ = connection;
+        var (service, ticket, notifications) = await SetupAsync(db, tenantId);
+
+        await service.AssignAsync(ticket.Id, "staff-1", actingUserId: "staff-1");
+
+        Assert.Empty(notifications.Sent);
+    }
+
+    /// Re-assigning to whoever already holds it is a no-op, and must not ring their bell again.
+    [Fact]
+    public async Task ReassigningToTheSamePerson_StaysSilent()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, connection) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using var _ = connection;
+        var (service, ticket, notifications) = await SetupAsync(db, tenantId);
+
+        await service.AssignAsync(ticket.Id, "staff-1", actingUserId: "emp-1");
+        notifications.Sent.Clear();
+
+        await service.AssignAsync(ticket.Id, "staff-1", actingUserId: "emp-1");
+
+        Assert.Empty(notifications.Sent);
+    }
+
+    [Fact]
+    public async Task FilerReply_TellsTheAssignee_AsWellAsTheFiler()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, connection) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using var _ = connection;
+        var (service, ticket, notifications) = await SetupAsync(db, tenantId);
+
+        await service.AssignAsync(ticket.Id, "staff-1", actingUserId: "emp-1");
+        notifications.Sent.Clear();
+
+        // The filer replies, so only the assignee should hear about it.
+        await service.AddCommentAsync(ticket.Id, "emp-1", "Still jamming.", isInternal: false);
+
+        var sent = Assert.Single(notifications.Sent);
+        Assert.Equal("staff-1", sent.UserId);
+        Assert.Equal("New reply on a ticket you are handling", sent.Title);
+        Assert.Contains("Still jamming.", sent.Message);
+    }
+
+    /// An internal note can be invisible to the assignee: AssignAsync only checks that they
+    /// exist in the tenant, not that they hold iams:tickets:queue. The notification carries an
+    /// excerpt of the body, so sending it would leak the note itself.
+    [Fact]
+    public async Task InternalComment_TellsNobody()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, connection) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using var _ = connection;
+        var (service, ticket, notifications) = await SetupAsync(db, tenantId);
+
+        await service.AssignAsync(ticket.Id, "staff-1", actingUserId: "emp-1");
+        notifications.Sent.Clear();
+
+        await service.AddCommentAsync(ticket.Id, "emp-1", "Ordering a replacement.", isInternal: true);
+
+        Assert.Empty(notifications.Sent);
+    }
+
+    /// When one person is both filer and assignee, one comment must not ring two bells.
+    [Fact]
+    public async Task WhenTheAssigneeIsAlsoTheFiler_OneCommentSendsOneNotification()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, connection) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using var _ = connection;
+        var (service, ticket, notifications) = await SetupAsync(db, tenantId);
+
+        await service.AssignAsync(ticket.Id, "emp-1", actingUserId: "staff-1");
+        notifications.Sent.Clear();
+
+        // Somebody else comments, so the one person on both sides is owed exactly one entry.
+        await service.AddCommentAsync(ticket.Id, "staff-1", "Looking into it.", isInternal: false);
+
+        var sent = Assert.Single(notifications.Sent);
+        Assert.Equal("emp-1", sent.UserId);
     }
 }

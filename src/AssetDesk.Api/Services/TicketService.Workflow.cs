@@ -6,7 +6,7 @@ namespace AssetDesk.Api.Services;
 public partial class TicketService
 {
     public async Task<ServiceResult> AssignAsync(
-        int id, string assigneeUserId, CancellationToken ct = default)
+        int id, string assigneeUserId, string? actingUserId, CancellationToken ct = default)
     {
         var ticket = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == id, ct);
         if (ticket is null)
@@ -42,10 +42,26 @@ public partial class TicketService
         if (advanceToAssigned)
             ticket.Status = TicketStatus.Assigned;
 
+        var assigneeChanged = ticket.AssignedToUserId != assigneeUserId;
+
         ticket.AssignedToUserId = assigneeUserId;
         ticket.AssignedAt ??= DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
+
+        // After the save, matching ResolveAsync: nobody should be told to pick up work that
+        // then failed to commit. Only on an actual change of hands - reassigning a ticket to
+        // whoever already holds it should not ring their bell again.
+        if (assigneeChanged)
+        {
+            await NotifyAssigneeAsync(
+                ticket,
+                actingUserId,
+                "Ticket assigned to you",
+                $"{Reference(ticket)} \"{ticket.Title}\" is now yours to work on.",
+                NotificationTypes.Info);
+        }
+
         return ServiceResult.Ok();
     }
 
@@ -171,6 +187,22 @@ public partial class TicketService
                 "New reply on your ticket",
                 $"{Reference(ticket)} \"{ticket.Title}\": {Excerpt(trimmedBody)}",
                 NotificationTypes.Info);
+
+            // The other side of the same conversation. Guarded on the assignee not being the
+            // requester, whom NotifyRequesterAsync just told - two bell entries for one comment
+            // reads as a bug. Internal comments stay excluded here too: AssignAsync only checks
+            // that the assignee exists in the tenant, not that they hold iams:tickets:queue, so
+            // a ticket can be assigned to someone who cannot see internal notes - and this
+            // notification carries an excerpt of the body.
+            if (ticket.AssignedToUserId != ticket.RequesterUserId)
+            {
+                await NotifyAssigneeAsync(
+                    ticket,
+                    userId,
+                    "New reply on a ticket you are handling",
+                    $"{Reference(ticket)} \"{ticket.Title}\": {Excerpt(trimmedBody)}",
+                    NotificationTypes.Info);
+            }
         }
 
         return ServiceResult<TicketComment>.Ok(comment);

@@ -161,7 +161,7 @@ public class TicketsController : ControllerBase
     public async Task<ActionResult<ApiResponse<object>>> Assign(
         int id, [FromBody] AssignTicketRequest request, CancellationToken ct)
     {
-        var result = await _tickets.AssignAsync(id, request.AssignedToUserId, ct);
+        var result = await _tickets.AssignAsync(id, request.AssignedToUserId, CurrentUserId, ct);
 
         return result.Success
             ? Ok(ApiResponse<object>.Ok(new { }, "Ticket assigned."))

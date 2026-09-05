@@ -13,8 +13,21 @@ public partial class TicketService
     /// </summary>
     private const int NotificationExcerptLength = 140;
 
+    /// <summary>Tells the person who filed a ticket that something happened on it.</summary>
+    private Task NotifyRequesterAsync(
+        Ticket ticket, string? actorUserId, string title, string message, string type)
+        => NotifyAboutTicketAsync(ticket.RequesterUserId, ticket, actorUserId, title, message, type);
+
     /// <summary>
-    /// Tells the person who filed a ticket that something happened on it.
+    /// Tells whoever is currently holding the ticket. A no-op while it is unassigned, which is
+    /// why callers need not check first.
+    /// </summary>
+    private Task NotifyAssigneeAsync(
+        Ticket ticket, string? actorUserId, string title, string message, string type)
+        => NotifyAboutTicketAsync(ticket.AssignedToUserId, ticket, actorUserId, title, message, type);
+
+    /// <summary>
+    /// Tells one person about something that happened on a ticket.
     ///
     /// Best-effort by design, and deliberately never throws: by the time this runs the caller
     /// has already committed the work the notification is about, so a failure here must not
@@ -24,12 +37,12 @@ public partial class TicketService
     /// Callers pass the actor so nobody is told about their own action: staff who file and
     /// then fix their own ticket would otherwise notify themselves.
     /// </summary>
-    private async Task NotifyRequesterAsync(
-        Ticket ticket, string? actorUserId, string title, string message, string type)
+    private async Task NotifyAboutTicketAsync(
+        string? userId, Ticket ticket, string? actorUserId, string title, string message, string type)
     {
         if (_notifications is null) return;
-        if (string.IsNullOrEmpty(ticket.RequesterUserId)) return;
-        if (actorUserId is not null && actorUserId == ticket.RequesterUserId) return;
+        if (string.IsNullOrEmpty(userId)) return;
+        if (actorUserId is not null && actorUserId == userId) return;
 
         try
         {
@@ -39,7 +52,7 @@ public partial class TicketService
                 // written through a fresh DI scope, and a tenant read from the JWT claim is
                 // not something this method can assume is there.
                 TenantId = ticket.TenantId,
-                UserId = ticket.RequesterUserId,
+                UserId = userId,
                 Title = title,
                 Message = message,
                 Type = type,
@@ -52,7 +65,7 @@ public partial class TicketService
         {
             _logger.LogWarning(ex,
                 "Could not notify {UserId} about ticket {TicketId}; the ticket change itself stands.",
-                ticket.RequesterUserId, ticket.Id);
+                userId, ticket.Id);
         }
     }
 

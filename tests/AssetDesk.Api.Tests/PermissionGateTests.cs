@@ -357,7 +357,8 @@ public class PermissionGateTests
         public Task<Ticket?> GetAsync(int id, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<(List<Ticket> Items, int TotalCount, int Page, int PageSize)> ListAsync(TicketQuery query, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<TicketSummary> GetSummaryAsync(CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<ServiceResult> AssignAsync(int id, string assigneeUserId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ServiceResult> AssignAsync(
+            int id, string assigneeUserId, string? actingUserId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ServiceResult> ChangeStatusAsync(int id, string status, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ServiceResult> ResolveAsync(int id, string resolution, string resolvedByUserId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ServiceResult<TicketComment>> AddCommentAsync(int ticketId, string userId, string body, bool isInternal, CancellationToken ct = default) => throw new NotSupportedException();

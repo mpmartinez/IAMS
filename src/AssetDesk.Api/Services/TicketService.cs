@@ -49,7 +49,13 @@ public interface ITicketService
 
     Task<TicketSummary> GetSummaryAsync(CancellationToken ct = default);
 
-    Task<ServiceResult> AssignAsync(int id, string assigneeUserId, CancellationToken ct = default);
+    /// <param name="actingUserId">
+    /// Who is doing the assigning, so they are not notified about their own action. Required
+    /// rather than optional on purpose: it sits before <paramref name="ct"/>, and a default
+    /// would let an existing positional call bind its CancellationToken argument here instead.
+    /// </param>
+    Task<ServiceResult> AssignAsync(
+        int id, string assigneeUserId, string? actingUserId, CancellationToken ct = default);
 
     Task<ServiceResult> ChangeStatusAsync(int id, string status, CancellationToken ct = default);
 
