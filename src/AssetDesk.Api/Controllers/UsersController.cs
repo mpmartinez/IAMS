@@ -105,10 +105,16 @@ public class UsersController(
             Department = dto.Department,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
-            TenantId = tenantId
+            TenantId = tenantId,
+            // Locked from the outset. The account is created with a password nobody sees, so
+            // this is what makes the invite link the only way in rather than merely the
+            // intended one - Login refuses while it is set.
+            MustChangePassword = true
         };
 
-        var result = await userManager.CreateAsync(user, dto.Password);
+        // Identity requires a password to create an account, but no human ever learns this one:
+        // the invitee sets their own through the link mailed below.
+        var result = await userManager.CreateAsync(user, PasswordGenerator.Generate());
         if (!result.Succeeded)
         {
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
@@ -130,7 +136,17 @@ public class UsersController(
         // Reload user with tenant
         user = await userManager.Users.Include(u => u.Tenant).FirstAsync(u => u.Id == user.Id);
 
-        return Ok(ApiResponse<UserDto>.Ok(MapToDto(user, role)));
+        // A failed send is reported, not rolled back. The account is correct in every other
+        // respect and the row already carries a resend button, so discarding it would make the
+        // administrator retype everything over a transient SMTP blip.
+        var invited = await SendPasswordSetupEmailAsync(user);
+
+        return Ok(ApiResponse<UserDto>.Ok(
+            MapToDto(user, role),
+            invited
+                ? $"User created. An invite to set their password has been sent to {user.Email}."
+                : "User created, but the invite email could not be sent. "
+                  + "Use the reset button on their row to try again."));
     }
 
     [HttpGet("{id}")]
@@ -325,15 +341,10 @@ public class UsersController(
             return BadRequest(ApiResponse<object>.Fail(
                 "This user is deactivated and cannot sign in. Reactivate them before resetting their password."));
 
-        var token = await userManager.GeneratePasswordResetTokenAsync(user);
-        var baseUrl = config["App:WebUrl"] ?? $"{Request.Scheme}://{Request.Host}";
-        var resetUrl =
-            $"{baseUrl}/reset-password?email={Uri.EscapeDataString(user.Email!)}&token={Uri.EscapeDataString(token)}";
-
         // Send first, lock second. Locking the account and then failing to deliver the mail
         // would leave the user with a password that no longer works and no link to fix it -
         // the exact lockout this endpoint exists to resolve.
-        var emailSent = await emailService.SendPasswordResetEmailAsync(user.Email!, resetUrl);
+        var emailSent = await SendPasswordSetupEmailAsync(user);
         if (!emailSent)
             return StatusCode(StatusCodes.Status502BadGateway, ApiResponse<object>.Fail(
                 "Could not send the reset email. Check this organisation's email settings and try again."));
@@ -361,6 +372,21 @@ public class UsersController(
         await db.SaveChangesAsync();
 
         return Ok(ApiResponse<object>.Ok(new { }, $"Password reset link sent to {user.Email}."));
+    }
+
+    /// <summary>
+    /// Mint a password-set token and mail its link. Shared by the invite on user creation and
+    /// the reset button, which differ only in why they are sending: the link, the token and the
+    /// page it lands on are identical.
+    /// </summary>
+    private async Task<bool> SendPasswordSetupEmailAsync(ApplicationUser user)
+    {
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        var baseUrl = config["App:WebUrl"] ?? $"{Request.Scheme}://{Request.Host}";
+        var resetUrl =
+            $"{baseUrl}/reset-password?email={Uri.EscapeDataString(user.Email!)}&token={Uri.EscapeDataString(token)}";
+
+        return await emailService.SendPasswordResetEmailAsync(user.Email!, resetUrl);
     }
 
     /// <summary>First hop in X-Forwarded-For behind the proxy, else the socket address.</summary>

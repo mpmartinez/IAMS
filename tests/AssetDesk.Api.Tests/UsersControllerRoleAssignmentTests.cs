@@ -32,7 +32,7 @@ public class UsersControllerRoleAssignmentTests
     private static UserManager<ApplicationUser> CreateUserManager(AppDbContext db)
     {
         var store = new UserStore<ApplicationUser, ApplicationRole, AppDbContext>(db);
-        return new UserManager<ApplicationUser>(
+        var manager = new UserManager<ApplicationUser>(
             store,
             optionsAccessor: Options.Create(new IdentityOptions()),
             passwordHasher: new PasswordHasher<ApplicationUser>(),
@@ -42,6 +42,11 @@ public class UsersControllerRoleAssignmentTests
             errors: new IdentityErrorDescriber(),
             services: null!,
             logger: NullLogger<UserManager<ApplicationUser>>.Instance);
+
+        // CreateUser now mints a password-set token to invite the new account, which needs a
+        // registered provider.
+        manager.RegisterTokenProvider(TokenOptions.DefaultProvider, new StubTokenProvider());
+        return manager;
     }
 
     private static TokenService CreateTokenService(AppDbContext db, UserManager<ApplicationUser> userManager) =>
@@ -196,7 +201,6 @@ public class UsersControllerRoleAssignmentTests
                 var result = await controller.CreateUser(new CreateUserDto
                 {
                     Email = $"{r.ToLowerInvariant()}@test.local",
-                    Password = "Sup3r$ecret!",
                     FullName = $"{r} User",
                     Role = r
                 });
@@ -233,7 +237,6 @@ public class UsersControllerRoleAssignmentTests
             var result = await controller.CreateUser(new CreateUserDto
             {
                 Email = "helpdesk@test.local",
-                Password = "Sup3r$ecret!",
                 FullName = "Helpdesk Person",
                 Role = customRole.Name!
             });

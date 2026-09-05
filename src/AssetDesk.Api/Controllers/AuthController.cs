@@ -39,14 +39,15 @@ public class AuthController(
         if (!user.IsActive)
             return Forbid();
 
-        // An administrator has forced a reset, so the old password is no longer a way in even
-        // though it still matches. Being specific here leaks nothing: this line is only reached
-        // after CheckPasswordSignInAsync already succeeded, so the caller demonstrably knows the
+        // Either an administrator reset this password, or the account was just created and its
+        // owner has not set one yet. Both mean the credential that just matched is not a way in.
+        // Being specific here leaks nothing: this line is only reached after
+        // CheckPasswordSignInAsync already succeeded, so the caller demonstrably knows the
         // password. A generic "invalid credentials" would instead strand the real user with no
-        // idea why a password they know to be correct stopped working.
+        // idea why a password they know to be correct does not work.
         if (user.MustChangePassword)
             return Unauthorized(ApiResponse<LoginResponseDto>.Fail(
-                "Your administrator has reset your password. Check your email for the reset link."));
+                "Check your email for a link to set your password before signing in."));
 
         var ipAddress = GetIpAddress();
         var accessToken = await tokenService.GenerateTokenAsync(user);

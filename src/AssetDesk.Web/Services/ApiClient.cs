@@ -841,18 +841,32 @@ public class ApiClient(HttpClient http, AuthService authService)
         return response?.Data;
     }
 
-    public async Task<(bool Success, string? Error)> CreateUserAsync(CreateUserDto dto)
+    /// <summary>
+    /// Creates the account and triggers its invite email. The success message is returned rather
+    /// than discarded: it says whether the invite actually went out, and a created-but-unmailed
+    /// account needs the administrator to follow up.
+    /// </summary>
+    public async Task<(bool Success, string? Message)> CreateUserAsync(CreateUserDto dto)
     {
         var client = await GetAuthenticatedClient();
         var response = await client.PostAsJsonAsync("api/users", dto);
 
-        if (!response.IsSuccessStatusCode)
+        // An expired token answers 401 with no body at all, and ReadFromJsonAsync throws on an
+        // empty one - so the read has to be allowed to come back null.
+        ApiResponse<UserDto>? body = null;
+        try
         {
-            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
-            return (false, error?.Message ?? "Failed to create user");
+            body = await response.Content.ReadFromJsonAsync<ApiResponse<UserDto>>();
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            // Left null; the caller falls back to its own wording.
         }
 
-        return (true, null);
+        if (!response.IsSuccessStatusCode)
+            return (false, body?.Message ?? "Failed to create user");
+
+        return (true, body?.Message);
     }
 
     public async Task<(bool Success, string? Error)> UpdateUserAsync(string id, UpdateUserDto dto)

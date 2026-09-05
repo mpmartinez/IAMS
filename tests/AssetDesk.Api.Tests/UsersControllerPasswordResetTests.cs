@@ -30,26 +30,6 @@ namespace AssetDesk.Api.Tests;
 /// </summary>
 public class UsersControllerPasswordResetTests
 {
-    /// <summary>
-    /// Stands in for Identity's DataProtectorTokenProvider. GeneratePasswordResetTokenAsync
-    /// resolves the "Default" provider and a hand-built UserManager has none registered, so
-    /// without this every test that gets as far as generating a token dies on
-    /// NotSupportedException. The real provider's cryptography is Identity's to test; what
-    /// matters here is that a token reaches the reset URL.
-    /// </summary>
-    private class StubTokenProvider : IUserTwoFactorTokenProvider<ApplicationUser>
-    {
-        public Task<string> GenerateAsync(string purpose, UserManager<ApplicationUser> manager, ApplicationUser user)
-            => Task.FromResult($"reset-token-{user.Id}");
-
-        public Task<bool> ValidateAsync(
-            string purpose, string token, UserManager<ApplicationUser> manager, ApplicationUser user)
-            => Task.FromResult(token == $"reset-token-{user.Id}");
-
-        public Task<bool> CanGenerateTwoFactorTokenAsync(UserManager<ApplicationUser> manager, ApplicationUser user)
-            => Task.FromResult(false);
-    }
-
     private static UserManager<ApplicationUser> CreateUserManager(AppDbContext db)
     {
         var store = new UserStore<ApplicationUser, ApplicationRole, AppDbContext>(db);
@@ -124,6 +104,18 @@ public class UsersControllerPasswordResetTests
             }
         };
 
+    private static async Task SeedAssignableRoleAsync(AppDbContext db, Guid tenantId, string name)
+    {
+        db.Roles.Add(new ApplicationRole
+        {
+            Id = $"role-{name}-{tenantId:N}",
+            Name = name,
+            NormalizedName = name.ToUpperInvariant(),
+            TenantId = tenantId
+        });
+        await db.SaveChangesAsync();
+    }
+
     private static async Task<ApplicationUser> SeedTargetAsync(
         AppDbContext db, UserManager<ApplicationUser> userManager, Guid tenantId, string id)
     {
@@ -141,6 +133,97 @@ public class UsersControllerPasswordResetTests
         db.Users.Add(user);
         await db.SaveChangesAsync();
         return user;
+    }
+
+    /// <summary>
+    /// Creating a user mails an invite and leaves the account locked until it is used. An
+    /// administrator never chooses the password - CreateUserDto has no field for one.
+    /// </summary>
+    [Fact]
+    public async Task CreateUser_MailsAnInvite_AndLeavesTheAccountLocked()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, connection) = TestDb.Create(new FakeTenantProvider(tenantId, isSuperAdmin: true));
+        using var _ = connection;
+        await TestDb.SeedTenantAsync(db, tenantId);
+
+        var userManager = CreateUserManager(db);
+        await SeedAssignableRoleAsync(db, tenantId, Roles.Staff);
+        var email = new FakeEmailService();
+        var controller = BuildController(db, tenantId, userManager, email, isSuperAdmin: true);
+
+        var result = await controller.CreateUser(new CreateUserDto
+        {
+            Email = "newcomer@test.local",
+            FullName = "New Comer",
+            Role = Roles.Staff
+        });
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var payload = Assert.IsType<ApiResponse<UserDto>>(ok.Value);
+        Assert.Contains("sent to newcomer@test.local", payload.Message);
+
+        var sent = Assert.Single(email.PasswordResets);
+        Assert.Equal("newcomer@test.local", sent.To);
+        Assert.Contains("/reset-password?email=", sent.ResetUrl);
+
+        var created = await db.Users.AsNoTracking().SingleAsync(u => u.Email == "newcomer@test.local");
+        Assert.True(created.MustChangePassword);
+        Assert.True(created.IsActive);
+    }
+
+    /// A failed invite must not discard the account - the row carries a resend button, and
+    /// making the administrator retype everything over an SMTP blip would be worse.
+    [Fact]
+    public async Task CreateUser_WhenInviteMailFails_StillCreatesTheUser_AndSaysSo()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, connection) = TestDb.Create(new FakeTenantProvider(tenantId, isSuperAdmin: true));
+        using var _ = connection;
+        await TestDb.SeedTenantAsync(db, tenantId);
+
+        var userManager = CreateUserManager(db);
+        await SeedAssignableRoleAsync(db, tenantId, Roles.Staff);
+        var email = new FakeEmailService { ShouldSucceed = false };
+        var controller = BuildController(db, tenantId, userManager, email, isSuperAdmin: true);
+
+        var result = await controller.CreateUser(new CreateUserDto
+        {
+            Email = "unreachable@test.local",
+            FullName = "Un Reachable",
+            Role = Roles.Staff
+        });
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var payload = Assert.IsType<ApiResponse<UserDto>>(ok.Value);
+        Assert.Contains("could not be sent", payload.Message);
+
+        var created = await db.Users.AsNoTracking().SingleAsync(u => u.Email == "unreachable@test.local");
+        Assert.True(created.MustChangePassword);
+    }
+
+    /// The generated password is never shown to anyone, but Identity still validates it on
+    /// creation - so it has to satisfy the configured requirements every time, not usually.
+    [Fact]
+    public void GeneratedPassword_AlwaysSatisfiesTheConfiguredRequirements()
+    {
+        for (var i = 0; i < 200; i++)
+        {
+            var password = PasswordGenerator.Generate();
+
+            Assert.Equal(24, password.Length);
+            Assert.Contains(password, char.IsDigit);
+            Assert.Contains(password, char.IsLower);
+            Assert.Contains(password, char.IsUpper);
+            Assert.Contains(password, c => !char.IsLetterOrDigit(c));
+        }
+    }
+
+    [Fact]
+    public void GeneratedPasswords_AreNotRepeated()
+    {
+        var generated = Enumerable.Range(0, 100).Select(_ => PasswordGenerator.Generate()).ToList();
+        Assert.Equal(generated.Count, generated.Distinct().Count());
     }
 
     [Fact]

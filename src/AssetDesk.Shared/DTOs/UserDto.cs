@@ -17,10 +17,14 @@ public record UserDto
     public bool IsSuperAdmin { get; init; }
 }
 
+/// <summary>
+/// No password field by design. An administrator never sets a new user's password: the account
+/// is created with a random one nobody sees, and the user sets their own through the invite link
+/// mailed to them (see UsersController.CreateUser).
+/// </summary>
 public record CreateUserDto
 {
     public required string Email { get; init; }
-    public required string Password { get; init; }
     public required string FullName { get; init; }
     public string? Department { get; init; }
     public string Role { get; init; } = "Staff";
