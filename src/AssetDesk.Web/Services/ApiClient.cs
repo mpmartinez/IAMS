@@ -202,9 +202,6 @@ public class ApiClient(HttpClient http, AuthService authService)
         return await http.GetFromJsonAsync<string[]>("api/assets/statuses");
     }
 
-    public Task<string[]?> GetCurrenciesAsync() =>
-        GetCachedLookupAsync("currencies", () => http.GetFromJsonAsync<string[]>("api/assets/currencies"));
-
     public Task<string[]?> GetTicketCategoriesAsync() =>
         GetCachedLookupAsync("ticket-categories", async () =>
         {

@@ -32,14 +32,16 @@ public static class LookupValueSeed
         Row(10, LookupTypes.DeviceType, DeviceTypes.Software, "Software", 9),
         Row(11, LookupTypes.DeviceType, DeviceTypes.Other, "Other", 10),
 
-        // Currency (editable)
-        Row(12, LookupTypes.Currency, Currencies.USD, "USD", 0),
-        Row(13, LookupTypes.Currency, Currencies.EUR, "EUR", 1),
-        Row(14, LookupTypes.Currency, Currencies.GBP, "GBP", 2),
-        Row(15, LookupTypes.Currency, Currencies.PHP, "PHP", 3),
-        Row(16, LookupTypes.Currency, Currencies.JPY, "JPY", 4),
-        Row(17, LookupTypes.Currency, Currencies.CAD, "CAD", 5),
-        Row(18, LookupTypes.Currency, Currencies.AUD, "AUD", 6),
+        // Currency (locked) - the app is peso-only. The six codes below shipped in an earlier
+        // release and are kept here deactivated rather than deleted, so a pre-existing row that
+        // still stores one of them resolves to a label instead of an orphaned code.
+        Row(15, LookupTypes.Currency, Currencies.PHP, "PHP", 0),
+        Row(12, LookupTypes.Currency, Currencies.USD, "USD", 1, isActive: false),
+        Row(13, LookupTypes.Currency, Currencies.EUR, "EUR", 2, isActive: false),
+        Row(14, LookupTypes.Currency, Currencies.GBP, "GBP", 3, isActive: false),
+        Row(16, LookupTypes.Currency, Currencies.JPY, "JPY", 4, isActive: false),
+        Row(17, LookupTypes.Currency, Currencies.CAD, "CAD", 5, isActive: false),
+        Row(18, LookupTypes.Currency, Currencies.AUD, "AUD", 6, isActive: false),
 
         // AttachmentCategory (editable)
         Row(19, LookupTypes.AttachmentCategory, AttachmentCategories.Receipt, "Receipt", 0),
@@ -91,14 +93,14 @@ public static class LookupValueSeed
         Row(53, LookupTypes.TicketPriority, TicketPriority.Critical, "Critical", 3),
     ];
 
-    private static LookupValue Row(int id, string lookupType, string value, string label, int sortOrder) => new()
+    private static LookupValue Row(int id, string lookupType, string value, string label, int sortOrder, bool isActive = true) => new()
     {
         Id = id,
         LookupType = lookupType,
         Value = value,
         Label = label,
         SortOrder = sortOrder,
-        IsActive = true,
+        IsActive = isActive,
         CreatedAt = SeededAt
     };
 }

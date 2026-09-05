@@ -180,19 +180,8 @@
                 </CardHeader>
                 <CardContent>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                    <FormField LabelText="Purchase Price">
-                        <Input Type="number" @bind-Value="_model.PurchasePrice" Placeholder="2499.00" />
-                    </FormField>
-                    <FormField LabelText="Currency">
-                        <Select @bind-Value="_model.Currency" Placeholder="Select currency">
-                            @if (_currencies is not null)
-                            {
-                                @foreach (var cur in _currencies)
-                                {
-                                    <option value="@cur">@cur</option>
-                                }
-                            }
-                        </Select>
+                    <FormField LabelText="Purchase Price (₱)">
+                        <Input Type="number" @bind-Value="_model.PurchasePrice" Placeholder="129900.00" />
                     </FormField>
                     <FormField LabelText="Purchase Date">
                         <Input Type="date" @bind-Value="_model.PurchaseDate" />
@@ -420,7 +409,6 @@
     private AssetModel _model = new();
     private string[]? _deviceTypes;
     private string[]? _statuses;
-    private string[]? _currencies;
     private List<UserListItem>? _users;
 
     // Apple auto-fill state
@@ -453,11 +441,6 @@
     {
         _deviceTypes = await Api.GetDeviceTypesAsync();
         _statuses = await Api.GetStatusesAsync();
-        // Fed from the currency lookup data (admin-editable) rather than hardcoded here. A
-        // built-in fallback covers a failed fetch - an empty dropdown is worse than one
-        // showing the defaults.
-        _currencies = await Api.GetCurrenciesAsync() is { Length: > 0 } fetched ? fetched : ["PHP", "USD"];
-
         // GetUserListAsync hits an endpoint gated on iams:users:read, a different permission from
         // this page's create/edit gate. A role holding only asset create/edit would otherwise 403
         // here; fail soft and leave the "Assigned To" list empty rather than throwing an
@@ -488,7 +471,9 @@
                     Status = asset.Status,
                     AssignedToUserId = asset.AssignedToUserId ?? "",
                     PurchasePrice = asset.PurchasePrice?.ToString() ?? "",
-                    Currency = asset.Currency,
+                    // Currency is deliberately not copied off the loaded asset. The model
+                    // default (PHP) is the only value this form can submit, so a stale
+                    // non-peso row cannot be round-tripped back into a rejected save.
                     PurchaseDate = asset.PurchaseDate?.ToString("yyyy-MM-dd") ?? "",
                     WarrantyProvider = asset.WarrantyProvider ?? "",
                     WarrantyStartDate = asset.WarrantyStartDate?.ToString("yyyy-MM-dd") ?? "",
@@ -499,7 +484,6 @@
         }
         else
         {
-            _model.Currency = "PHP"; // Default to Peso
             _model.Status = "Available";
         }
 

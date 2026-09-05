@@ -60,18 +60,12 @@ public class DashboardController(AppDbContext db) : ControllerBase
         var inUseAssets = assets.Count(a => a.Status == AssetStatus.InUse);
         var maintenanceAssets = assets.Count(a => a.Status == AssetStatus.Maintenance);
 
-        // Calculate total value (assuming USD as primary currency for simplicity)
+        // Every asset is denominated in peso - see Currencies.
         var totalValue = assets
             .Where(a => a.PurchasePrice.HasValue)
             .Sum(a => a.PurchasePrice!.Value);
 
-        // Get primary currency (most used)
-        var primaryCurrency = assets
-            .Where(a => !string.IsNullOrEmpty(a.Currency))
-            .GroupBy(a => a.Currency)
-            .OrderByDescending(g => g.Count())
-            .Select(g => g.Key)
-            .FirstOrDefault() ?? "USD";
+        var primaryCurrency = Currencies.PHP;
 
         // Warranty counts
         var warrantiesExpiringSoon = assets.Count(a =>

@@ -232,7 +232,7 @@ else
                     </div>
                     <CardContent>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                            <DetailItem Label="Purchase Price" Value="@FormatPrice(_asset.PurchasePrice, _asset.Currency)" />
+                            <DetailItem Label="Purchase Price" Value="@FormatPrice(_asset.PurchasePrice)" />
                             <DetailItem Label="Purchase Date" Value="@(_asset.PurchaseDate?.ToString("MMM dd, yyyy") ?? "—")" />
                             <DetailItem Label="Warranty Provider" Value="@(_asset.WarrantyProvider ?? "—")" />
                             <div>
@@ -601,7 +601,7 @@ else
                     <div class="grid grid-cols-2 gap-4 text-sm">
                         <div>
                             <span class="text-slate-500 dark:text-slate-400">Purchase Price:</span>
-                            <span class="ml-2 text-slate-900 dark:text-white">@FormatPrice(_asset.PurchasePrice, _asset.Currency)</span>
+                            <span class="ml-2 text-slate-900 dark:text-white">@FormatPrice(_asset.PurchasePrice)</span>
                         </div>
                         <div>
                             <span class="text-slate-500 dark:text-slate-400">Purchase Date:</span>
@@ -939,19 +939,9 @@ else
         _returning = false;
     }
 
-    private string FormatPrice(decimal? price, string currency)
-    {
-        if (!price.HasValue) return "—";
-        return currency switch
-        {
-            "USD" => $"${price:N2}",
-            "EUR" => $"\u20AC{price:N2}",
-            "GBP" => $"\u00A3{price:N2}",
-            "PHP" => $"\u20B1{price:N2}",
-            "JPY" => $"\u00A5{price:N0}",
-            _ => $"{currency} {price:N2}"
-        };
-    }
+    // Peso-only app - the stored currency code is not consulted.
+    private static string FormatPrice(decimal? price) =>
+        price.HasValue ? $"\u20B1{price.Value:N2}" : "—";
 
     private string GetWarrantyPeriod()
     {

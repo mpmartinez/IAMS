@@ -62,10 +62,10 @@ public static class LookupTypes
     public const string TicketPriority = "TicketPriority";
 
     public static readonly string[] Editable =
-        [DeviceType, Currency, AttachmentCategory, TicketAttachmentCategory, TicketCategory];
+        [DeviceType, AttachmentCategory, TicketAttachmentCategory, TicketCategory];
 
     public static readonly string[] Locked =
-        [TicketStatus, TicketType, AssetStatus, TicketPriority];
+        [Currency, TicketStatus, TicketType, AssetStatus, TicketPriority];
 
     public static readonly string[] All = [.. Editable, .. Locked];
 
@@ -91,6 +91,10 @@ public static class LookupTypes
     /// cannot be edited here.</summary>
     public static string? LockedReason(string type) => type switch
     {
+        Currency =>
+            "AssetDesk is peso-only. Every amount in the UI, the PDF reports and the CSV exports " +
+            "is rendered with the peso symbol without consulting this table, so re-activating " +
+            "another currency here would mislabel the figures rather than convert them.",
         TicketStatus =>
             "TicketWorkflow.CanTransition hardcodes which statuses a ticket may move between. " +
             "Adding or renaming a status here would not teach the workflow engine about it.",

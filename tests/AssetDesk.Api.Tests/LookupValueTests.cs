@@ -117,7 +117,7 @@ public class LookupValueTests
             {
                 DeviceType = NewDeviceType,
                 Status = AssetStatus.Available,
-                Currency = "USD"
+                Currency = Currencies.PHP
             });
 
             var created = Assert.IsType<CreatedAtActionResult>(result.Result);
@@ -145,7 +145,7 @@ public class LookupValueTests
             {
                 DeviceType = NewDeviceType,
                 Status = AssetStatus.Available,
-                Currency = "USD"
+                Currency = Currencies.PHP
             });
 
             var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
@@ -257,6 +257,59 @@ public class LookupValueTests
             var updatePayload = Assert.IsType<ApiResponse<LookupValueDto>>(updateOk.Value);
             Assert.True(updatePayload.Success);
             Assert.False(updatePayload.Data!.IsActive);
+        }
+    }
+
+    [Theory]
+    [InlineData("USD")]
+    [InlineData("EUR")]
+    [InlineData("JPY")]
+    public async Task AssetsController_rejects_a_non_peso_currency_on_create(string currency)
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+
+            var controller = new AssetsController(db, null!, null!, new LookupService(db));
+
+            var result = await controller.CreateAsset(new CreateAssetDto
+            {
+                DeviceType = DeviceTypes.Laptop,
+                Status = AssetStatus.Available,
+                Currency = currency
+            });
+
+            var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var payload = Assert.IsType<ApiResponse<AssetDto>>(badRequest.Value);
+            Assert.False(payload.Success);
+            Assert.Contains("peso-only", payload.Message);
+        }
+    }
+
+    [Fact]
+    public async Task LookupsController_rejects_reactivating_a_retired_currency()
+    {
+        var (db, conn) = TestDb.Create();
+        using (db)
+        using (conn)
+        {
+            var usd = await db.LookupValues.SingleAsync(
+                l => l.LookupType == LookupTypes.Currency && l.Value == Currencies.USD);
+            Assert.False(usd.IsActive);
+
+            var controller = new LookupsController(db);
+
+            var result = await controller.Update(usd.Id, new UpdateLookupValueDto
+            {
+                IsActive = true
+            }, default);
+
+            Assert.IsNotType<OkObjectResult>(result.Result);
+            Assert.False(
+                (await db.LookupValues.AsNoTracking().SingleAsync(l => l.Id == usd.Id)).IsActive);
         }
     }
 

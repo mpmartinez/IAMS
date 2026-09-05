@@ -104,9 +104,11 @@ public class AssetsController(
         if (!validStatuses.Contains(dto.Status))
             return BadRequest(ApiResponse<AssetDto>.Fail($"Invalid status. Must be one of: {string.Join(", ", validStatuses)}"));
 
-        // Validate currency - editable lookup data, not the Currencies constant.
+        // Locked to peso. PHP is the only active row in the Currency lookup, so this rejects
+        // anything else a client sends rather than storing a code nothing will render.
         if (!await lookups.IsActiveValueAsync(LookupTypes.Currency, dto.Currency))
-            return BadRequest(ApiResponse<AssetDto>.Fail($"'{dto.Currency}' is not a valid currency."));
+            return BadRequest(ApiResponse<AssetDto>.Fail(
+                $"'{dto.Currency}' is not a valid currency. AssetDesk is peso-only - use '{Currencies.PHP}'."));
 
         // Validate warranty dates
         if (dto.WarrantyStartDate.HasValue && dto.WarrantyEndDate.HasValue && dto.WarrantyStartDate > dto.WarrantyEndDate)
@@ -177,9 +179,10 @@ public class AssetsController(
         if (dto.Status is not null && !validStatuses.Contains(dto.Status))
             return BadRequest(ApiResponse<AssetDto>.Fail($"Invalid status. Must be one of: {string.Join(", ", validStatuses)}"));
 
-        // Validate currency if provided - editable lookup data, not the Currencies constant.
+        // Locked to peso, see the same check in CreateAsset.
         if (dto.Currency is not null && !await lookups.IsActiveValueAsync(LookupTypes.Currency, dto.Currency))
-            return BadRequest(ApiResponse<AssetDto>.Fail($"'{dto.Currency}' is not a valid currency."));
+            return BadRequest(ApiResponse<AssetDto>.Fail(
+                $"'{dto.Currency}' is not a valid currency. AssetDesk is peso-only - use '{Currencies.PHP}'."));
 
         // Validate warranty dates
         var startDate = dto.WarrantyStartDate ?? asset.WarrantyStartDate;
@@ -279,11 +282,6 @@ public class AssetsController(
     [AllowAnonymous]
     public ActionResult<string[]> GetStatuses() =>
         Ok(new[] { AssetStatus.Available, AssetStatus.InUse, AssetStatus.Maintenance, AssetStatus.Retired, AssetStatus.Lost });
-
-    [HttpGet("currencies")]
-    [AllowAnonymous]
-    public async Task<ActionResult<string[]>> GetCurrencies(CancellationToken ct) =>
-        Ok(await lookups.GetActiveValuesAsync(LookupTypes.Currency, ct));
 
     // Users with iams:reports:view permission can view reports
     [HttpGet("reports/summary")]

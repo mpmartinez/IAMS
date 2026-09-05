@@ -218,7 +218,7 @@
                                     <td class="px-4 py-3 text-right hidden xl:table-cell">
                                         @if (asset.PurchasePrice.HasValue)
                                         {
-                                            <span class="text-sm text-slate-600 dark:text-slate-300">@FormatPrice(asset.PurchasePrice.Value, asset.Currency)</span>
+                                            <span class="text-sm text-slate-600 dark:text-slate-300">@FormatPrice(asset.PurchasePrice.Value)</span>
                                         }
                                         else
                                         {
@@ -403,15 +403,8 @@
         _ => @<svg class="w-4 h-4 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
     };
 
-    private string FormatPrice(decimal price, string currency) => currency switch
-    {
-        "USD" => $"${price:N2}",
-        "EUR" => $"\u20AC{price:N2}",
-        "GBP" => $"\u00A3{price:N2}",
-        "PHP" => $"\u20B1{price:N2}",
-        "JPY" => $"\u00A5{price:N0}",
-        _ => $"{currency} {price:N2}"
-    };
+    // Peso-only app - the stored currency code is not consulted.
+    private static string FormatPrice(decimal price) => $"\u20B1{price:N2}";
 
     private string GetInitials(string name)
     {

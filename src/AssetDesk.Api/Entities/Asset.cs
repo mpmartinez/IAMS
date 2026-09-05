@@ -15,7 +15,7 @@ public class Asset : ITenantEntity
     public string? SerialNumber { get; set; }
     public required string DeviceType { get; set; }
     public decimal? PurchasePrice { get; set; }
-    public string Currency { get; set; } = "USD";
+    public string Currency { get; set; } = "PHP";
     public string? WarrantyProvider { get; set; }
     public DateTime? WarrantyStartDate { get; set; }
     public DateTime? WarrantyEndDate { get; set; }
@@ -75,15 +75,30 @@ public static class DeviceTypes
     public static readonly string[] All = [Laptop, Desktop, Monitor, Phone, Tablet, Printer, Network, Server, Peripheral, Software, Other];
 }
 
+/// <summary>
+/// AssetDesk is peso-only. <see cref="All"/> - the single supported currency - is what
+/// LookupTypes.FallbackValues hands the validator, so PHP is the only code an asset can be
+/// saved with.
+///
+/// <see cref="Retired"/> holds the codes this app used to offer. They are kept as constants
+/// because LookupValueSeed still carries their rows: a lookup row is never deleted, only
+/// deactivated, so history that references them stays readable.
+/// </summary>
 public static class Currencies
 {
+    public const string PHP = "PHP";
+
     public const string USD = "USD";
     public const string EUR = "EUR";
     public const string GBP = "GBP";
-    public const string PHP = "PHP";
     public const string JPY = "JPY";
     public const string CAD = "CAD";
     public const string AUD = "AUD";
 
-    public static readonly string[] All = [USD, EUR, GBP, PHP, JPY, CAD, AUD];
+    /// <summary>The peso symbol every amount in the app is rendered with.</summary>
+    public const string Symbol = "₱";
+
+    public static readonly string[] All = [PHP];
+
+    public static readonly string[] Retired = [USD, EUR, GBP, JPY, CAD, AUD];
 }

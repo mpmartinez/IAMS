@@ -97,7 +97,7 @@ public record UnreturnedAssetDto
     public string DeviceType { get; init; } = "";
     public string? SerialNumber { get; init; }
     public decimal? PurchasePrice { get; init; }
-    public string Currency { get; init; } = "USD";
+    public string Currency { get; init; } = "PHP";
     public DateTime AssignedAt { get; init; }
     public int DaysAssigned { get; init; }
     public string? Location { get; init; }

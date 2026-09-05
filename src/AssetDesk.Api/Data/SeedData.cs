@@ -164,6 +164,8 @@ public static class SeedData
         {
             var staffUser = await userManager.FindByEmailAsync("staff@company.com");
 
+            // Demo data. Prices are representative Philippine street prices in peso -
+            // the app is peso-only, see Currencies - not quotes from any supplier.
             var assets = new[]
             {
                 new Asset
@@ -176,8 +178,8 @@ public static class SeedData
                     SerialNumber = "C02X1234ABCD",
                     DeviceType = DeviceTypes.Laptop,
                     Status = AssetStatus.InUse,
-                    PurchasePrice = 2499.00m,
-                    Currency = "USD",
+                    PurchasePrice = 164990.00m,
+                    Currency = "PHP",
                     WarrantyProvider = "Apple Care+",
                     WarrantyStartDate = DateTime.UtcNow.AddMonths(-6),
                     WarrantyEndDate = DateTime.UtcNow.AddYears(2),
@@ -195,8 +197,8 @@ public static class SeedData
                     SerialNumber = "DEL789XYZ",
                     DeviceType = DeviceTypes.Monitor,
                     Status = AssetStatus.InUse,
-                    PurchasePrice = 549.00m,
-                    Currency = "USD",
+                    PurchasePrice = 34995.00m,
+                    Currency = "PHP",
                     AssignedToUserId = staffUser?.Id,
                     Location = "Office - Floor 2",
                     PurchaseDate = DateTime.UtcNow.AddMonths(-6)
@@ -211,8 +213,8 @@ public static class SeedData
                     SerialNumber = "APPL123456",
                     DeviceType = DeviceTypes.Phone,
                     Status = AssetStatus.Available,
-                    PurchasePrice = 999.00m,
-                    Currency = "USD",
+                    PurchasePrice = 71990.00m,
+                    Currency = "PHP",
                     WarrantyProvider = "Apple Care+",
                     WarrantyStartDate = DateTime.UtcNow.AddMonths(-1),
                     WarrantyEndDate = DateTime.UtcNow.AddYears(1),
@@ -229,8 +231,8 @@ public static class SeedData
                     SerialNumber = "HP9876543",
                     DeviceType = DeviceTypes.Printer,
                     Status = AssetStatus.InUse,
-                    PurchasePrice = 399.00m,
-                    Currency = "USD",
+                    PurchasePrice = 23495.00m,
+                    Currency = "PHP",
                     Location = "Office - Floor 1",
                     PurchaseDate = DateTime.UtcNow.AddYears(-1)
                 },
@@ -244,8 +246,8 @@ public static class SeedData
                     SerialNumber = "CSC456789",
                     DeviceType = DeviceTypes.Network,
                     Status = AssetStatus.InUse,
-                    PurchasePrice = 1299.00m,
-                    Currency = "USD",
+                    PurchasePrice = 82500.00m,
+                    Currency = "PHP",
                     WarrantyProvider = "Cisco SmartNet",
                     WarrantyStartDate = DateTime.UtcNow.AddYears(-2),
                     WarrantyEndDate = DateTime.UtcNow.AddYears(1),
@@ -262,8 +264,8 @@ public static class SeedData
                     SerialNumber = "LEN456123",
                     DeviceType = DeviceTypes.Desktop,
                     Status = AssetStatus.Available,
-                    PurchasePrice = 899.00m,
-                    Currency = "USD",
+                    PurchasePrice = 58900.00m,
+                    Currency = "PHP",
                     WarrantyProvider = "Lenovo Premier Support",
                     WarrantyStartDate = DateTime.UtcNow.AddMonths(-2),
                     WarrantyEndDate = DateTime.UtcNow.AddYears(3),

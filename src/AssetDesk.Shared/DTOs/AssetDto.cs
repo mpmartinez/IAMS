@@ -27,7 +27,7 @@ public record AssetDto
     public string? SerialNumber { get; init; }
     public required string DeviceType { get; init; }
     public decimal? PurchasePrice { get; init; }
-    public string Currency { get; init; } = "USD";
+    public string Currency { get; init; } = "PHP";
     public string? WarrantyProvider { get; init; }
     public DateTime? WarrantyStartDate { get; init; }
     public DateTime? WarrantyEndDate { get; init; }
@@ -97,7 +97,7 @@ public record CreateAssetDto
     public decimal? PurchasePrice { get; init; }
 
     [StringLength(3, MinimumLength = 3, ErrorMessage = "Currency must be a 3-letter code")]
-    public string Currency { get; init; } = "USD";
+    public string Currency { get; init; } = "PHP";
 
     [StringLength(200, ErrorMessage = "Warranty provider cannot exceed 200 characters")]
     public string? WarrantyProvider { get; init; }
@@ -250,7 +250,7 @@ public record DashboardDto
 
     // Asset value
     public decimal TotalAssetValue { get; init; }
-    public string PrimaryCurrency { get; init; } = "USD";
+    public string PrimaryCurrency { get; init; } = "PHP";
 
     // Warranty alerts
     public int WarrantiesExpiringSoon { get; init; }
@@ -391,7 +391,7 @@ public record AssetValueReportRow
     public int AssetCount { get; init; }
     public decimal TotalValue { get; init; }
     public decimal AverageValue { get; init; }
-    public string Currency { get; init; } = "USD";
+    public string Currency { get; init; } = "PHP";
 }
 
 /// <summary>
@@ -402,7 +402,7 @@ public record AssetValueSummaryDto
     public decimal GrandTotalValue { get; init; }
     public int TotalAssetCount { get; init; }
     public decimal AverageAssetValue { get; init; }
-    public string PrimaryCurrency { get; init; } = "USD";
+    public string PrimaryCurrency { get; init; } = "PHP";
     public List<AssetValueReportRow> ByDeviceType { get; init; } = new();
     public List<AssetValueByStatusDto> ByStatus { get; init; } = new();
 }

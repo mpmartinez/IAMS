@@ -323,12 +323,7 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
         var totalCount = assets.Count;
         var avgValue = totalCount > 0 ? totalValue / totalCount : 0;
 
-        var primaryCurrency = assets
-            .Where(a => !string.IsNullOrEmpty(a.Currency))
-            .GroupBy(a => a.Currency)
-            .OrderByDescending(g => g.Count())
-            .Select(g => g.Key)
-            .FirstOrDefault() ?? "USD";
+        var primaryCurrency = Currencies.PHP;
 
         var byDeviceType = assets
             .GroupBy(a => a.DeviceType)
@@ -384,12 +379,7 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
             })
             .ToListAsync();
 
-        var primaryCurrency = assets
-            .Where(a => !string.IsNullOrEmpty(a.Currency))
-            .GroupBy(a => a.Currency)
-            .OrderByDescending(g => g.Count())
-            .Select(g => g.Key)
-            .FirstOrDefault() ?? "USD";
+        var primaryCurrency = Currencies.PHP;
 
         var byDeviceType = assets
             .GroupBy(a => a.DeviceType)
@@ -574,12 +564,7 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
         var totalCount = assets.Count;
         var avgValue = totalCount > 0 ? totalValue / totalCount : 0;
 
-        var primaryCurrency = assets
-            .Where(a => !string.IsNullOrEmpty(a.Currency))
-            .GroupBy(a => a.Currency)
-            .OrderByDescending(g => g.Count())
-            .Select(g => g.Key)
-            .FirstOrDefault() ?? "USD";
+        var primaryCurrency = Currencies.PHP;
 
         var byDeviceType = assets
             .GroupBy(a => a.DeviceType)

@@ -124,10 +124,11 @@ public class AssetImportService(AppDbContext db, ILogger<AssetImportService> log
 
         var currency = ReadString(row, headerMap, "Currency");
         if (string.IsNullOrWhiteSpace(currency))
-            currency = "USD";
-        // Editable lookup data, not the Currencies constant.
+            currency = Currencies.PHP;
+        // Locked to peso - PHP is the only active row in the Currency lookup.
         if (!await lookups.IsActiveValueAsync(LookupTypes.Currency, currency, ct))
-            throw new ImportRowException($"Invalid Currency '{currency}'.");
+            throw new ImportRowException(
+                $"Invalid Currency '{currency}'. AssetDesk is peso-only - leave the column blank or use '{Currencies.PHP}'.");
 
         var modelYear = ReadInt(row, headerMap, "ModelYear");
         if (modelYear is < 1900 or > 2100)
