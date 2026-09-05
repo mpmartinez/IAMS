@@ -81,6 +81,8 @@ public class UsersControllerRoleAssignmentTests
             new StubSubscriptionService(),
             CreateTokenService(db, userManager),
             new PermissionResolver(db),
+            new FakeEmailService(),
+            new ConfigurationBuilder().Build(),
             db)
         {
             ControllerContext = new ControllerContext

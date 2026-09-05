@@ -869,6 +869,43 @@ public class ApiClient(HttpClient http, AuthService authService)
         return (true, null);
     }
 
+    /// <summary>
+    /// Mail this user a password reset link and lock their current password until they use it.
+    /// The message is surfaced verbatim: a 502 here means SMTP is misconfigured and the admin
+    /// needs to know that, not a generic failure.
+    /// </summary>
+    public async Task<(bool Success, string? Message)> SendPasswordResetAsync(string id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsync($"api/users/{id}/send-password-reset", null);
+
+        // The rate limiter answers 429 and the authorization pipeline answers 403 with no body
+        // at all, so the JSON read has to be allowed to come back empty rather than throw.
+        ApiResponse<object>? body = null;
+        try
+        {
+            body = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            // Left null; the status-code branches below supply their own wording.
+        }
+
+        if (response.IsSuccessStatusCode)
+            return (true, body?.Message ?? "Reset link sent");
+
+        return response.StatusCode switch
+        {
+            System.Net.HttpStatusCode.TooManyRequests =>
+                (false, "Too many reset requests. Wait a few minutes and try again."),
+            System.Net.HttpStatusCode.Forbidden =>
+                (false, body?.Message ?? "You are not allowed to reset this user's password."),
+            System.Net.HttpStatusCode.NotFound =>
+                (false, body?.Message ?? "That user no longer exists."),
+            _ => (false, body?.Message ?? "Failed to send the reset link")
+        };
+    }
+
     public async Task<bool> DeleteUserAsync(string id)
     {
         var client = await GetAuthenticatedClient();

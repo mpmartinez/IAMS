@@ -39,6 +39,15 @@ public class AuthController(
         if (!user.IsActive)
             return Forbid();
 
+        // An administrator has forced a reset, so the old password is no longer a way in even
+        // though it still matches. Being specific here leaks nothing: this line is only reached
+        // after CheckPasswordSignInAsync already succeeded, so the caller demonstrably knows the
+        // password. A generic "invalid credentials" would instead strand the real user with no
+        // idea why a password they know to be correct stopped working.
+        if (user.MustChangePassword)
+            return Unauthorized(ApiResponse<LoginResponseDto>.Fail(
+                "Your administrator has reset your password. Check your email for the reset link."));
+
         var ipAddress = GetIpAddress();
         var accessToken = await tokenService.GenerateTokenAsync(user);
         var refreshToken = await tokenService.GenerateRefreshTokenAsync(user.Id, ipAddress);
@@ -279,6 +288,10 @@ public class AuthController(
         }
 
         user.UpdatedAt = DateTime.UtcNow;
+        // Completing the reset is exactly what the admin-initiated lock was waiting for, so
+        // lift it here. Unconditional: a user who reset through the ordinary forgot-password
+        // flow simply has nothing to clear.
+        user.MustChangePassword = false;
         await userManager.UpdateAsync(user);
 
         // Revoke all refresh tokens on password reset for security

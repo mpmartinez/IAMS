@@ -26,4 +26,10 @@ public static class AuditActions
     public const string Created = "Created";
     public const string Updated = "Updated";
     public const string Deleted = "Deleted";
+
+    /// An administrator sent a password reset link for another user. Recorded explicitly
+    /// because ApplicationUser is deliberately absent from AuditSaveChangesInterceptor's
+    /// AuditedTypes - auditing it wholesale would serialise PasswordHash and SecurityStamp
+    /// into Changes on every edit.
+    public const string PasswordResetSent = "PasswordResetSent";
 }

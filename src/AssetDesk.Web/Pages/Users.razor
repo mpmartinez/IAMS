@@ -109,6 +109,11 @@
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                 </svg>
                                             </button>
+                                            <button @onclick="() => OpenResetModal(user)" class="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors" title="Send password reset">
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                                </svg>
+                                            </button>
                                             <button @onclick="() => OpenDeleteModal(user)" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Deactivate">
                                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -225,6 +230,36 @@
     </div>
 }
 
+<!-- Password Reset Confirmation Modal -->
+@if (_showResetModal && _userToReset is not null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @onclick="CloseResetModal"></div>
+        <div class="relative w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl shadow-xl animate-scale-in">
+            <div class="p-6 text-center">
+                <div class="w-16 h-16 mx-auto rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
+                    <svg class="w-8 h-8 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Send password reset?</h3>
+                <p class="text-slate-500 dark:text-slate-400 mb-6">
+                    A reset link will be emailed to <span class="font-medium text-slate-700 dark:text-slate-300">@_userToReset.Email</span>.
+                    Their current password stops working immediately, and they will be signed out everywhere.
+                </p>
+                <div class="flex gap-3">
+                    <button @onclick="CloseResetModal" class="flex-1 px-4 py-2.5 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
+                        Cancel
+                    </button>
+                    <Button OnClick="ConfirmReset" Loading="@_sendingReset" Class="flex-1">
+                        Send link
+                    </Button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Delete Confirmation Modal -->
 @if (_showDeleteModal && _userToDelete is not null)
 {
@@ -271,6 +306,10 @@
     private UserFormModel _modalModel = new();
 
     // Delete modal state
+    private bool _showResetModal;
+    private bool _sendingReset;
+    private UserDto? _userToReset;
+
     private bool _showDeleteModal;
     private bool _deleting;
     private UserDto? _userToDelete;
@@ -426,6 +465,44 @@
         else
         {
             _modalError = error;
+        }
+    }
+
+    private void OpenResetModal(UserDto user)
+    {
+        _userToReset = user;
+        _showResetModal = true;
+    }
+
+    private void CloseResetModal()
+    {
+        _showResetModal = false;
+        _userToReset = null;
+    }
+
+    private async Task ConfirmReset()
+    {
+        if (_userToReset is null) return;
+
+        _sendingReset = true;
+
+        var (success, message) = await Api.SendPasswordResetAsync(_userToReset.Id);
+
+        _sendingReset = false;
+
+        if (success)
+        {
+            // The user's IsActive is untouched, but their session state changed - reload so the
+            // list reflects anything the server adjusted rather than showing a stale row.
+            Snackbar.Success(message ?? "Reset link sent");
+            CloseResetModal();
+            await LoadUsers();
+        }
+        else
+        {
+            // Surfaced verbatim: "check this organisation's email settings" is actionable in a
+            // way that a generic failure is not.
+            Snackbar.Error(message ?? "Failed to send the reset link");
         }
     }
 

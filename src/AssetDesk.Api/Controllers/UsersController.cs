@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using AssetDesk.Api.Authorization;
 using AssetDesk.Api.Data;
 using AssetDesk.Api.Entities;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace AssetDesk.Api.Controllers;
@@ -20,6 +22,8 @@ public class UsersController(
     ISubscriptionService subscriptionService,
     TokenService tokenService,
     IPermissionResolver permissionResolver,
+    IEmailService emailService,
+    IConfiguration config,
     AppDbContext db) : ControllerBase
 {
     [HttpGet]
@@ -290,6 +294,85 @@ public class UsersController(
     }
 
     // Users with iams:users:read permission can view the users list (for asset assignment)
+    /// <summary>
+    /// Mail a password reset link to a user and lock their current password until they use it.
+    /// The administrator never learns the new password - the user sets it themselves.
+    /// </summary>
+    [HttpPost("{id}/send-password-reset")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanManageUsers")]
+    [EnableRateLimiting(RateLimitPolicies.AdminPasswordReset)]
+    public async Task<ActionResult<ApiResponse<object>>> SendPasswordReset(string id)
+    {
+        var user = await userManager.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user is null)
+            return NotFound();
+
+        // Same tenant boundary as UpdateUser, and 404 for the same reason: a 403 here would
+        // confirm that an account with this id exists in somebody else's tenant.
+        var tenantId = tenantProvider.GetCurrentTenantId();
+        var actorIsSuperAdmin = tenantProvider.IsSuperAdmin();
+        if (!actorIsSuperAdmin && tenantId.HasValue && user.TenantId != tenantId.Value)
+            return NotFound();
+
+        // A platform SuperAdmin is only resettable by another SuperAdmin - UpdateUser applies
+        // the same rule. Without it, iams:users:manage would be a route to taking over the one
+        // account that bypasses every permission check in the system.
+        var roles = await userManager.GetRolesAsync(user);
+        if (!actorIsSuperAdmin && roles.Contains(Roles.SuperAdmin))
+            return Forbid();
+
+        if (!user.IsActive)
+            return BadRequest(ApiResponse<object>.Fail(
+                "This user is deactivated and cannot sign in. Reactivate them before resetting their password."));
+
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        var baseUrl = config["App:WebUrl"] ?? $"{Request.Scheme}://{Request.Host}";
+        var resetUrl =
+            $"{baseUrl}/reset-password?email={Uri.EscapeDataString(user.Email!)}&token={Uri.EscapeDataString(token)}";
+
+        // Send first, lock second. Locking the account and then failing to deliver the mail
+        // would leave the user with a password that no longer works and no link to fix it -
+        // the exact lockout this endpoint exists to resolve.
+        var emailSent = await emailService.SendPasswordResetEmailAsync(user.Email!, resetUrl);
+        if (!emailSent)
+            return StatusCode(StatusCodes.Status502BadGateway, ApiResponse<object>.Fail(
+                "Could not send the reset email. Check this organisation's email settings and try again."));
+
+        // Unlike the anonymous /api/auth/forgot-password flow, which leaves the existing
+        // password working until the user gets round to the link, an admin-initiated reset
+        // assumes the current credential is lost or compromised and cuts it off now.
+        user.MustChangePassword = true;
+        user.UpdatedAt = DateTime.UtcNow;
+        await userManager.UpdateAsync(user);
+        await tokenService.RevokeAllUserTokensAsync(user.Id, GetIpAddress());
+
+        // ApplicationUser is deliberately not in AuditSaveChangesInterceptor's AuditedTypes -
+        // auditing it wholesale would serialise PasswordHash and SecurityStamp into every row -
+        // so this admin action records itself explicitly.
+        db.AuditLogs.Add(new AuditLog
+        {
+            TenantId = user.TenantId,
+            EntityType = nameof(ApplicationUser),
+            EntityId = user.Id,
+            Action = AuditActions.PasswordResetSent,
+            UserId = User.FindFirstValue(ClaimTypes.NameIdentifier),
+            Timestamp = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        return Ok(ApiResponse<object>.Ok(new { }, $"Password reset link sent to {user.Email}."));
+    }
+
+    /// <summary>First hop in X-Forwarded-For behind the proxy, else the socket address.</summary>
+    private string? GetIpAddress()
+    {
+        var forwarded = Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(forwarded))
+            return forwarded.Split(',')[0].Trim();
+
+        return HttpContext.Connection.RemoteIpAddress?.MapToIPv4().ToString();
+    }
+
     [HttpGet("list")]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewUsersList")]
     public async Task<ActionResult> GetUserList()
