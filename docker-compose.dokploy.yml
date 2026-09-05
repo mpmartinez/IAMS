@@ -68,6 +68,11 @@ services:
       - "traefik.http.routers.iams-api.tls=true"
       - "traefik.http.routers.iams-api.tls.certresolver=letsencrypt"
       - "traefik.http.routers.iams-api.priority=100"
+      # The API's JSON went out uncompressed: only the web router carried a compress
+      # middleware, so every list, dashboard and lookup payload was sent raw. Traefik skips
+      # content types that are already compressed, so this costs nothing on attachments.
+      - "traefik.http.middlewares.iams-api-compress.compress=true"
+      - "traefik.http.routers.iams-api.middlewares=iams-api-compress"
       - "traefik.http.services.iams-api.loadbalancer.server.port=5000"
 
   iams-web:
