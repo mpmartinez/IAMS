@@ -1,11 +1,20 @@
+@namespace AssetDesk.Web.Components
+
 <div class="flex flex-col items-center justify-center py-12 text-center animate-fade-in">
-    <div class="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mb-4">
-        <svg class="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-        </svg>
+    <div class="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4 text-muted-foreground">
+        @if (Icon is not null)
+        {
+            @Icon
+        }
+        else
+        {
+            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+            </svg>
+        }
     </div>
-    <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-1">@Title</h3>
-    <p class="text-slate-500 dark:text-slate-400 mb-6 max-w-sm">@Description</p>
+    <h3 class="text-lg font-medium text-foreground mb-1">@Title</h3>
+    <p class="text-muted-foreground mb-6 max-w-sm text-sm">@Description</p>
     @if (ChildContent is not null)
     {
         @ChildContent
@@ -15,5 +24,6 @@
 @code {
     [Parameter] public string Title { get; set; } = "No items found";
     [Parameter] public string Description { get; set; } = "Get started by creating a new item.";
+    [Parameter] public RenderFragment? Icon { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }

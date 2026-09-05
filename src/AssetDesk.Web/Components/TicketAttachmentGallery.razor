@@ -3,6 +3,7 @@
    so uploaded files consumed tenant storage while being invisible to everyone. *@
 
 @using System.Security.Claims
+@using AssetDesk.Web.Components.UI
 @inject ApiClient Api
 @inject SnackbarService Snackbar
 @inject IJSRuntime JS
@@ -13,20 +14,20 @@
     <div class="flex flex-wrap gap-2">
         @for (var i = 0; i < 3; i++)
         {
-            <div class="w-20 h-20 rounded-lg skeleton"></div>
+            <Skeleton Class="w-20 h-20" />
         }
     </div>
 }
 else if (_error is not null)
 {
     <div class="flex items-center gap-3">
-        <p class="text-sm text-red-600 dark:text-red-400">@_error</p>
+        <p class="text-sm text-destructive">@_error</p>
         <Button Variant="ghost" Size="sm" OnClick="ReloadAsync">Retry</Button>
     </div>
 }
 else if (_attachments.Count == 0)
 {
-    <p class="text-sm text-slate-500 dark:text-slate-400">No attachments.</p>
+    <p class="text-sm text-muted-foreground">No attachments.</p>
 }
 else
 {
@@ -36,33 +37,35 @@ else
             <div @key="a.Id" class="relative">
                 @if (a.IsImage)
                 {
-                    <button type="button" @onclick="() => OpenPreview(a)" title="@a.FileName"
-                            class="block w-20 h-20 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700">
+                    <Button Variant="outline" Size="none" Title="@a.FileName"
+                            Class="block w-20 h-20 rounded-lg overflow-hidden p-0"
+                            OnClick="() => OpenPreview(a)">
                         @if (_thumbCache.TryGetValue(a.Id, out var thumb))
                         {
                             <img src="@thumb" alt="@a.FileName" class="w-full h-full object-cover" />
                         }
                         else
                         {
-                            <span class="block w-full h-full skeleton"></span>
+                            <Skeleton Class="block w-full h-full rounded-none" />
                         }
-                    </button>
+                    </Button>
                 }
                 else
                 {
-                    <button type="button" @onclick="() => Download(a)" title="@a.FileName"
-                            class="w-20 h-20 flex flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-1">
-                        <svg class="w-5 h-5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <Button Variant="outline" Size="none" Title="@a.FileName"
+                            Class="w-20 h-20 flex-col gap-1 rounded-lg px-1"
+                            OnClick="() => Download(a)">
+                        <svg class="w-5 h-5 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
-                        <span class="text-[9px] leading-tight text-slate-500 dark:text-slate-400 truncate w-full text-center">@a.FileName</span>
-                    </button>
+                        <span class="text-[9px] leading-tight text-muted-foreground truncate w-full text-center">@a.FileName</span>
+                    </Button>
                 }
 
                 @if (CanDelete(a))
                 {
                     <button type="button" @onclick="() => ConfirmDelete(a)" title="Remove"
-                            class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-700 dark:bg-slate-600 text-white flex items-center justify-center hover:bg-red-600 transition-colors">
+                            class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-foreground text-background flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors">
                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -81,7 +84,7 @@ else
         }
         else
         {
-            <div class="h-48 rounded-lg skeleton"></div>
+            <Skeleton Class="h-48 w-full" />
         }
     </ChildContent>
     <FooterContent>
@@ -95,8 +98,8 @@ else
 
 <Modal IsOpen="@(_toDelete is not null)" Title="Remove attachment" OnClose="CancelDelete">
     <ChildContent>
-        <p class="text-sm text-slate-600 dark:text-slate-300">
-            Remove <span class="font-medium text-slate-900 dark:text-white">@_toDelete?.FileName</span>?
+        <p class="text-sm text-muted-foreground">
+            Remove <span class="font-medium text-foreground">@_toDelete?.FileName</span>?
             This deletes the file and cannot be undone.
         </p>
     </ChildContent>

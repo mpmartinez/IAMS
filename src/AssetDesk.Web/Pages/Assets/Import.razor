@@ -12,31 +12,31 @@
     <!-- Header -->
     <div class="flex items-center gap-3 sm:gap-4">
         <a href="/assets"
-           class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200">
+           class="p-2 rounded-lg text-muted-foreground hover:text-muted-foreground hover:bg-muted transition-all duration-200">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
         </a>
         <div>
-            <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Import Assets</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Bulk-add assets from an Excel file</p>
+            <h1 class="text-xl sm:text-2xl font-bold text-foreground">Import Assets</h1>
+            <p class="text-sm text-muted-foreground mt-1">Bulk-add assets from an Excel file</p>
         </div>
     </div>
 
     <!-- Step 1: download template -->
     <Card Class="p-6">
         <div class="flex items-start gap-4">
-            <div class="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shrink-0">
-                <span class="text-primary-600 dark:text-primary-400 font-bold">1</span>
+            <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <span class="text-primary font-bold">1</span>
             </div>
             <div class="flex-1 min-w-0">
-                <h2 class="font-semibold text-slate-900 dark:text-white">Download the template</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-3">
+                <h2 class="font-semibold text-foreground">Download the template</h2>
+                <p class="text-sm text-muted-foreground mt-1 mb-3">
                     Use the template to format your data correctly. Required columns are highlighted in red.
                 </p>
                 <a href="templates/Asset_Upload_Template.xlsx"
                    download
-                   class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-medium transition-all duration-200">
+                   class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-foreground hover:bg-muted text-sm font-medium transition-all duration-200">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                               d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
@@ -50,13 +50,13 @@
     <!-- Step 2: upload -->
     <Card Class="p-6">
         <div class="flex items-start gap-4">
-            <div class="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shrink-0">
-                <span class="text-primary-600 dark:text-primary-400 font-bold">2</span>
+            <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <span class="text-primary font-bold">2</span>
             </div>
             <div class="flex-1 min-w-0 space-y-4">
                 <div>
-                    <h2 class="font-semibold text-slate-900 dark:text-white">Upload the filled template</h2>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    <h2 class="font-semibold text-foreground">Upload the filled template</h2>
+                    <p class="text-sm text-muted-foreground mt-1">
                         AssetTags are auto-generated. Each row creates one new asset.
                     </p>
                 </div>
@@ -69,28 +69,23 @@
                             Error="@_validationError" />
 
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <button type="button"
-                            @onclick="UploadAsync"
-                            disabled="@(_selectedFile is null || _uploading)"
-                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base">
+                    <Button Loading="@_uploading"
+                            Disabled="@(_selectedFile is null)"
+                            Class="shadow-lg shadow-primary/25"
+                            OnClick="UploadAsync">
                         @if (_uploading)
                         {
-                            <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor"
-                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
                             <span>Uploading...</span>
                         }
                         else
                         {
-                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                       d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M17 8l-5-5-5 5M12 3v12" />
                             </svg>
                             <span>Upload &amp; Import</span>
                         }
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>
@@ -120,17 +115,17 @@
                         </div>
                     }
                     <div>
-                        <h2 class="font-semibold text-slate-900 dark:text-white">Import Results</h2>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">
+                        <h2 class="font-semibold text-foreground">Import Results</h2>
+                        <p class="text-sm text-muted-foreground">
                             @_result.CreatedCount of @_result.TotalRows row(s) imported successfully.
                         </p>
                     </div>
                 </div>
 
                 <div class="grid grid-cols-3 gap-3">
-                    <div class="rounded-xl bg-slate-50 dark:bg-slate-800 p-4">
-                        <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total</p>
-                        <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">@_result.TotalRows</p>
+                    <div class="rounded-xl bg-muted/50 p-4">
+                        <p class="text-xs text-muted-foreground uppercase tracking-wider">Total</p>
+                        <p class="text-2xl font-bold text-foreground mt-1">@_result.TotalRows</p>
                     </div>
                     <div class="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 p-4">
                         <p class="text-xs text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Created</p>
@@ -165,15 +160,12 @@
                 }
 
                 <div class="flex flex-col sm:flex-row gap-3 pt-2">
-                    <a href="/assets"
-                       class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 text-sm sm:text-base">
+                    <a href="/assets" class="@UiClasses.PrimaryButtonLarge">
                         View Assets
                     </a>
-                    <button type="button"
-                            @onclick="Reset"
-                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm sm:text-base">
+                    <Button Variant="outline" Size="lg" OnClick="Reset">
                         Import Another File
-                    </button>
+                    </Button>
                 </div>
             </div>
         </Card>

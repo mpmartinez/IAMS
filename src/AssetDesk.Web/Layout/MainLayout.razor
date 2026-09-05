@@ -38,11 +38,15 @@
                         <span class="truncate text-xs text-sidebar-foreground/70">Asset &amp; Service</span>
                     </div>
                 </a>
-                <button class="lg:hidden ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" @onclick="CloseMobileMenu">
+                <Button Variant="ghost"
+                        Size="icon-sm"
+                        Class="lg:hidden ml-auto shrink-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        OnClick="CloseMobileMenu"
+                        aria-label="Close menu">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                </button>
+                </Button>
             </div>
 
             <!-- Navigation -->
@@ -144,23 +148,25 @@
                 <header class="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4 lg:px-6">
             @* shadcn SidebarTrigger: one ghost square that opens the drawer on mobile and
                minimizes the rail on desktop, followed by a vertical separator. *@
-            <button class="@TriggerClasses lg:hidden" @onclick="OpenMobileMenu" aria-label="Open menu">
+            <Button Variant="ghost" Size="icon-sm" Class="@($"{TriggerClasses} lg:hidden")" OnClick="OpenMobileMenu" aria-label="Open menu">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4v16" />
                 </svg>
-            </button>
+            </Button>
 
-            <button class="@TriggerClasses hidden lg:inline-flex"
-                    @onclick="ToggleSidebar"
-                    title="@(_sidebarCollapsed ? "Expand menu" : "Minimize menu")"
+            <Button Variant="ghost"
+                    Size="icon-sm"
+                    Class="@($"{TriggerClasses} hidden lg:inline-flex")"
+                    OnClick="ToggleSidebar"
+                    Title="@(_sidebarCollapsed ? "Expand menu" : "Minimize menu")"
                     aria-label="@(_sidebarCollapsed ? "Expand menu" : "Minimize menu")"
                     aria-expanded="@((!_sidebarCollapsed).ToString().ToLowerInvariant())">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4v16" />
                 </svg>
-            </button>
+            </Button>
 
             <!-- Organization Name -->
             <AuthorizeView>
@@ -183,11 +189,11 @@
 
             <!-- Quick actions -->
             <div class="relative">
-                <button @onclick="ToggleSearch" class="@IconButtonClasses" aria-label="Search assets">
+                <Button Variant="ghost" Size="icon-sm" Class="@IconButtonClasses" OnClick="ToggleSearch" aria-label="Search assets">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                </button>
+                </Button>
 
                 <!-- Search Dropdown -->
                 @if (_showSearch)
@@ -273,7 +279,7 @@
 
             <!-- Notifications -->
             <div class="relative">
-                <button @onclick="ToggleNotifications" class="@IconButtonClasses relative" aria-label="Notifications">
+                <Button Variant="ghost" Size="icon-sm" Class="@($"{IconButtonClasses} relative")" OnClick="ToggleNotifications" aria-label="Notifications">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                     </svg>
@@ -283,7 +289,7 @@
                             @(Notifications.UnreadCount > 9 ? "9+" : Notifications.UnreadCount.ToString())
                         </span>
                     }
-                </button>
+                </Button>
 
                 <!-- Notification Dropdown -->
                 @if (_showNotifications)
@@ -296,9 +302,9 @@
                             <div class="flex items-center gap-2">
                                 @if (Notifications.UnreadCount > 0)
                                 {
-                                    <button @onclick="MarkAllAsRead" class="text-xs font-medium text-primary hover:underline">
+                                    <Button Variant="link" Size="sm" Class="h-auto px-0 text-xs" OnClick="MarkAllAsRead">
                                         Mark all read
-                                    </button>
+                                    </Button>
                                 }
                                 @if (!Notifications.IsConnected)
                                 {
@@ -379,15 +385,13 @@
 
             <!-- User menu -->
             <div class="relative">
-                <button @onclick="ToggleUserMenu" class="flex items-center gap-2 rounded-md p-1 transition-colors hover:bg-accent"
-                        title="Account" aria-label="Account menu">
-                    <div class="flex aspect-square h-8 w-8 items-center justify-center rounded-lg bg-muted text-sm font-medium text-foreground">
-                        @headerAuth.User.Identity?.Name?.FirstOrDefault()
-                    </div>
+                <Button Variant="ghost" Size="none" Class="gap-2 rounded-md p-1" OnClick="ToggleUserMenu"
+                        Title="Account" aria-label="Account menu">
+                    <Avatar Size="sm" Fallback="@headerAuth.User.Identity?.Name" />
                     <svg class="hidden h-4 w-4 text-muted-foreground sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
-                </button>
+                </Button>
 
                 @if (_showUserMenu)
                 {
@@ -408,12 +412,13 @@
                         </a>
 
                         <div class="border-t border-border">
-                            <button @onclick="LogoutFromMenu" class="mx-1 my-1 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/10">
+                            <Button Variant="ghost" Size="none" OnClick="LogoutFromMenu"
+                                    Class="mx-1 my-1 w-[calc(100%_-_0.5rem)] justify-start gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">
                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                                 </svg>
                                 Logout
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 }
@@ -499,12 +504,13 @@
                     }
 
                     <!-- More (opens sidebar) -->
-                    <button @onclick="OpenMobileMenu" class="flex flex-col items-center justify-center text-muted-foreground transition-colors hover:text-foreground">
+                    <Button Variant="ghost" Size="none" OnClick="OpenMobileMenu"
+                            Class="flex-col text-muted-foreground hover:bg-transparent hover:text-foreground">
                         <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
                         <span class="text-xs mt-1">More</span>
-                    </button>
+                    </Button>
                 </div>
             </nav>
         </Authorized>
@@ -529,16 +535,11 @@
     private ElementReference _searchInput;
     private CancellationTokenSource? _searchCts;
 
-    // shadcn's ghost icon button, used for the sidebar trigger and the header actions.
-    private const string TriggerClasses =
-        "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground "
-        + "transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none "
-        + "focus-visible:ring-1 focus-visible:ring-ring";
+    // The ghost icon button itself now comes from Components/UI/Button (Variant="ghost"
+    // Size="icon-sm"); these only carry what the header adds on top of it.
+    private const string TriggerClasses = "shrink-0 text-muted-foreground";
 
-    private const string IconButtonClasses =
-        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground "
-        + "transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none "
-        + "focus-visible:ring-1 focus-visible:ring-ring";
+    private const string IconButtonClasses = "shrink-0 text-muted-foreground";
 
     // Minimize is a desktop-only affordance: below lg the sidebar is an off-canvas drawer that is
     // always full width, so every collapsed style is gated behind lg:. Widths come from the
@@ -812,9 +813,9 @@
         "Available" => "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
         "InUse" => "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
         "Maintenance" => "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-        "Retired" => "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400",
+        "Retired" => "bg-muted text-foreground",
         "Lost" => "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-        _ => "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400"
+        _ => "bg-muted text-foreground"
     };
 
     private string GetDeviceTypeBg(string deviceType) => deviceType switch
@@ -824,7 +825,7 @@
         "Phone" or "Tablet" => "bg-green-100 dark:bg-green-900/30",
         "Printer" => "bg-orange-100 dark:bg-orange-900/30",
         "Network" or "Server" => "bg-red-100 dark:bg-red-900/30",
-        _ => "bg-slate-100 dark:bg-slate-700"
+        _ => "bg-muted"
     };
 
     private RenderFragment GetDeviceTypeIcon(string deviceType)

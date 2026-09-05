@@ -1,6 +1,6 @@
 @namespace AssetDesk.Web.Components.UI
 
-<div class="flex items-center space-x-2 @Class">
+<div class="flex @(Align == "start" ? "items-start" : "items-center") space-x-2 @Class">
     <button type="button"
             role="checkbox"
             aria-checked="@Value"
@@ -30,6 +30,10 @@
     [Parameter] public EventCallback<bool> ValueChanged { get; set; }
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public bool HasError { get; set; }
+
+    /// <summary>"center" (default) or "start", for a label that wraps onto several lines.</summary>
+    [Parameter] public string Align { get; set; } = "center";
+
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public string? Class { get; set; }
     [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? AdditionalAttributes { get; set; }

@@ -15,12 +15,12 @@
 <div class="max-w-3xl mx-auto space-y-4 sm:space-y-6">
     <!-- Header -->
     <div class="flex items-center gap-3 sm:gap-4">
-        <a href="@(IsNew ? "/assets" : $"/assets/{Id}")" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200">
+        <a href="@(IsNew ? "/assets" : $"/assets/{Id}")" class="p-2 rounded-lg text-muted-foreground hover:text-muted-foreground hover:bg-muted transition-all duration-200">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
         </a>
-        <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">@(IsNew ? "Add Asset" : "Edit Asset")</h1>
+        <h1 class="text-xl sm:text-2xl font-bold text-foreground">@(IsNew ? "Add Asset" : "Edit Asset")</h1>
     </div>
 
     @if (_loading)
@@ -57,25 +57,22 @@
                             </Select>
                         </FormField>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Serial Number</label>
+                    <FormField LabelText="Serial Number">
                         <div class="relative">
-                            <input type="text"
-                                   @bind="_model.SerialNumber"
-                                   @bind:event="oninput"
-                                   @bind:after="OnSerialNumberChangedAsync"
-                                   placeholder="C02X1234ABCD"
-                                   class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 text-sm @(_appleDeviceInfo is not null ? "pr-10" : "")" />
+                            <Input Value="@_model.SerialNumber"
+                                   ValueChanged="OnSerialNumberChanged"
+                                   Placeholder="C02X1234ABCD"
+                                   Class="@(_appleDeviceInfo is not null ? "pr-10" : "")" />
                             @if (_appleDeviceInfo is not null)
                             {
                                 <div class="absolute right-3 top-1/2 -translate-y-1/2">
-                                    <svg class="w-5 h-5 text-slate-400" viewBox="0 0 24 24" fill="currentColor">
+                                    <svg class="w-5 h-5 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
                                     </svg>
                                 </div>
                             }
                         </div>
-                    </div>
+                    </FormField>
                     <FormField LabelText="Manufacturer">
                         <Input @bind-Value="_model.Manufacturer" Placeholder="Apple, Dell, HP..." />
                     </FormField>
@@ -98,42 +95,38 @@
             <!-- Apple Auto-fill Suggestion -->
             @if (_appleDeviceInfo is not null && _showAutoFillSuggestion)
             {
-                <div class="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl border border-slate-200 dark:border-slate-600 p-4 animate-slide-up">
+                <div class="bg-muted/50 rounded-2xl border border-border p-4 animate-slide-up">
                     <div class="flex items-start gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-white dark:bg-slate-600 flex items-center justify-center shadow-sm shrink-0">
-                            <svg class="w-6 h-6 text-slate-600 dark:text-slate-300" viewBox="0 0 24 24" fill="currentColor">
+                        <div class="w-10 h-10 rounded-xl bg-background flex items-center justify-center shadow-sm shrink-0">
+                            <svg class="w-6 h-6 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
                             </svg>
                         </div>
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 mb-1">
-                                <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Apple Device Detected</h4>
+                                <h4 class="text-sm font-semibold text-foreground">Apple Device Detected</h4>
                                 @if (_appleDeviceInfo.IsPartialMatch)
                                 {
                                     <span class="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded">Partial</span>
                                 }
                             </div>
-                            <div class="text-sm text-slate-600 dark:text-slate-300 space-y-0.5">
+                            <div class="text-sm text-muted-foreground space-y-0.5">
                                 @if (_appleDeviceInfo.Model is not null)
                                 {
-                                    <p><span class="text-slate-400">Model:</span> @_appleDeviceInfo.Model</p>
+                                    <p><span class="text-muted-foreground">Model:</span> @_appleDeviceInfo.Model</p>
                                 }
                                 @if (_appleDeviceInfo.Year.HasValue)
                                 {
-                                    <p><span class="text-slate-400">Year:</span> @_appleDeviceInfo.Year</p>
+                                    <p><span class="text-muted-foreground">Year:</span> @_appleDeviceInfo.Year</p>
                                 }
                                 @if (_appleDeviceInfo.DeviceType is not null)
                                 {
-                                    <p><span class="text-slate-400">Type:</span> @_appleDeviceInfo.DeviceType</p>
+                                    <p><span class="text-muted-foreground">Type:</span> @_appleDeviceInfo.DeviceType</p>
                                 }
                             </div>
                             <div class="flex items-center gap-2 mt-3">
-                                <button type="button" @onclick="ApplyAutoFill" class="px-3 py-1.5 text-sm font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
-                                    Apply
-                                </button>
-                                <button type="button" @onclick="DismissAutoFill" class="px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
-                                    Dismiss
-                                </button>
+                                <Button Size="sm" OnClick="ApplyAutoFill">Apply</Button>
+                                <Button Variant="ghost" Size="sm" Class="text-muted-foreground" OnClick="DismissAutoFill">Dismiss</Button>
                             </div>
                         </div>
                     </div>
@@ -218,12 +211,11 @@
                     <CardTitle>Additional Notes</CardTitle>
                 </CardHeader>
                 <CardContent>
-                <div>
-                    <textarea @bind="_model.Notes"
-                              rows="4"
-                              placeholder="Additional notes about this asset..."
-                              class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 resize-none text-sm"></textarea>
-                </div>
+                <Textarea Value="@_model.Notes"
+                          ValueChanged="@(v => _model.Notes = v)"
+                          Rows="4"
+                          Placeholder="Additional notes about this asset..."
+                          Class="resize-none" />
                 </CardContent>
             </Card>
         </EditForm>
@@ -234,9 +226,9 @@
             <Card>
                 <div class="flex flex-row items-center justify-between space-y-0 p-6 pb-2">
                     <CardTitle>Attachments</CardTitle>
-                    <button type="button" @onclick="ShowUploadModal" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 font-medium transition-colors">
+                    <Button Variant="link" Size="none" Class="text-sm" OnClick="ShowUploadModal">
                         Add File
-                    </button>
+                    </Button>
                 </div>
                 <CardContent>
                     @if (_attachmentsLoading)
@@ -257,20 +249,20 @@
                     else if (_attachments is null || _attachments.Count == 0)
                     {
                         <EmptyState Title="No attachments" Description="Upload receipts, photos, or documents for this asset.">
-                            <button type="button" @onclick="ShowUploadModal" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 text-sm">
+                            <Button OnClick="ShowUploadModal">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                 </svg>
                                 Upload File
-                            </button>
+                            </Button>
                         </EmptyState>
                     }
                     else
                     {
-                        <div class="divide-y divide-slate-100 dark:divide-slate-700 -mx-6 -mb-6">
+                        <div class="divide-y divide-border -mx-6 -mb-6">
                             @foreach (var attachment in _attachments)
                             {
-                                <div class="flex items-center gap-3 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                <div class="flex items-center gap-3 px-6 py-4 hover:bg-muted/50 transition-colors">
                                     <!-- Thumbnail/Icon -->
                                     @if (attachment.IsImage && _attachmentThumbnails.TryGetValue(attachment.Id, out var thumbnailUrl))
                                     {
@@ -280,14 +272,14 @@
                                     }
                                     else if (attachment.IsImage)
                                     {
-                                        <div class="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                                            <div class="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                                        <div class="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                                            <div class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                                         </div>
                                     }
                                     else
                                     {
-                                        <div class="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                                            <svg class="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <div class="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                                            <svg class="w-6 h-6 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                             </svg>
                                         </div>
@@ -295,26 +287,24 @@
 
                                     <!-- Info -->
                                     <div class="flex-1 min-w-0">
-                                        <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@attachment.FileName</p>
-                                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                                        <p class="text-sm font-medium text-foreground truncate">@attachment.FileName</p>
+                                        <p class="text-xs text-muted-foreground">
                                             @attachment.Category &bull; @attachment.FileSizeDisplay &bull; @attachment.CreatedAt.ToString("MMM dd, yyyy")
                                         </p>
                                     </div>
 
                                     <!-- Actions -->
                                     <div class="flex items-center gap-1">
-                                        <button type="button" @onclick="() => DownloadAttachment(attachment)"
-                                                class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-700 transition-all">
+                                        <Button Variant="ghost" Size="icon-sm" Title="Download" Class="text-muted-foreground" OnClick="() => DownloadAttachment(attachment)">
                                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                             </svg>
-                                        </button>
-                                        <button type="button" @onclick="() => ConfirmDeleteAttachment(attachment)"
-                                                class="p-2 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-300 dark:hover:bg-red-900/20 transition-all">
+                                        </Button>
+                                        <Button Variant="ghost" Size="icon-sm" Title="Delete" Class="text-destructive hover:bg-destructive/10 hover:text-destructive" OnClick="() => ConfirmDeleteAttachment(attachment)">
                                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
                             }
@@ -344,13 +334,13 @@
                             </Select>
                         </FormField>
 
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Description (Optional)</label>
-                            <textarea @bind="_uploadDescription"
-                                      rows="2"
-                                      placeholder="Brief description of this file..."
-                                      class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
-                        </div>
+                        <FormField LabelText="Description (Optional)">
+                            <Textarea Value="@_uploadDescription"
+                                      ValueChanged="@(v => _uploadDescription = v ?? "")"
+                                      Rows="2"
+                                      Placeholder="Brief description of this file..."
+                                      Class="resize-none" />
+                        </FormField>
 
                         @if (!string.IsNullOrEmpty(_uploadError))
                         {
@@ -367,7 +357,7 @@
             <!-- Delete Attachment Confirmation Modal -->
             <Modal IsOpen="@_showDeleteAttachmentModal" Title="Delete Attachment" OnClose="() => _showDeleteAttachmentModal = false" Size="sm">
                 <ChildContent>
-                    <p class="text-slate-600 dark:text-slate-300">
+                    <p class="text-muted-foreground">
                         Are you sure you want to delete <strong>@_attachmentToDelete?.FileName</strong>? This action cannot be undone.
                     </p>
                 </ChildContent>
@@ -388,7 +378,7 @@
 
         <!-- Action Buttons -->
         <div class="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-2">
-            <a href="@(IsNew ? "/assets" : $"/assets/{Id}")" class="w-full sm:w-auto px-6 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 text-center">
+            <a href="@(IsNew ? "/assets" : $"/assets/{Id}")" class="w-full sm:w-auto px-6 py-2.5 rounded-xl font-medium text-muted-foreground hover:bg-muted transition-all duration-200 text-center">
                 Cancel
             </a>
             <Button Type="submit" form="asset-form" Loading="@_saving" Class="w-full sm:w-auto">
@@ -400,6 +390,12 @@
 </PermissionView>
 
 @code {
+    private async Task OnSerialNumberChanged(string value)
+    {
+        _model.SerialNumber = value;
+        await OnSerialNumberChangedAsync();
+    }
+
     [Parameter] public int? Id { get; set; }
 
     private bool IsNew => Id is null;

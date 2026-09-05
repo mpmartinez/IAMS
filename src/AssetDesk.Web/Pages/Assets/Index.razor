@@ -12,21 +12,21 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Assets</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage your IT inventory</p>
+            <h1 class="text-xl sm:text-2xl font-bold text-foreground">Assets</h1>
+            <p class="text-sm text-muted-foreground mt-1">Manage your IT inventory</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 sm:gap-3">
             <PermissionView Permission="iams:assets:import">
-                <a href="/assets/import" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium transition-all duration-200 btn-press text-sm sm:text-base">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <a href="/assets/import" class="@UiClasses.OutlineButton">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M17 8l-5-5-5 5M12 3v12" />
                     </svg>
                     Import
                 </a>
             </PermissionView>
             <PermissionView Permission="iams:assets:create">
-                <a href="/assets/new" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press text-sm sm:text-base">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <a href="/assets/new" class="@($"{UiClasses.PrimaryButton} shadow-lg shadow-primary/25")">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
                     Add Asset
@@ -39,19 +39,17 @@
     <div class="flex flex-col gap-3">
         <!-- Search -->
         <div class="relative">
-            <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <input type="text"
-                   @bind="_search"
-                   @bind:event="oninput"
-                   @onkeyup="HandleSearch"
-                   placeholder="Search by tag, manufacturer, model, serial..."
-                   class="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 text-sm" />
+            <Input Value="@_search"
+                   ValueChanged="OnSearchChanged"
+                   Placeholder="Search by tag, manufacturer, model, serial..."
+                   Class="pl-9" />
         </div>
         <!-- Filter Dropdowns -->
         <div class="flex flex-col sm:flex-row gap-3">
-            <select @bind="_deviceType" @bind:after="LoadAssets" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+            <Select Value="@_deviceType" ValueChanged="OnDeviceTypeChanged" Class="flex-1">
                 <option value="">All Device Types</option>
                 @if (_deviceTypes is not null)
                 {
@@ -60,8 +58,8 @@
                         <option value="@dt">@dt</option>
                     }
                 }
-            </select>
-            <select @bind="_status" @bind:after="LoadAssets" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+            </Select>
+            <Select Value="@_status" ValueChanged="OnStatusChanged" Class="flex-1">
                 <option value="">All Statuses</option>
                 @if (_statuses is not null)
                 {
@@ -70,7 +68,7 @@
                         <option value="@stat">@stat</option>
                     }
                 }
-            </select>
+            </Select>
         </div>
     </div>
 
@@ -78,32 +76,32 @@
     @if (_assets is not null && !_loading)
     {
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div class="text-sm text-slate-500 dark:text-slate-400">
+            <div class="text-sm text-muted-foreground">
                 Showing @_assets.Items.Count of @_assets.TotalCount assets
                 @if (_hasFilters)
                 {
-                    <button @onclick="ClearFilters" class="ml-2 text-primary-600 dark:text-primary-400 hover:underline">
+                    <Button Variant="link" Size="none" Class="ml-2 text-sm" OnClick="ClearFilters">
                         Clear filters
-                    </button>
+                    </Button>
                 }
             </div>
 
+            @* The toggle is a segmented control: the active view is the solid Button, the other
+               is ghost, so the pair reads as one control. *@
             <!-- View Toggle -->
-            <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-                <button @onclick="() => _viewMode = ViewMode.Cards"
-                        class="@GetViewToggleClass(ViewMode.Cards) flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200">
+            <div class="flex items-center gap-1 bg-muted rounded-xl p-1">
+                <Button Variant="@ViewToggleVariant(ViewMode.Cards)" Size="sm" OnClick="() => _viewMode = ViewMode.Cards">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                     </svg>
                     Cards
-                </button>
-                <button @onclick="() => _viewMode = ViewMode.Grid"
-                        class="@GetViewToggleClass(ViewMode.Grid) flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200">
+                </Button>
+                <Button Variant="@ViewToggleVariant(ViewMode.Grid)" Size="sm" OnClick="() => _viewMode = ViewMode.Grid">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                     </svg>
                     Grid
-                </button>
+                </Button>
             </div>
         </div>
     }
@@ -114,23 +112,23 @@
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             @for (int i = 0; i < 6; i++)
             {
-                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 sm:p-5">
+                <Card Class="p-4 sm:p-5">
                     <div class="flex items-start gap-3 sm:gap-4">
-                        <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl skeleton"></div>
+                        <Skeleton Class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl" />
                         <div class="flex-1 space-y-2">
-                            <div class="h-5 w-2/3 rounded skeleton"></div>
-                            <div class="h-4 w-1/2 rounded skeleton"></div>
+                            <Skeleton Class="h-5 w-2/3" />
+                            <Skeleton Class="h-4 w-1/2" />
                         </div>
                     </div>
                     <div class="mt-4 grid grid-cols-2 gap-2">
-                        <div class="h-4 rounded skeleton"></div>
-                        <div class="h-4 rounded skeleton"></div>
+                        <Skeleton Class="h-4" />
+                        <Skeleton Class="h-4" />
                     </div>
-                    <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex justify-between">
-                        <div class="h-5 w-24 rounded skeleton"></div>
-                        <div class="h-5 w-16 rounded skeleton"></div>
+                    <div class="mt-4 pt-3 border-t flex justify-between">
+                        <Skeleton Class="h-5 w-24" />
+                        <Skeleton Class="h-5 w-16" />
                     </div>
-                </div>
+                </Card>
             }
         </div>
     }
@@ -151,109 +149,89 @@
         else
         {
             <!-- Grid/Table View -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead>
-                            <tr class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Asset</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Type</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden sm:table-cell">Serial</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden md:table-cell">Assigned To</th>
-                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden lg:table-cell">Warranty</th>
-                                <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden xl:table-cell">Price</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                            @foreach (var asset in _assets.Items)
-                            {
-                                <tr @onclick="() => NavigateToAsset(asset.Id)"
-                                    class="hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors duration-150">
-                                    <td class="px-4 py-3">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-8 h-8 rounded-lg @GetDeviceTypeBg(asset.DeviceType) flex items-center justify-center shrink-0">
-                                                @GetDeviceIcon(asset.DeviceType)
-                                            </div>
-                                            <div class="min-w-0">
-                                                <div class="font-medium text-slate-900 dark:text-white truncate text-sm">@asset.DisplayName</div>
-                                                <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">@asset.AssetTag</div>
-                                            </div>
+            <Card NoPadding="true" Class="overflow-hidden">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead Class="px-4">Asset</TableHead>
+                            <TableHead Class="px-4">Type</TableHead>
+                            <TableHead Class="px-4 hidden sm:table-cell">Serial</TableHead>
+                            <TableHead Class="px-4">Status</TableHead>
+                            <TableHead Class="px-4 hidden md:table-cell">Assigned To</TableHead>
+                            <TableHead Class="px-4 hidden lg:table-cell">Warranty</TableHead>
+                            <TableHead Class="px-4 text-right hidden xl:table-cell">Price</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        @foreach (var asset in _assets.Items)
+                        {
+                            <TableRow @onclick="() => NavigateToAsset(asset.Id)" Class="cursor-pointer">
+                                <TableCell Class="px-4 py-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg @GetDeviceTypeBg(asset.DeviceType) flex items-center justify-center shrink-0">
+                                            @GetDeviceIcon(asset.DeviceType)
                                         </div>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <span class="text-sm text-slate-600 dark:text-slate-300">@asset.DeviceType</span>
-                                    </td>
-                                    <td class="px-4 py-3 hidden sm:table-cell">
-                                        <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">@(asset.SerialNumber ?? "-")</span>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <Badge Variant="@asset.Status">@asset.Status</Badge>
-                                    </td>
-                                    <td class="px-4 py-3 hidden md:table-cell">
-                                        @if (!string.IsNullOrEmpty(asset.AssignedToUserName))
-                                        {
-                                            <div class="flex items-center gap-2">
-                                                <div class="w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                                                    <span class="text-primary-600 dark:text-primary-400 font-medium text-xs">@GetInitials(asset.AssignedToUserName)</span>
-                                                </div>
-                                                <span class="text-sm text-slate-600 dark:text-slate-300 truncate max-w-[120px]">@asset.AssignedToUserName</span>
-                                            </div>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-sm text-slate-400 dark:text-slate-500">Unassigned</span>
-                                        }
-                                    </td>
-                                    <td class="px-4 py-3 hidden lg:table-cell">
-                                        @if (asset.WarrantyStatus != WarrantyStatus.None)
-                                        {
-                                            <Badge Variant="@GetWarrantyBadgeVariant(asset)" Pulse="@(asset.WarrantyStatus == WarrantyStatus.Expiring)">@GetWarrantyBadgeText(asset)</Badge>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-sm text-slate-400 dark:text-slate-500">-</span>
-                                        }
-                                    </td>
-                                    <td class="px-4 py-3 text-right hidden xl:table-cell">
-                                        @if (asset.PurchasePrice.HasValue)
-                                        {
-                                            <span class="text-sm text-slate-600 dark:text-slate-300">@FormatPrice(asset.PurchasePrice.Value)</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-sm text-slate-400 dark:text-slate-500">-</span>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                                        <div class="min-w-0">
+                                            <div class="font-medium text-foreground truncate text-sm">@asset.DisplayName</div>
+                                            <div class="text-xs text-muted-foreground font-mono">@asset.AssetTag</div>
+                                        </div>
+                                    </div>
+                                </TableCell>
+                                <TableCell Class="px-4 py-3 text-sm">@asset.DeviceType</TableCell>
+                                <TableCell Class="px-4 py-3 hidden sm:table-cell">
+                                    <span class="text-sm text-muted-foreground font-mono">@(asset.SerialNumber ?? "-")</span>
+                                </TableCell>
+                                <TableCell Class="px-4 py-3">
+                                    <Badge Variant="@asset.Status">@asset.Status</Badge>
+                                </TableCell>
+                                <TableCell Class="px-4 py-3 hidden md:table-cell">
+                                    @if (!string.IsNullOrEmpty(asset.AssignedToUserName))
+                                    {
+                                        <div class="flex items-center gap-2">
+                                            <Avatar Size="sm" Class="h-6 w-6" Fallback="@asset.AssignedToUserName" />
+                                            <span class="text-sm truncate max-w-[120px]">@asset.AssignedToUserName</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-sm text-muted-foreground">Unassigned</span>
+                                    }
+                                </TableCell>
+                                <TableCell Class="px-4 py-3 hidden lg:table-cell">
+                                    @if (asset.WarrantyStatus != WarrantyStatus.None)
+                                    {
+                                        <Badge Variant="@GetWarrantyBadgeVariant(asset)" Pulse="@(asset.WarrantyStatus == WarrantyStatus.Expiring)">@GetWarrantyBadgeText(asset)</Badge>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-sm text-muted-foreground">-</span>
+                                    }
+                                </TableCell>
+                                <TableCell Class="px-4 py-3 text-right hidden xl:table-cell">
+                                    @if (asset.PurchasePrice.HasValue)
+                                    {
+                                        <span class="text-sm">@FormatPrice(asset.PurchasePrice.Value)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-sm text-muted-foreground">-</span>
+                                    }
+                                </TableCell>
+                            </TableRow>
+                        }
+                    </TableBody>
+                </Table>
+            </Card>
         }
 
         <!-- Pagination -->
         @if (_assets.TotalPages > 1)
         {
-            <div class="flex items-center justify-center gap-2 pt-4">
-                <button @onclick="() => ChangePage(_page - 1)"
-                        disabled="@(!_assets.HasPrevious)"
-                        class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </button>
-                <span class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">
-                    Page @_page of @_assets.TotalPages
-                </span>
-                <button @onclick="() => ChangePage(_page + 1)"
-                        disabled="@(!_assets.HasNext)"
-                        class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                </button>
+            <div class="flex items-center justify-center pt-4">
+                <Pagination CurrentPage="@_page"
+                            TotalPages="@_assets.TotalPages"
+                            OnPageChange="ChangePage"
+                            MaxVisiblePages="5" />
             </div>
         }
     }
@@ -265,7 +243,7 @@
                 {
                     <div class="flex flex-wrap items-center justify-center gap-3">
                         <PermissionView Permission="iams:assets:create">
-                            <a href="/assets/new" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                            <a href="/assets/new" class="@UiClasses.PrimaryButton">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                 </svg>
@@ -273,7 +251,7 @@
                             </a>
                         </PermissionView>
                         <PermissionView Permission="iams:assets:import">
-                            <a href="/assets/import" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium transition-all duration-200">
+                            <a href="/assets/import" class="@UiClasses.OutlineButton">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M17 8l-5-5-5 5M12 3v12" />
                                 </svg>
@@ -284,9 +262,9 @@
                 }
                 else
                 {
-                    <button @onclick="ClearFilters" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200">
+                    <Button Variant="secondary" OnClick="ClearFilters">
                         Clear Filters
-                    </button>
+                    </Button>
                 }
             </EmptyState>
         </Card>
@@ -310,9 +288,21 @@
 
     private bool _hasFilters => !string.IsNullOrEmpty(_search) || !string.IsNullOrEmpty(_deviceType) || !string.IsNullOrEmpty(_status);
 
-    private string GetViewToggleClass(ViewMode mode) => _viewMode == mode
-        ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
-        : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300";
+    private string ViewToggleVariant(ViewMode mode) => _viewMode == mode ? "default" : "ghost";
+
+    private async Task OnDeviceTypeChanged(string value)
+    {
+        _deviceType = value;
+        _page = 1;
+        await LoadAssets();
+    }
+
+    private async Task OnStatusChanged(string value)
+    {
+        _status = value;
+        _page = 1;
+        await LoadAssets();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -339,8 +329,9 @@
         _loading = false;
     }
 
-    private void HandleSearch(KeyboardEventArgs e)
+    private void OnSearchChanged(string value)
     {
+        _search = value;
         _searchTimer?.Stop();
         _searchTimer?.Dispose();
         _searchTimer = new System.Timers.Timer(300);
@@ -389,7 +380,7 @@
         "Phone" or "Tablet" => "bg-green-100 dark:bg-green-900/30",
         "Printer" => "bg-orange-100 dark:bg-orange-900/30",
         "Network" or "Server" => "bg-red-100 dark:bg-red-900/30",
-        _ => "bg-slate-100 dark:bg-slate-700"
+        _ => "bg-muted"
     };
 
     private RenderFragment GetDeviceIcon(string deviceType) => deviceType switch
@@ -400,19 +391,12 @@
         "Tablet" => @<svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>,
         "Printer" => @<svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
         "Network" or "Server" => @<svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" /></svg>,
-        _ => @<svg class="w-4 h-4 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+        _ => @<svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
     };
 
     // Peso-only app - the stored currency code is not consulted.
     private static string FormatPrice(decimal price) => $"\u20B1{price:N2}";
 
-    private string GetInitials(string name)
-    {
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 2)
-            return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
-        return parts.Length > 0 ? parts[0][0].ToString().ToUpper() : "?";
-    }
 
     private string GetWarrantyBadgeVariant(AssetDto asset) => asset.WarrantyStatus switch
     {

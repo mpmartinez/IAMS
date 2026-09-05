@@ -13,22 +13,22 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Tickets</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Service desk queue</p>
+            <h1 class="text-xl sm:text-2xl font-bold text-foreground">Tickets</h1>
+            <p class="text-sm text-muted-foreground mt-1">Service desk queue</p>
         </div>
-        <button @onclick="ShowCreateModal" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press text-sm sm:text-base">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <Button Class="shadow-lg shadow-primary/25" OnClick="ShowCreateModal">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
             New Ticket
-        </button>
+        </Button>
     </div>
 
     <!-- Summary Cards -->
     @if (_summary is not null)
     {
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-amber-200 dark:border-amber-900/50 p-4">
+            <div class="bg-card rounded-2xl border border-amber-200 dark:border-amber-900/50 p-4">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
                         <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -37,24 +37,24 @@
                     </div>
                     <div>
                         <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">@_summary.Open</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Open</p>
+                        <p class="text-xs text-muted-foreground">Open</p>
                     </div>
                 </div>
             </div>
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+            <div class="bg-card rounded-2xl border border-border p-4">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                        <svg class="w-5 h-5 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                        <svg class="w-5 h-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
                     </div>
                     <div>
-                        <p class="text-2xl font-bold text-slate-900 dark:text-white">@_summary.Unassigned</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Unassigned</p>
+                        <p class="text-2xl font-bold text-foreground">@_summary.Unassigned</p>
+                        <p class="text-xs text-muted-foreground">Unassigned</p>
                     </div>
                 </div>
             </div>
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-blue-200 dark:border-blue-900/50 p-4">
+            <div class="bg-card rounded-2xl border border-blue-200 dark:border-blue-900/50 p-4">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                         <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -63,11 +63,11 @@
                     </div>
                     <div>
                         <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">@_summary.InProgress</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">In Progress</p>
+                        <p class="text-xs text-muted-foreground">In Progress</p>
                     </div>
                 </div>
             </div>
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 dark:border-red-900/50 p-4">
+            <div class="bg-card rounded-2xl border border-red-200 dark:border-red-900/50 p-4">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                         <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -76,7 +76,7 @@
                     </div>
                     <div>
                         <p class="text-2xl font-bold text-red-600 dark:text-red-400">@_summary.Overdue</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Overdue</p>
+                        <p class="text-xs text-muted-foreground">Overdue</p>
                     </div>
                 </div>
             </div>
@@ -87,25 +87,23 @@
     <div class="flex flex-col gap-3">
         <!-- Search -->
         <div class="relative">
-            <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <input type="text"
-                   @bind="_search"
-                   @bind:event="oninput"
-                   @onkeyup="HandleSearch"
-                   placeholder="Search by title, reference, requester..."
-                   class="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-500 focus:border-primary-500 text-sm" />
+            <Input Value="@_search"
+                   ValueChanged="OnSearchChanged"
+                   Placeholder="Search by title, reference, requester..."
+                   Class="pl-9" />
         </div>
         <!-- Filter Dropdowns -->
         <div class="flex flex-col sm:flex-row gap-3">
-            <select @bind="_type" @bind:after="LoadTickets" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+            <Select Value="@_type" ValueChanged="@(v => OnFilterChanged(() => _type = v))" Class="flex-1">
                 <option value="">All Types</option>
                 <option value="Incident">Incident</option>
                 <option value="Request">Request</option>
                 <option value="SecurityEvent">Security Event</option>
-            </select>
-            <select @bind="_status" @bind:after="LoadTickets" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+            </Select>
+            <Select Value="@_status" ValueChanged="@(v => OnFilterChanged(() => _status = v))" Class="flex-1">
                 <option value="">All Statuses</option>
                 <option value="New">New</option>
                 <option value="Assigned">Assigned</option>
@@ -114,18 +112,18 @@
                 <option value="Resolved">Resolved</option>
                 <option value="Closed">Closed</option>
                 <option value="Cancelled">Cancelled</option>
-            </select>
-            <select @bind="_priority" @bind:after="LoadTickets" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+            </Select>
+            <Select Value="@_priority" ValueChanged="@(v => OnFilterChanged(() => _priority = v))" Class="flex-1">
                 <option value="">All Priorities</option>
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
                 <option value="High">High</option>
                 <option value="Critical">Critical</option>
-            </select>
+            </Select>
             @* Options come from the lookups API rather than a fixed list: categories are
                admin-editable, so a hardcoded set would drift the moment one is added on the
                Reference Data screen. *@
-            <select @bind="_category" @bind:after="LoadTickets" class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white transition-all duration-200 text-sm">
+            <Select Value="@_category" ValueChanged="@(v => OnFilterChanged(() => _category = v))" Class="flex-1">
                 <option value="">All Categories</option>
                 @if (_categories is not null)
                 {
@@ -134,7 +132,7 @@
                         <option value="@cat">@cat</option>
                     }
                 }
-            </select>
+            </Select>
         </div>
     </div>
 
@@ -142,13 +140,13 @@
     @if (_tickets is not null && !_loading)
     {
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div class="text-sm text-slate-500 dark:text-slate-400">
+            <div class="text-sm text-muted-foreground">
                 Showing @_tickets.Items.Count of @_tickets.TotalCount tickets
                 @if (_hasFilters)
                 {
-                    <button @onclick="ClearFilters" class="ml-2 text-primary-600 dark:text-primary-400 hover:underline">
+                    <Button Variant="link" Size="none" Class="ml-2 text-sm" OnClick="ClearFilters">
                         Clear filters
-                    </button>
+                    </Button>
                 }
             </div>
         </div>
@@ -157,102 +155,76 @@
     <!-- Queue Table -->
     @if (_loading)
     {
-        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-4">
+        <Card Class="p-4 space-y-4">
             @for (int i = 0; i < 6; i++)
             {
                 <div class="flex items-center gap-4">
                     <div class="flex-1 space-y-2">
-                        <div class="h-4 w-1/3 rounded skeleton"></div>
-                        <div class="h-3 w-1/5 rounded skeleton"></div>
+                        <Skeleton Class="h-4 w-1/3" />
+                        <Skeleton Class="h-3 w-1/5" />
                     </div>
-                    <div class="h-4 w-16 rounded skeleton hidden sm:block"></div>
-                    <div class="h-4 w-20 rounded skeleton hidden md:block"></div>
-                    <div class="h-4 w-20 rounded skeleton"></div>
+                    <Skeleton Class="h-4 w-16 hidden sm:block" />
+                    <Skeleton Class="h-4 w-20 hidden md:block" />
+                    <Skeleton Class="h-4 w-20" />
                 </div>
             }
-        </div>
+        </Card>
     }
     else if (_tickets?.Items.Any() == true)
     {
-        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead>
-                        <tr class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Ticket</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden sm:table-cell">Type</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden lg:table-cell">Category</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden lg:table-cell">Asset</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden md:table-cell">Requester</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Priority</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden md:table-cell">Assignee</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider hidden lg:table-cell">Age</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                        @foreach (var ticket in _tickets.Items)
-                        {
-                            <tr @key="ticket.Id" @onclick="() => NavigateToTicket(ticket.Id)"
-                                class="hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors duration-150">
-                                <td class="px-4 py-3">
-                                    <div class="min-w-0">
-                                        <div class="font-medium text-slate-900 dark:text-white truncate text-sm">@ticket.Title</div>
-                                        <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">@ticket.Reference</div>
-                                    </div>
-                                </td>
-                                <td class="px-4 py-3 hidden sm:table-cell">
-                                    <Badge Variant="@ticket.Type">@GetTypeLabel(ticket.Type)</Badge>
-                                </td>
-                                <td class="px-4 py-3 hidden lg:table-cell">
-                                    <span class="text-sm text-slate-600 dark:text-slate-300">@(string.IsNullOrEmpty(ticket.Category) ? "-" : ticket.Category)</span>
-                                </td>
-                                <td class="px-4 py-3 hidden lg:table-cell">
-                                    <span class="text-sm text-slate-600 dark:text-slate-300 font-mono">@(ticket.AssetTag ?? "-")</span>
-                                </td>
-                                <td class="px-4 py-3 hidden md:table-cell">
-                                    <span class="text-sm text-slate-600 dark:text-slate-300">@(ticket.RequesterName ?? "-")</span>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <Badge Variant="@ticket.Priority">@ticket.Priority</Badge>
-                                </td>
-                                <td class="px-4 py-3">
-                                    <Badge Variant="@ticket.Status">@GetStatusLabel(ticket.Status)</Badge>
-                                </td>
-                                <td class="px-4 py-3 hidden md:table-cell">
-                                    <span class="text-sm text-slate-600 dark:text-slate-300">@(ticket.AssignedToName ?? "Unassigned")</span>
-                                </td>
-                                <td class="px-4 py-3 hidden lg:table-cell">
-                                    <span class="text-sm text-slate-500 dark:text-slate-400">@GetAge(ticket.CreatedAt)</span>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <Card NoPadding="true" Class="overflow-hidden">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead Class="px-4">Ticket</TableHead>
+                        <TableHead Class="px-4 hidden sm:table-cell">Type</TableHead>
+                        <TableHead Class="px-4 hidden lg:table-cell">Category</TableHead>
+                        <TableHead Class="px-4 hidden lg:table-cell">Asset</TableHead>
+                        <TableHead Class="px-4 hidden md:table-cell">Requester</TableHead>
+                        <TableHead Class="px-4">Priority</TableHead>
+                        <TableHead Class="px-4">Status</TableHead>
+                        <TableHead Class="px-4 hidden md:table-cell">Assignee</TableHead>
+                        <TableHead Class="px-4 hidden lg:table-cell">Age</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    @foreach (var ticket in _tickets.Items)
+                    {
+                        <TableRow @key="ticket.Id" @onclick="() => NavigateToTicket(ticket.Id)" Class="cursor-pointer">
+                            <TableCell Class="px-4 py-3">
+                                <div class="min-w-0">
+                                    <div class="font-medium text-foreground truncate text-sm">@ticket.Title</div>
+                                    <div class="text-xs text-muted-foreground font-mono">@ticket.Reference</div>
+                                </div>
+                            </TableCell>
+                            <TableCell Class="px-4 py-3 hidden sm:table-cell">
+                                <Badge Variant="@ticket.Type">@GetTypeLabel(ticket.Type)</Badge>
+                            </TableCell>
+                            <TableCell Class="px-4 py-3 text-sm hidden lg:table-cell">@(string.IsNullOrEmpty(ticket.Category) ? "-" : ticket.Category)</TableCell>
+                            <TableCell Class="px-4 py-3 text-sm font-mono hidden lg:table-cell">@(ticket.AssetTag ?? "-")</TableCell>
+                            <TableCell Class="px-4 py-3 text-sm hidden md:table-cell">@(ticket.RequesterName ?? "-")</TableCell>
+                            <TableCell Class="px-4 py-3">
+                                <Badge Variant="@ticket.Priority">@ticket.Priority</Badge>
+                            </TableCell>
+                            <TableCell Class="px-4 py-3">
+                                <Badge Variant="@ticket.Status">@GetStatusLabel(ticket.Status)</Badge>
+                            </TableCell>
+                            <TableCell Class="px-4 py-3 text-sm hidden md:table-cell">@(ticket.AssignedToName ?? "Unassigned")</TableCell>
+                            <TableCell Class="px-4 py-3 text-sm text-muted-foreground hidden lg:table-cell">@GetAge(ticket.CreatedAt)</TableCell>
+                        </TableRow>
+                    }
+                </TableBody>
+            </Table>
+        </Card>
 
         <!-- Pagination -->
         @if (_tickets.TotalPages > 1)
         {
-            <div class="flex items-center justify-center gap-2 pt-4">
-                <button @onclick="() => ChangePage(_page - 1)"
-                        disabled="@(!_tickets.HasPrevious)"
-                        class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </button>
-                <span class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">
-                    Page @_page of @_tickets.TotalPages
-                </span>
-                <button @onclick="() => ChangePage(_page + 1)"
-                        disabled="@(!_tickets.HasNext)"
-                        class="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                </button>
+            <div class="flex items-center justify-center pt-4">
+                <Pagination CurrentPage="@_page"
+                            TotalPages="@_tickets.TotalPages"
+                            OnPageChange="ChangePage"
+                            MaxVisiblePages="5" />
             </div>
         }
     }
@@ -262,9 +234,9 @@
             <EmptyState Title="No tickets found" Description="@(_hasFilters ? "Try adjusting your filters." : "No tickets have been raised yet.")">
                 @if (_hasFilters)
                 {
-                    <button @onclick="ClearFilters" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200">
+                    <Button Variant="secondary" OnClick="ClearFilters">
                         Clear Filters
-                    </button>
+                    </Button>
                 }
             </EmptyState>
         </Card>
@@ -304,9 +276,14 @@
             </FormField>
 
             <div class="space-y-1.5">
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description <span class="text-slate-400 font-normal">(optional)</span></label>
-                <textarea @bind="_newDescription" rows="3" placeholder="Details for whoever picks this up..."
-                          class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 resize-none text-sm"></textarea>
+                <AssetDesk.Web.Components.UI.Label Class="block">
+                    Description <span class="text-muted-foreground font-normal">(optional)</span>
+                </AssetDesk.Web.Components.UI.Label>
+                <Textarea Value="@_newDescription"
+                          ValueChanged="@(v => _newDescription = v ?? "")"
+                          Rows="3"
+                          Placeholder="Details for whoever picks this up..."
+                          Class="resize-none" />
             </div>
 
             <FormField LabelText="Priority">
@@ -321,18 +298,20 @@
             @if (_newType != "Request")
             {
                 <div class="space-y-1.5">
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Asset <span class="text-slate-400 font-normal">(optional)</span></label>
+                    <AssetDesk.Web.Components.UI.Label Class="block">
+                        Asset <span class="text-muted-foreground font-normal">(optional)</span>
+                    </AssetDesk.Web.Components.UI.Label>
 
                     @if (_newLinkedAsset is not null)
                     {
-                        <div class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600">
+                        <div class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-muted/40 border">
                             <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@_newLinkedAsset.DisplayName</p>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">@_newLinkedAsset.AssetTag</p>
+                                <p class="text-sm font-medium text-foreground truncate">@_newLinkedAsset.DisplayName</p>
+                                <p class="text-xs text-muted-foreground font-mono">@_newLinkedAsset.AssetTag</p>
                             </div>
-                            <button @onclick="ClearNewAsset" class="text-xs font-medium text-primary-600 dark:text-primary-400 hover:underline shrink-0">
+                            <Button Variant="link" Size="none" Class="shrink-0 text-xs" OnClick="ClearNewAsset">
                                 Change
-                            </button>
+                            </Button>
                         </div>
                     }
                     else
@@ -341,15 +320,19 @@
 
                         @if (_assetResults.Count > 0)
                         {
-                            <div class="mt-2 rounded-xl border border-slate-200 dark:border-slate-600 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+                            <div class="mt-2 rounded-xl border overflow-hidden divide-y">
                                 @foreach (var asset in _assetResults)
                                 {
-                                    <button @key="asset.Id" @onclick="() => PickNewAsset(asset)" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left">
+                                    <Button @key="asset.Id"
+                                            Variant="ghost"
+                                            Size="none"
+                                            Class="w-full justify-start gap-3 rounded-none px-4 py-2.5 text-left"
+                                            OnClick="() => PickNewAsset(asset)">
                                         <div class="min-w-0">
-                                            <p class="text-sm text-slate-900 dark:text-white truncate">@asset.DisplayName</p>
-                                            <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">@asset.AssetTag</p>
+                                            <p class="text-sm text-foreground truncate">@asset.DisplayName</p>
+                                            <p class="text-xs text-muted-foreground font-mono">@asset.AssetTag</p>
                                         </div>
-                                    </button>
+                                    </Button>
                                 }
                             </div>
                         }
@@ -361,12 +344,16 @@
 
             @if (!string.IsNullOrEmpty(_createError))
             {
-                <div class="flex items-start gap-2 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50">
-                    <svg class="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <p class="text-sm text-red-700 dark:text-red-400">@_createError</p>
-                </div>
+                <Alert Variant="destructive">
+                    <Icon>
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </Icon>
+                    <ChildContent>
+                        @_createError
+                    </ChildContent>
+                </Alert>
             }
         </div>
     </ChildContent>
@@ -453,8 +440,16 @@
         }
     }
 
-    private void HandleSearch(KeyboardEventArgs e)
+    private async Task OnFilterChanged(Action apply)
     {
+        apply();
+        _page = 1;
+        await LoadTickets();
+    }
+
+    private void OnSearchChanged(string value)
+    {
+        _search = value;
         _searchTimer?.Stop();
         _searchTimer?.Dispose();
         _searchTimer = new System.Timers.Timer(300);

@@ -9,8 +9,8 @@
 <div class="space-y-6">
     <!-- Header -->
     <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Reference Data</h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">
+        <h1 class="text-2xl font-bold text-foreground">Reference Data</h1>
+        <p class="text-muted-foreground mt-1">
             The shared vocabulary every tenant's dropdowns draw from - device types, currencies,
             categories. Changes apply globally.
         </p>
@@ -34,27 +34,27 @@
         {
             <div class="space-y-4">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Editable</p>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Editable</p>
                     <div class="flex flex-wrap gap-2">
                         @foreach (var t in _types.Where(t => t.IsEditable))
                         {
-                            <button @onclick="() => SelectType(t)" class="@TypeChipClass(t)">
+                            <Button Variant="@TypeChipVariant(t)" Size="none" Class="@TypeChipClass" OnClick="() => SelectType(t)">
                                 @t.DisplayName
-                            </button>
+                            </Button>
                         }
                     </div>
                 </div>
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Locked - read only</p>
+                    <p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Locked - read only</p>
                     <div class="flex flex-wrap gap-2">
                         @foreach (var t in _types.Where(t => !t.IsEditable))
                         {
-                            <button @onclick="() => SelectType(t)" class="@TypeChipClass(t)">
+                            <Button Variant="@TypeChipVariant(t)" Size="none" Class="@TypeChipClass" OnClick="() => SelectType(t)">
                                 <svg class="w-3.5 h-3.5 mr-1.5 inline -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                 </svg>
                                 @t.DisplayName
-                            </button>
+                            </Button>
                         }
                     </div>
                 </div>
@@ -66,12 +66,12 @@
     @if (_selectedType is not null)
     {
         <Card Class="overflow-hidden">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-5 border-b border-border">
                 <div>
-                    <h2 class="font-semibold text-slate-900 dark:text-white">@_selectedType.DisplayName</h2>
+                    <h2 class="font-semibold text-foreground">@_selectedType.DisplayName</h2>
                     @if (!_selectedType.IsEditable)
                     {
-                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Shown for reference only.</p>
+                        <p class="text-sm text-muted-foreground mt-0.5">Shown for reference only.</p>
                     }
                 </div>
                 @if (_selectedType.IsEditable)
@@ -110,65 +110,63 @@
                 }
                 else
                 {
-                    <div class="overflow-x-auto -mx-4 sm:mx-0">
-                        <table class="w-full">
-                            <thead>
-                                <tr class="border-b border-slate-200 dark:border-slate-700">
-                                    <th class="text-left py-2 px-4 sm:px-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Label</th>
-                                    <th class="text-left py-2 px-4 sm:px-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Code</th>
-                                    <th class="text-left py-2 px-4 sm:px-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active</th>
-                                    <th class="text-right py-2 px-4 sm:px-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">&nbsp;</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
-                                @for (var i = 0; i < _values.Count; i++)
-                                {
-                                    var value = _values[i];
-                                    var index = i;
-                                    <tr @key="value.Id" class="@(value.IsActive ? "" : "opacity-50")">
-                                        <td class="py-2.5 px-4 sm:px-2">
-                                            <span class="font-medium text-slate-900 dark:text-white text-sm">@value.Label</span>
-                                        </td>
-                                        <td class="py-2.5 px-4 sm:px-2">
-                                            <span class="text-xs font-mono text-slate-500 dark:text-slate-400">@value.Value</span>
-                                        </td>
-                                        <td class="py-2.5 px-4 sm:px-2">
-                                            @if (_selectedType.IsEditable)
-                                            {
-                                                <Switch Value="@value.IsActive" ValueChanged="v => ToggleActive(value, v)" />
-                                            }
-                                            else
-                                            {
-                                                <Badge Variant="@(value.IsActive ? "success" : "secondary")">@(value.IsActive ? "Active" : "Inactive")</Badge>
-                                            }
-                                        </td>
-                                        <td class="py-2.5 px-4 sm:px-2">
-                                            @if (_selectedType.IsEditable)
-                                            {
-                                                <div class="flex items-center justify-end gap-1">
-                                                    <button @onclick="() => Move(index, -1)" disabled="@(index == 0)" title="Move up" class="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
-                                                        </svg>
-                                                    </button>
-                                                    <button @onclick="() => Move(index, 1)" disabled="@(index == _values.Count - 1)" title="Move down" class="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                                                        </svg>
-                                                    </button>
-                                                    <button @onclick="() => OpenEditModal(value)" title="Rename" class="p-1.5 text-slate-400 hover:text-primary-600 transition-colors">
-                                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            }
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
+                    <Table WrapperClass="-mx-4 sm:mx-0">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Label</TableHead>
+                                <TableHead>Code</TableHead>
+                                <TableHead>Active</TableHead>
+                                <TableHead Class="text-right">&nbsp;</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            @for (var i = 0; i < _values.Count; i++)
+                            {
+                                var value = _values[i];
+                                var index = i;
+                                <TableRow @key="value.Id" Class="@(value.IsActive ? "" : "opacity-50")">
+                                    <TableCell>
+                                        <span class="font-medium text-foreground text-sm">@value.Label</span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <span class="text-xs font-mono text-muted-foreground">@value.Value</span>
+                                    </TableCell>
+                                    <TableCell>
+                                        @if (_selectedType.IsEditable)
+                                        {
+                                            <Switch Value="@value.IsActive" ValueChanged="v => ToggleActive(value, v)" />
+                                        }
+                                        else
+                                        {
+                                            <Badge Variant="@(value.IsActive ? "success" : "secondary")">@(value.IsActive ? "Active" : "Inactive")</Badge>
+                                        }
+                                    </TableCell>
+                                    <TableCell>
+                                        @if (_selectedType.IsEditable)
+                                        {
+                                            <div class="flex items-center justify-end gap-1">
+                                                <Button Variant="ghost" Size="icon-sm" Disabled="@(index == 0)" Title="Move up" Class="text-muted-foreground" OnClick="() => Move(index, -1)">
+                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                                                    </svg>
+                                                </Button>
+                                                <Button Variant="ghost" Size="icon-sm" Disabled="@(index == _values.Count - 1)" Title="Move down" Class="text-muted-foreground" OnClick="() => Move(index, 1)">
+                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </Button>
+                                                <Button Variant="ghost" Size="icon-sm" Title="Rename" Class="text-muted-foreground" OnClick="() => OpenEditModal(value)">
+                                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </Button>
+                                            </div>
+                                        }
+                                    </TableCell>
+                                </TableRow>
+                            }
+                        </TableBody>
+                    </Table>
                 }
             </div>
         </Card>
@@ -245,19 +243,16 @@
         _loadingValues = false;
     }
 
-    private string TypeChipClass(LookupTypeDto type)
+    private const string TypeChipClass = "px-3 py-1.5 rounded-lg text-sm font-medium";
+
+    // A locked type is still selectable, just never editable - it reads as a neutral chip
+    // rather than the primary one so the two groups stay visually distinct.
+    private string TypeChipVariant(LookupTypeDto type)
     {
-        const string baseClasses = "inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors duration-150";
-        var isSelected = _selectedType?.Type == type.Type;
+        if (_selectedType?.Type != type.Type)
+            return "outline";
 
-        if (isSelected)
-        {
-            return type.IsEditable
-                ? $"{baseClasses} bg-primary-600 border-primary-600 text-white"
-                : $"{baseClasses} bg-slate-700 border-slate-700 text-white dark:bg-slate-600 dark:border-slate-600";
-        }
-
-        return $"{baseClasses} bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500";
+        return type.IsEditable ? "default" : "secondary";
     }
 
     private async Task ToggleActive(LookupValueDto value, bool isActive)

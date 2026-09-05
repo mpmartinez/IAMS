@@ -13,8 +13,8 @@
 <div class="space-y-6">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Roles</h1>
-            <p class="text-slate-500 dark:text-slate-400 mt-1">
+            <h1 class="text-2xl font-bold text-foreground">Roles</h1>
+            <p class="text-muted-foreground mt-1">
                 What each role in your organisation is allowed to do. Built-in roles can be retuned;
                 custom roles are yours to create.
             </p>
@@ -47,60 +47,58 @@
         }
         else
         {
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead>
-                        <tr class="border-b border-slate-200 dark:border-slate-700">
-                            <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Role</th>
-                            <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Permissions</th>
-                            <th class="text-left py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Users</th>
-                            <th class="text-right py-3 px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">&nbsp;</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
-                        @foreach (var role in _roles)
-                        {
-                            <tr @key="role.Id">
-                                <td class="py-3 px-4">
-                                    <div class="flex items-center gap-2">
-                                        <span class="font-medium text-slate-900 dark:text-white text-sm">@role.Name</span>
-                                        <Badge Variant="@(role.IsBuiltIn ? "secondary" : "success")">
-                                            @(role.IsBuiltIn ? "Built-in" : "Custom")
-                                        </Badge>
-                                    </div>
-                                    @if (!string.IsNullOrWhiteSpace(role.Description))
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead Class="px-4">Role</TableHead>
+                        <TableHead Class="px-4">Permissions</TableHead>
+                        <TableHead Class="px-4">Users</TableHead>
+                        <TableHead Class="px-4 text-right">&nbsp;</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    @foreach (var role in _roles)
+                    {
+                        <TableRow @key="role.Id">
+                            <TableCell Class="px-4 py-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium text-foreground text-sm">@role.Name</span>
+                                    <Badge Variant="@(role.IsBuiltIn ? "secondary" : "success")">
+                                        @(role.IsBuiltIn ? "Built-in" : "Custom")
+                                    </Badge>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(role.Description))
+                                {
+                                    <p class="text-xs text-muted-foreground mt-0.5">@role.Description</p>
+                                }
+                            </TableCell>
+                            <TableCell Class="px-4 py-3 text-sm">
+                                @role.Permissions.Count of @_totalPermissions
+                            </TableCell>
+                            <TableCell Class="px-4 py-3 text-sm">@role.UserCount</TableCell>
+                            <TableCell Class="px-4 py-3">
+                                <div class="flex items-center justify-end gap-1">
+                                    <!-- iams:roles:view's catalog description promises seeing "what [roles] grant" - gating
+                                         this button on iams:roles:manage as well left a view-only holder with nothing that
+                                         actually does what their permission is named for. Everyone who reached this page (the
+                                         wrapping PermissionView above already requires at least iams:roles:view) can open the
+                                         editor; OpenEdit decides read-only vs editable via _canManage. Only New Role and
+                                         Delete - genuine writes - stay gated on iams:roles:manage. -->
+                                    <Button Variant="ghost" Size="sm" OnClick="() => OpenEdit(role)">
+                                        @(role.Name == "SuperAdmin" || !_canManage ? "View" : "Edit")
+                                    </Button>
+                                    @if (!role.IsBuiltIn)
                                     {
-                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">@role.Description</p>
+                                        <PermissionView Permission="iams:roles:manage">
+                                            <Button Variant="ghost" Size="sm" OnClick="() => ConfirmDelete(role)">Delete</Button>
+                                        </PermissionView>
                                     }
-                                </td>
-                                <td class="py-3 px-4 text-sm text-slate-600 dark:text-slate-300">
-                                    @role.Permissions.Count of @_totalPermissions
-                                </td>
-                                <td class="py-3 px-4 text-sm text-slate-600 dark:text-slate-300">@role.UserCount</td>
-                                <td class="py-3 px-4">
-                                    <div class="flex items-center justify-end gap-1">
-                                        <!-- iams:roles:view's catalog description promises seeing "what [roles] grant" - gating
-                                             this button on iams:roles:manage as well left a view-only holder with nothing that
-                                             actually does what their permission is named for. Everyone who reached this page (the
-                                             wrapping PermissionView above already requires at least iams:roles:view) can open the
-                                             editor; OpenEdit decides read-only vs editable via _canManage. Only New Role and
-                                             Delete - genuine writes - stay gated on iams:roles:manage. -->
-                                        <Button Variant="ghost" Size="sm" OnClick="() => OpenEdit(role)">
-                                            @(role.Name == "SuperAdmin" || !_canManage ? "View" : "Edit")
-                                        </Button>
-                                        @if (!role.IsBuiltIn)
-                                        {
-                                            <PermissionView Permission="iams:roles:manage">
-                                                <Button Variant="ghost" Size="sm" OnClick="() => ConfirmDelete(role)">Delete</Button>
-                                            </PermissionView>
-                                        }
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    }
+                </TableBody>
+            </Table>
         }
     </Card>
 </div>
@@ -132,15 +130,14 @@
                     {
                         var groupKeys = group.Permissions.Select(p => p.Key).ToList();
                         var allOn = groupKeys.All(_selected.Contains);
-                        <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                        <div class="rounded-xl border border-border p-3">
                             <div class="flex items-center justify-between mb-2">
-                                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">@group.Group</p>
+                                <p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">@group.Group</p>
                                 @if (!_readOnly)
                                 {
-                                    <button type="button" @onclick="() => ToggleGroup(groupKeys, !allOn)"
-                                            class="text-xs font-medium text-primary-600 hover:text-primary-700">
+                                    <Button Variant="link" Size="none" Class="text-xs" OnClick="() => ToggleGroup(groupKeys, !allOn)">
                                         @(allOn ? "Clear all" : "Select all")
-                                    </button>
+                                    </Button>
                                 }
                             </div>
                             <div class="space-y-1.5">
@@ -161,22 +158,23 @@
                                         : notGrantable
                                             ? "You do not hold this permission, so you cannot grant it."
                                             : null;
-                                    <label class="flex items-start gap-2.5 @(blocked ? "opacity-50 cursor-not-allowed" : "cursor-pointer")" title="@title">
-                                        <input type="checkbox" disabled="@blocked"
-                                               checked="@_selected.Contains(key)"
-                                               @onchange="e => Toggle(key, (bool)(e.Value ?? false))"
-                                               class="mt-0.5 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500" />
+                                    <Checkbox Align="start"
+                                              Value="@_selected.Contains(key)"
+                                              ValueChanged="@(v => Toggle(key, v))"
+                                              Disabled="@blocked"
+                                              Class="@(blocked ? "opacity-50" : "")"
+                                              title="@title">
                                         <span>
-                                            <span class="block text-sm text-slate-900 dark:text-white">
+                                            <span class="block text-sm text-foreground">
                                                 @permission.Label
                                                 @if (preserved)
                                                 {
-                                                    <span class="ml-1 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">(kept)</span>
+                                                    <span class="ml-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">(kept)</span>
                                                 }
                                             </span>
-                                            <span class="block text-xs text-slate-500 dark:text-slate-400">@permission.Description</span>
+                                            <span class="block text-xs text-muted-foreground">@permission.Description</span>
                                         </span>
-                                    </label>
+                                    </Checkbox>
                                 }
                             </div>
                         </div>
@@ -186,9 +184,7 @@
 
             @if (!string.IsNullOrEmpty(_formError))
             {
-                <div class="px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50">
-                    <p class="text-sm text-red-700 dark:text-red-400">@_formError</p>
-                </div>
+                <Alert Variant="destructive">@_formError</Alert>
             }
         </div>
     </ChildContent>
@@ -206,7 +202,7 @@
      it, so this asks before making the destructive call rather than firing it on click. -->
 <Modal IsOpen="@_showDeleteModal" Title="Delete Role" OnClose="CloseDeleteModal">
     <ChildContent>
-        <p class="text-slate-600 dark:text-slate-300">
+        <p class="text-muted-foreground">
             Are you sure you want to delete <strong>@_roleToDelete?.Name</strong>? This cannot be undone.
         </p>
         @if (_roleToDelete?.UserCount > 0)

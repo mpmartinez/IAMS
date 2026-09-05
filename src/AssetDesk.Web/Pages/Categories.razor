@@ -1,4 +1,5 @@
 @page "/categories"
+@using AssetDesk.Web.Components.UI
 @attribute [Authorize]
 @inject ApiClient Api
 
@@ -6,8 +7,8 @@
 
 <div class="space-y-6">
     <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Device Types</h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">Asset types overview</p>
+        <h1 class="text-2xl font-bold text-foreground">Device Types</h1>
+        <p class="text-muted-foreground mt-1">Asset types overview</p>
     </div>
 
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -16,13 +17,13 @@
             @foreach (var deviceType in _deviceTypes)
             {
                 <div class="stagger-item">
-                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 card-hover text-center">
+                    <Card Hoverable="true" Class="p-5 text-center">
                         <div class="w-14 h-14 mx-auto rounded-xl @GetDeviceTypeBg(deviceType) flex items-center justify-center mb-3">
                             @GetDeviceTypeIcon(deviceType)
                         </div>
-                        <h3 class="font-semibold text-slate-900 dark:text-white">@deviceType</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">@GetCount(deviceType) assets</p>
-                    </div>
+                        <CardTitle>@deviceType</CardTitle>
+                        <CardDescription Class="mt-1">@GetCount(deviceType) assets</CardDescription>
+                    </Card>
                 </div>
             }
         }
@@ -57,7 +58,7 @@
         "Network" or "Server" => "bg-red-100 dark:bg-red-900/30",
         "Peripheral" => "bg-cyan-100 dark:bg-cyan-900/30",
         "Software" => "bg-indigo-100 dark:bg-indigo-900/30",
-        _ => "bg-slate-100 dark:bg-slate-700"
+        _ => "bg-muted"
     };
 
     private RenderFragment GetDeviceTypeIcon(string deviceType)
@@ -74,7 +75,7 @@
             "Server" => builder => { builder.AddMarkupContent(0, "<svg class=\"w-7 h-7 text-red-600 dark:text-red-400\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01\" /></svg>"); },
             "Peripheral" => builder => { builder.AddMarkupContent(0, "<svg class=\"w-7 h-7 text-cyan-600 dark:text-cyan-400\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z\" /></svg>"); },
             "Software" => builder => { builder.AddMarkupContent(0, "<svg class=\"w-7 h-7 text-indigo-600 dark:text-indigo-400\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z\" /></svg>"); },
-            _ => builder => { builder.AddMarkupContent(0, "<svg class=\"w-7 h-7 text-slate-600 dark:text-slate-400\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4\" /></svg>"); }
+            _ => builder => { builder.AddMarkupContent(0, "<svg class=\"w-7 h-7 text-muted-foreground\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4\" /></svg>"); }
         };
     }
 }

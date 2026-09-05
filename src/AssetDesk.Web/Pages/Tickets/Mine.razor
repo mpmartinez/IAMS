@@ -10,10 +10,10 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">My Reports</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Problems and requests you've sent to IT</p>
+            <h1 class="text-xl sm:text-2xl font-bold text-foreground">My Reports</h1>
+            <p class="text-sm text-muted-foreground mt-1">Problems and requests you've sent to IT</p>
         </div>
-        <a href="/report" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press text-sm sm:text-base">
+        <a href="/report" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl font-medium hover:bg-primary/90 transition-all duration-200 shadow-lg shadow-primary-500/25 btn-press text-sm sm:text-base">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
@@ -26,7 +26,7 @@
         <div class="space-y-3">
             @for (int i = 0; i < 4; i++)
             {
-                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+                <div class="bg-card rounded-2xl border border-border p-4">
                     <div class="flex items-center gap-4">
                         <div class="flex-1 space-y-2">
                             <div class="h-4 w-1/2 rounded skeleton"></div>
@@ -44,19 +44,19 @@
             @foreach (var ticket in _tickets)
             {
                 <div @key="ticket.Id" @onclick="() => NavigateToTicket(ticket.Id)"
-                     class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors duration-150">
+                     class="bg-card rounded-2xl border border-border p-4 hover:bg-muted/50 cursor-pointer transition-colors duration-150">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <Badge Variant="@ticket.Type">@GetTypeLabel(ticket.Type)</Badge>
-                                <span class="text-xs text-slate-400 dark:text-slate-500 font-mono">@ticket.Reference</span>
+                                <span class="text-xs text-muted-foreground font-mono">@ticket.Reference</span>
                             </div>
-                            <p class="font-medium text-slate-900 dark:text-white mt-1.5 truncate">@ticket.Title</p>
+                            <p class="font-medium text-foreground mt-1.5 truncate">@ticket.Title</p>
                             @if (!string.IsNullOrEmpty(ticket.AssetTag))
                             {
-                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">@ticket.AssetTag</p>
+                                <p class="text-xs text-muted-foreground mt-0.5 font-mono">@ticket.AssetTag</p>
                             }
-                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1.5">Submitted @GetAge(ticket.CreatedAt)</p>
+                            <p class="text-xs text-muted-foreground mt-1.5">Submitted @GetAge(ticket.CreatedAt)</p>
                         </div>
                         <Badge Variant="@ticket.Status">@GetStatusLabel(ticket.Status)</Badge>
                     </div>
@@ -68,7 +68,7 @@
     {
         <Card Class="p-6">
             <EmptyState Title="No reports yet" Description="Problems and requests you send to IT will show up here.">
-                <a href="/report" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 transition-all duration-200">
+                <a href="/report" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl font-medium hover:bg-primary/90 transition-all duration-200">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>

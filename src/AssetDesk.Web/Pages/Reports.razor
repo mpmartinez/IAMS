@@ -1,4 +1,5 @@
 @page "/reports"
+@using AssetDesk.Web.Components.UI
 @attribute [Authorize]
 @inject ApiClient Api
 @inject AuthService AuthService
@@ -13,15 +14,18 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Asset Reports</h1>
-            <p class="text-slate-500 dark:text-slate-400 mt-1">Generate and export asset data reports</p>
+            <h1 class="text-2xl font-bold text-foreground">Asset Reports</h1>
+            <p class="text-muted-foreground mt-1">Generate and export asset data reports</p>
         </div>
     </div>
 
+    @* Every report card runs the same three actions, so they share the same button hierarchy:
+       Preview is outline, CSV is the primary action, PDF is secondary. The coloured icon tile
+       is what tells the four cards apart. *@
     <!-- Report Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
         <!-- Asset Inventory Report -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 lg:p-6">
+        <Card Class="p-5 lg:p-6">
             <div class="flex items-start gap-4">
                 <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
                     <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -29,12 +33,12 @@
                     </svg>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Asset Inventory</h3>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Complete list of all assets with details</p>
+                    <CardTitle Class="text-lg">Asset Inventory</CardTitle>
+                    <CardDescription Class="mt-1">Complete list of all assets with details</CardDescription>
 
                     <!-- Filters -->
                     <div class="mt-4 grid grid-cols-2 gap-3">
-                        <select @bind="_inventoryDeviceType" class="px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white">
+                        <Select Value="@_inventoryDeviceType" ValueChanged="@(v => _inventoryDeviceType = v ?? "")">
                             <option value="">All Device Types</option>
                             @if (_deviceTypes != null)
                             {
@@ -43,8 +47,8 @@
                                     <option value="@type">@type</option>
                                 }
                             }
-                        </select>
-                        <select @bind="_inventoryStatus" class="px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white">
+                        </Select>
+                        <Select Value="@_inventoryStatus" ValueChanged="@(v => _inventoryStatus = v ?? "")">
                             <option value="">All Statuses</option>
                             @if (_statuses != null)
                             {
@@ -53,36 +57,36 @@
                                     <option value="@status">@status</option>
                                 }
                             }
-                        </select>
+                        </Select>
                     </div>
 
                     <div class="mt-4 grid grid-cols-3 gap-2">
-                        <button @onclick="ViewInventoryReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                        <Button Variant="outline" Size="sm" OnClick="ViewInventoryReport">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
                             Preview
-                        </button>
-                        <button @onclick="ExportInventoryReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors text-sm">
+                        </Button>
+                        <Button Size="sm" OnClick="ExportInventoryReport">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                             CSV
-                        </button>
-                        <button @onclick="ExportInventoryPdf" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-colors text-sm">
+                        </Button>
+                        <Button Variant="secondary" Size="sm" OnClick="ExportInventoryPdf">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             PDF
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>
-        </div>
+        </Card>
 
         <!-- Assigned Assets by User Report -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 lg:p-6">
+        <Card Class="p-5 lg:p-6">
             <div class="flex items-start gap-4">
                 <div class="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
                     <svg class="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -90,12 +94,12 @@
                     </svg>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Assigned Assets by User</h3>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Assets grouped by assigned user</p>
+                    <CardTitle Class="text-lg">Assigned Assets by User</CardTitle>
+                    <CardDescription Class="mt-1">Assets grouped by assigned user</CardDescription>
 
                     <!-- Filters -->
                     <div class="mt-4">
-                        <select @bind="_assignedUserId" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white">
+                        <Select Value="@_assignedUserId" ValueChanged="@(v => _assignedUserId = v ?? "")">
                             <option value="">All Users</option>
                             @if (_users != null)
                             {
@@ -104,36 +108,36 @@
                                     <option value="@user.Id">@user.FullName</option>
                                 }
                             }
-                        </select>
+                        </Select>
                     </div>
 
                     <div class="mt-4 grid grid-cols-3 gap-2">
-                        <button @onclick="ViewAssignedByUserReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                        <Button Variant="outline" Size="sm" OnClick="ViewAssignedByUserReport">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
                             Preview
-                        </button>
-                        <button @onclick="ExportAssignedByUserReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors text-sm">
+                        </Button>
+                        <Button Size="sm" OnClick="ExportAssignedByUserReport">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                             CSV
-                        </button>
-                        <button @onclick="ExportAssignedByUserPdf" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-colors text-sm">
+                        </Button>
+                        <Button Variant="secondary" Size="sm" OnClick="ExportAssignedByUserPdf">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             PDF
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>
-        </div>
+        </Card>
 
         <!-- Warranty Expiry Report -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 lg:p-6">
+        <Card Class="p-5 lg:p-6">
             <div class="flex items-start gap-4">
                 <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
                     <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -141,52 +145,52 @@
                     </svg>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Warranty Expiry</h3>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Assets with warranty information</p>
+                    <CardTitle Class="text-lg">Warranty Expiry</CardTitle>
+                    <CardDescription Class="mt-1">Assets with warranty information</CardDescription>
 
                     <!-- Filters -->
                     <div class="mt-4 grid grid-cols-2 gap-3">
-                        <select @bind="_warrantyStatus" class="px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white">
+                        <Select Value="@_warrantyStatus" ValueChanged="@(v => _warrantyStatus = v ?? "")">
                             <option value="">All Statuses</option>
                             <option value="expired">Expired</option>
                             <option value="expiring">Expiring</option>
                             <option value="active">Active</option>
-                        </select>
-                        <select @bind="_warrantyDaysThreshold" class="px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white">
+                        </Select>
+                        <Select Value="@_warrantyDaysThreshold" ValueChanged="@(v => _warrantyDaysThreshold = v ?? "")">
                             <option value="">No Threshold</option>
                             <option value="30">Next 30 days</option>
                             <option value="60">Next 60 days</option>
                             <option value="90">Next 90 days</option>
-                        </select>
+                        </Select>
                     </div>
 
                     <div class="mt-4 grid grid-cols-3 gap-2">
-                        <button @onclick="ViewWarrantyExpiryReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                        <Button Variant="outline" Size="sm" OnClick="ViewWarrantyExpiryReport">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
                             Preview
-                        </button>
-                        <button @onclick="ExportWarrantyExpiryReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors text-sm">
+                        </Button>
+                        <Button Size="sm" OnClick="ExportWarrantyExpiryReport">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                             CSV
-                        </button>
-                        <button @onclick="ExportWarrantyExpiryPdf" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-colors text-sm">
+                        </Button>
+                        <Button Variant="secondary" Size="sm" OnClick="ExportWarrantyExpiryPdf">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             PDF
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>
-        </div>
+        </Card>
 
         <!-- Asset Value Report -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 lg:p-6">
+        <Card Class="p-5 lg:p-6">
             <div class="flex items-start gap-4">
                 <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
                     <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -194,8 +198,8 @@
                     </svg>
                 </div>
                 <div class="flex-1 min-w-0">
-                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Total Asset Value</h3>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Asset values by device type and status</p>
+                    <CardTitle Class="text-lg">Total Asset Value</CardTitle>
+                    <CardDescription Class="mt-1">Asset values by device type and status</CardDescription>
 
                     @if (_assetValueSummary != null)
                     {
@@ -210,70 +214,51 @@
                     }
 
                     <div class="mt-4 grid grid-cols-3 gap-2">
-                        <button @onclick="ViewAssetValueReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm">
+                        <Button Variant="outline" Size="sm" OnClick="ViewAssetValueReport">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
                             Preview
-                        </button>
-                        <button @onclick="ExportAssetValueReport" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors text-sm">
+                        </Button>
+                        <Button Size="sm" OnClick="ExportAssetValueReport">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                             CSV
-                        </button>
-                        <button @onclick="ExportAssetValuePdf" class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-600 text-white rounded-xl font-medium hover:bg-rose-700 transition-colors text-sm">
+                        </Button>
+                        <Button Variant="secondary" Size="sm" OnClick="ExportAssetValuePdf">
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             PDF
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>
-        </div>
+        </Card>
     </div>
 
     <!-- Report Preview Modal -->
-    @if (_showPreview)
-    {
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @onclick="ClosePreview"></div>
-            <div class="relative w-full max-w-5xl max-h-[85vh] bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex flex-col animate-scale-in">
-                <!-- Modal Header -->
-                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">@_previewTitle</h3>
-                    <button @onclick="ClosePreview" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+    <Dialog IsOpen="@_showPreview" Title="@_previewTitle" Size="xl" OnClose="ClosePreview">
+        <ChildContent>
+            @if (_isLoadingPreview)
+            {
+                <div class="flex items-center justify-center py-12">
+                    <Spinner Size="lg" Class="text-primary" />
                 </div>
-
-                <!-- Modal Body -->
-                <div class="flex-1 overflow-auto p-6">
-                    @if (_isLoadingPreview)
-                    {
-                        <div class="flex items-center justify-center py-12">
-                            <div class="w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin"></div>
-                        </div>
-                    }
-                    else
-                    {
-                        @_previewContent
-                    }
-                </div>
-
-                <!-- Modal Footer -->
-                <div class="flex justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700">
-                    <button @onclick="ClosePreview" class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
-                        Close
-                    </button>
-                </div>
+            }
+            else
+            {
+                @_previewContent
+            }
+        </ChildContent>
+        <FooterContent>
+            <div class="mt-4 flex justify-end gap-3 border-t pt-4">
+                <Button Variant="outline" OnClick="ClosePreview">Close</Button>
             </div>
-        </div>
-    }
+        </FooterContent>
+    </Dialog>
 </div>
 </PermissionView>
 
@@ -343,7 +328,7 @@
         }
         catch (Exception ex)
         {
-            _previewContent = @<div class="text-red-500">Error: @ex.Message</div>;
+            _previewContent = @<div class="text-destructive">Error: @ex.Message</div>;
         }
         _isLoadingPreview = false;
     }
@@ -381,7 +366,7 @@
         }
         catch (Exception ex)
         {
-            _previewContent = @<div class="text-red-500">Error: @ex.Message</div>;
+            _previewContent = @<div class="text-destructive">Error: @ex.Message</div>;
         }
         _isLoadingPreview = false;
     }
@@ -419,7 +404,7 @@
         }
         catch (Exception ex)
         {
-            _previewContent = @<div class="text-red-500">Error: @ex.Message</div>;
+            _previewContent = @<div class="text-destructive">Error: @ex.Message</div>;
         }
         _isLoadingPreview = false;
     }
@@ -460,43 +445,43 @@
                             <div class="text-sm text-purple-600 dark:text-purple-400">Total Value</div>
                             <div class="text-2xl font-bold text-purple-700 dark:text-purple-300">@FormatCurrency(data.GrandTotalValue)</div>
                         </div>
-                        <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
-                            <div class="text-sm text-slate-600 dark:text-slate-400">Total Assets</div>
-                            <div class="text-2xl font-bold text-slate-900 dark:text-white">@data.TotalAssetCount</div>
+                        <div class="p-4 bg-muted/50 rounded-xl">
+                            <div class="text-sm text-muted-foreground">Total Assets</div>
+                            <div class="text-2xl font-bold text-foreground">@data.TotalAssetCount</div>
                         </div>
-                        <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
-                            <div class="text-sm text-slate-600 dark:text-slate-400">Average</div>
-                            <div class="text-2xl font-bold text-slate-900 dark:text-white">@FormatCurrency(data.AverageAssetValue)</div>
+                        <div class="p-4 bg-muted/50 rounded-xl">
+                            <div class="text-sm text-muted-foreground">Average</div>
+                            <div class="text-2xl font-bold text-foreground">@FormatCurrency(data.AverageAssetValue)</div>
                         </div>
                     </div>
-                    <h4 class="font-semibold text-slate-900 dark:text-white mb-3">By Device Type</h4>
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-slate-200 dark:border-slate-700">
-                                <th class="text-left py-2 font-medium text-slate-700 dark:text-slate-300">Type</th>
-                                <th class="text-right py-2 font-medium text-slate-700 dark:text-slate-300">Count</th>
-                                <th class="text-right py-2 font-medium text-slate-700 dark:text-slate-300">Total</th>
-                                <th class="text-right py-2 font-medium text-slate-700 dark:text-slate-300">Avg</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                    <h4 class="font-semibold text-foreground mb-3">By Device Type</h4>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Type</TableHead>
+                                <TableHead Class="text-right">Count</TableHead>
+                                <TableHead Class="text-right">Total</TableHead>
+                                <TableHead Class="text-right">Avg</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             @foreach (var row in data.ByDeviceType)
                             {
-                                <tr class="border-b border-slate-100 dark:border-slate-700/50">
-                                    <td class="py-2 text-slate-900 dark:text-white">@row.DeviceType</td>
-                                    <td class="py-2 text-right text-slate-600 dark:text-slate-400">@row.AssetCount</td>
-                                    <td class="py-2 text-right text-slate-900 dark:text-white font-medium">@FormatCurrency(row.TotalValue)</td>
-                                    <td class="py-2 text-right text-slate-600 dark:text-slate-400">@FormatCurrency(row.AverageValue)</td>
-                                </tr>
+                                <TableRow>
+                                    <TableCell Class="text-foreground">@row.DeviceType</TableCell>
+                                    <TableCell Class="text-right text-muted-foreground">@row.AssetCount</TableCell>
+                                    <TableCell Class="text-right font-medium">@FormatCurrency(row.TotalValue)</TableCell>
+                                    <TableCell Class="text-right text-muted-foreground">@FormatCurrency(row.AverageValue)</TableCell>
+                                </TableRow>
                             }
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>;
             }
         }
         catch (Exception ex)
         {
-            _previewContent = @<div class="text-red-500">Error: @ex.Message</div>;
+            _previewContent = @<div class="text-destructive">Error: @ex.Message</div>;
         }
         _isLoadingPreview = false;
     }
@@ -512,35 +497,33 @@
     }
 
     private RenderFragment BuildTablePreview<T>(List<T> data, string[] headers, Func<T, object[]> rowMapper) => @<div>
-        <div class="mb-4 text-sm text-slate-500 dark:text-slate-400">@data.Count rows</div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="border-b border-slate-200 dark:border-slate-700">
-                        @foreach (var h in headers)
-                        {
-                            <th class="text-left py-2 px-3 font-medium text-slate-700 dark:text-slate-300">@h</th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var row in data.Take(50))
+        <div class="mb-4 text-sm text-muted-foreground">@data.Count rows</div>
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    @foreach (var h in headers)
                     {
-                        var cells = rowMapper(row);
-                        <tr class="border-b border-slate-100 dark:border-slate-700/50">
-                            @foreach (var cell in cells)
-                            {
-                                <td class="py-2 px-3 text-slate-600 dark:text-slate-400">@cell</td>
-                            }
-                        </tr>
+                        <TableHead Class="px-3">@h</TableHead>
                     }
-                </tbody>
-            </table>
-            @if (data.Count > 50)
-            {
-                <div class="mt-4 text-center text-sm text-slate-500">Showing first 50 of @data.Count rows</div>
-            }
-        </div>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                @foreach (var row in data.Take(50))
+                {
+                    var cells = rowMapper(row);
+                    <TableRow>
+                        @foreach (var cell in cells)
+                        {
+                            <TableCell Class="px-3 text-muted-foreground">@cell</TableCell>
+                        }
+                    </TableRow>
+                }
+            </TableBody>
+        </Table>
+        @if (data.Count > 50)
+        {
+            <div class="mt-4 text-center text-sm text-muted-foreground">Showing first 50 of @data.Count rows</div>
+        }
     </div>;
 
     private void ClosePreview()

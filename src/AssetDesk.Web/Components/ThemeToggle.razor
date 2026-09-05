@@ -1,10 +1,13 @@
 @using AssetDesk.Web.Services
+@using AssetDesk.Web.Components.UI
 @inject ThemeService Theme
 @implements IDisposable
 
-<button @onclick="ToggleTheme"
-        class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        title="@(Theme.IsDarkMode ? "Switch to light mode" : "Switch to dark mode")">
+<Button Variant="ghost"
+        Size="icon-sm"
+        Class="shrink-0 text-muted-foreground"
+        OnClick="ToggleTheme"
+        Title="@(Theme.IsDarkMode ? "Switch to light mode" : "Switch to dark mode")">
     @if (Theme.IsDarkMode)
     {
         <!-- Sun icon (show when in dark mode to switch to light) -->
@@ -19,7 +22,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
         </svg>
     }
-</button>
+</Button>
 
 @code {
     protected override void OnInitialized()

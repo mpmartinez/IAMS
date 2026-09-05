@@ -1,9 +1,10 @@
+@using AssetDesk.Web.Components.UI
 @inject IJSRuntime JS
 
 <div class="space-y-3">
     @if (!string.IsNullOrEmpty(Label))
     {
-        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">@Label</label>
+        <AssetDesk.Web.Components.UI.Label For="@_inputId" Class="block">@Label</AssetDesk.Web.Components.UI.Label>
     }
 
     <div class="relative">
@@ -23,14 +24,14 @@
             @if (_selectedFile is null)
             {
                 <div class="flex flex-col items-center gap-2 py-6 px-4">
-                    <svg class="w-10 h-10 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="w-10 h-10 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
-                    <div class="text-center">
-                        <span class="text-primary-600 dark:text-primary-400 font-medium">Click to upload</span>
-                        <span class="text-slate-500 dark:text-slate-400"> or drag and drop</span>
+                    <div class="text-center text-sm">
+                        <span class="text-primary font-medium">Click to upload</span>
+                        <span class="text-muted-foreground"> or drag and drop</span>
                     </div>
-                    <p class="text-xs text-slate-400 dark:text-slate-500">@HelpText</p>
+                    <p class="text-xs text-muted-foreground">@HelpText</p>
                 </div>
             }
             else
@@ -42,22 +43,25 @@
                     }
                     else
                     {
-                        <div class="w-16 h-16 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                            <svg class="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <div class="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
+                            <svg class="w-8 h-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                             </svg>
                         </div>
                     }
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-slate-900 dark:text-white truncate">@_selectedFile.Name</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">@FormatFileSize(_selectedFile.Size)</p>
+                        <p class="text-sm font-medium text-foreground truncate">@_selectedFile.Name</p>
+                        <p class="text-xs text-muted-foreground">@FormatFileSize(_selectedFile.Size)</p>
                     </div>
-                    <button type="button" @onclick="ClearSelection" @onclick:stopPropagation
-                            class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+                    @* The wrapper carries the stopPropagation so clearing does not re-open the
+                       file picker the surrounding label is bound to. *@
+                    <div @onclick:stopPropagation>
+                        <Button Variant="ghost" Size="icon-sm" Title="Remove file" Class="text-muted-foreground" OnClick="ClearSelection">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </Button>
+                    </div>
                 </div>
             }
         </label>
@@ -65,19 +69,18 @@
 
     @if (EnableCameraCapture)
     {
-        <button type="button" @onclick="TriggerCameraCapture"
-                class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <Button Variant="outline" Class="w-full" OnClick="TriggerCameraCapture">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             Take Photo
-        </button>
+        </Button>
     }
 
     @if (!string.IsNullOrEmpty(Error))
     {
-        <p class="text-sm text-red-500">@Error</p>
+        <p class="text-sm text-destructive">@Error</p>
     }
 </div>
 
@@ -97,8 +100,8 @@
     private bool _isDragging;
 
     private string DropZoneClasses => _isDragging
-        ? "flex cursor-pointer rounded-xl border-2 border-dashed border-primary-500 bg-primary-50 dark:bg-primary-900/20 transition-all duration-200"
-        : "flex cursor-pointer rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 hover:border-primary-400 dark:hover:border-primary-500 bg-slate-50 dark:bg-slate-800 transition-all duration-200";
+        ? "flex cursor-pointer rounded-xl border-2 border-dashed border-primary bg-primary/10 transition-all duration-200"
+        : "flex cursor-pointer rounded-xl border-2 border-dashed border-input hover:border-primary/60 bg-muted/40 transition-all duration-200";
 
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {

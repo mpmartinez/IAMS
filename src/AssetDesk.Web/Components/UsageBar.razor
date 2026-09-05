@@ -1,3 +1,13 @@
+@namespace AssetDesk.Web.Components
+
+<div class="flex items-center gap-2">
+    <span class="text-xs text-muted-foreground w-14">@Label</span>
+    <div class="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div class="h-full @BarColor rounded-full transition-all duration-300" style="width: @Percentage%"></div>
+    </div>
+    <span class="text-xs text-muted-foreground w-20 text-right">@FormatValue(Current) / @FormatValue(Max)</span>
+</div>
+
 @code {
     [Parameter] public string Label { get; set; } = "";
     [Parameter] public long Current { get; set; }
@@ -8,9 +18,9 @@
 
     private string BarColor => Percentage switch
     {
-        >= 90 => "bg-red-500",
+        >= 90 => "bg-destructive",
         >= 75 => "bg-amber-500",
-        _ => "bg-primary-500"
+        _ => "bg-primary"
     };
 
     private string FormatValue(long value)
@@ -26,11 +36,3 @@
         };
     }
 }
-
-<div class="flex items-center gap-2">
-    <span class="text-xs text-slate-500 dark:text-slate-400 w-14">@Label</span>
-    <div class="flex-1 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
-        <div class="h-full @BarColor rounded-full transition-all duration-300" style="width: @Percentage%"></div>
-    </div>
-    <span class="text-xs text-slate-600 dark:text-slate-300 w-20 text-right">@FormatValue(Current) / @FormatValue(Max)</span>
-</div>
