@@ -5,7 +5,22 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+    <!-- Trimming (the IL linker) drops unused framework code and roughly halves the WASM cold
+         first-load, which is the dominant cost of the first visit. It is memory-hungry, which
+         is fine where the images are actually built (GitHub Actions, .github/workflows/deploy.yml)
+         but would need workstation GC and a serial build if this ever moved onto the 4GB box.
+         To keep the linker from removing members that are only ever reached by reflection -
+         System.Text.Json maps DTO properties that way - our own assemblies are rooted below. -->
+    <PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
+
+  <!-- Keep every member of our own assemblies: the DTOs in AssetDesk.Shared are (de)serialized
+       reflectively, and AssetDesk.Web holds components and services the linker cannot always
+       prove are used. The framework is still trimmed, which is where the win is. -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="AssetDesk.Web" />
+    <TrimmerRootAssembly Include="AssetDesk.Shared" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
