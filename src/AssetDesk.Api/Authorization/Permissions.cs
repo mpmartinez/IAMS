@@ -51,6 +51,8 @@ public static class Permissions
 
     public const string NotificationsTest = "iams:notifications:test";
 
+    public const string AuditView = "iams:audit:view";
+
     public static readonly PermissionDescriptor[] All =
     [
         new(AssetsView, "Assets", "View assets", "See the asset list and individual asset records."),
@@ -83,6 +85,8 @@ public static class Permissions
         new(WarrantyDelete, "Warranty", "Delete alerts", "Remove a warranty alert."),
 
         new(NotificationsTest, "Notifications", "Send test notification", "Push a test notification, for diagnosing delivery."),
+
+        new(AuditView, "Audit", "View the audit trail", "Read the record of who changed what, and when."),
     ];
 
     public static readonly string[] Keys = All.Select(p => p.Key).ToArray();
@@ -115,7 +119,8 @@ public static class Permissions
             UsersRead, AttachmentsManage, WarrantyManage,
         ],
 
-        Roles.Auditor => [AssignmentsView, TicketsFile, ReportsView],
+        // A role called Auditor that cannot open the audit trail would be a contradiction.
+        Roles.Auditor => [AssignmentsView, TicketsFile, ReportsView, AuditView],
 
         Roles.Management => [TicketsFile],
 

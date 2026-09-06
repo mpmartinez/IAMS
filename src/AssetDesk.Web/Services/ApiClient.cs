@@ -825,6 +825,38 @@ public class ApiClient(HttpClient http, AuthService authService)
 
     public string GetBaseUrl() => http.BaseAddress?.ToString().TrimEnd('/') ?? "";
 
+    // Audit trail APIs
+    public async Task<PagedResponse<AuditLogDto>?> GetAuditLogAsync(
+        int page = 1,
+        int pageSize = 25,
+        string? entityType = null,
+        string? entityId = null,
+        string? action = null,
+        string? userId = null,
+        DateTime? fromDate = null,
+        DateTime? toDate = null)
+    {
+        var client = await GetAuthenticatedClient();
+        var query = $"api/audit?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrEmpty(entityType)) query += $"&entityType={Uri.EscapeDataString(entityType)}";
+        if (!string.IsNullOrEmpty(entityId)) query += $"&entityId={Uri.EscapeDataString(entityId)}";
+        if (!string.IsNullOrEmpty(action)) query += $"&action={Uri.EscapeDataString(action)}";
+        if (!string.IsNullOrEmpty(userId)) query += $"&userId={Uri.EscapeDataString(userId)}";
+        // Round-trip format ("o"): the endpoint compares against UTC timestamps, and the
+        // default ToString() would hand it a local, culture-shaped string instead.
+        if (fromDate.HasValue) query += $"&fromDate={Uri.EscapeDataString(fromDate.Value.ToString("o"))}";
+        if (toDate.HasValue) query += $"&toDate={Uri.EscapeDataString(toDate.Value.ToString("o"))}";
+
+        var response = await client.GetFromJsonAsync<ApiResponse<PagedResponse<AuditLogDto>>>(query);
+        return response?.Data;
+    }
+
+    public async Task<AuditFilterOptionsDto?> GetAuditFilterOptionsAsync()
+    {
+        var response = await SafeGetAsync<ApiResponse<AuditFilterOptionsDto>>("api/audit/filters");
+        return response?.Data;
+    }
+
     // User Management APIs
     public async Task<PagedResponse<UserDto>?> GetUsersAsync(string? search = null, int page = 1, int pageSize = 20)
     {

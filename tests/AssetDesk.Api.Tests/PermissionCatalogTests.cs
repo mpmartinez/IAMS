@@ -43,7 +43,7 @@ public class PermissionCatalogTests
 
     [Theory]
     [InlineData(Roles.Staff, 13)]
-    [InlineData(Roles.Auditor, 3)]
+    [InlineData(Roles.Auditor, 4)]
     [InlineData(Roles.Management, 1)]
     [InlineData(Roles.Employee, 1)]
     public void BuiltInRoles_HaveTheExpectedGrantCount(string role, int expected)
@@ -57,6 +57,15 @@ public class PermissionCatalogTests
         // CanFileTickets today lists every authenticated role including Employee.
         foreach (var role in Roles.All)
             Assert.Contains(Permissions.TicketsFile, Permissions.DefaultsFor(role));
+    }
+
+    [Fact]
+    public void Auditor_CanOpenTheAuditTrail()
+    {
+        // A role named Auditor that cannot read the audit trail would be a contradiction.
+        // Existing tenants get this grant from the GrantAuditViewPermission migration, since
+        // EnsureRolePermissionsAsync never revisits a tenant it has already provisioned.
+        Assert.Contains(Permissions.AuditView, Permissions.DefaultsFor(Roles.Auditor));
     }
 
     [Fact]

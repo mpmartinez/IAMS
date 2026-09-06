@@ -143,6 +143,7 @@ builder.Services.AddAuthorizationBuilder()
     .RequirePermission("CanManageWarrantyAlerts", Permissions.WarrantyManage)
     .RequirePermission("CanDeleteWarrantyAlerts", Permissions.WarrantyDelete)
     .RequirePermission("CanSendTestNotifications", Permissions.NotificationsTest)
+    .RequirePermission("CanViewAuditLog", Permissions.AuditView)
     // Platform-level: not tenant-tunable.
     .AddPolicy("SuperAdmin", policy => policy.RequireRole(Roles.SuperAdmin))
     .AddPolicy("CanManageTenants", policy => policy.RequireRole(Roles.SuperAdmin));

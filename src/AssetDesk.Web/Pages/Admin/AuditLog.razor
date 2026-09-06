@@ -1,0 +1,311 @@
+@page "/admin/audit"
+@using AssetDesk.Web.Components.UI
+@using System.Globalization
+@attribute [Authorize]
+@inject ApiClient Api
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>Audit Trail - AssetDesk</PageTitle>
+
+<PermissionView Permission="iams:audit:view" ShowDeniedMessage="true">
+<div class="space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-foreground">Audit Trail</h1>
+        <p class="text-muted-foreground mt-1">
+            Who changed what, and when. Entries are written automatically and can never be
+            edited or removed.
+        </p>
+    </div>
+
+    <!-- Filters -->
+    <Card Class="p-4 sm:p-5">
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <FormField LabelText="Record type">
+                <Select Value="@_entityType" ValueChanged="@(v => ApplyFilter(() => _entityType = v))">
+                    <option value="">All types</option>
+                    @foreach (var type in _filterOptions?.EntityTypes ?? [])
+                    {
+                        <option value="@type">@Humanise(type)</option>
+                    }
+                </Select>
+            </FormField>
+            <FormField LabelText="Action">
+                <Select Value="@_action" ValueChanged="@(v => ApplyFilter(() => _action = v))">
+                    <option value="">All actions</option>
+                    @foreach (var action in _filterOptions?.Actions ?? [])
+                    {
+                        <option value="@action">@Humanise(action)</option>
+                    }
+                </Select>
+            </FormField>
+            <FormField LabelText="From">
+                <Input Type="date" Value="@_fromDate" ValueChanged="@(v => ApplyFilter(() => _fromDate = v))" />
+            </FormField>
+            <FormField LabelText="To">
+                <Input Type="date" Value="@_toDate" ValueChanged="@(v => ApplyFilter(() => _toDate = v))" />
+            </FormField>
+        </div>
+
+        @if (HasAnyFilter)
+        {
+            <div class="mt-4 flex flex-wrap items-center gap-2">
+                @if (_userId is not null)
+                {
+                    <Badge Variant="secondary">Changed by @(_userName ?? _userId)</Badge>
+                }
+                <Button Variant="ghost" Size="sm" OnClick="ClearFilters">Clear filters</Button>
+            </div>
+        }
+    </Card>
+
+    <!-- Entries -->
+    <Card Class="p-6">
+        @if (_loading)
+        {
+            <div class="space-y-4">
+                @for (int i = 0; i < 5; i++)
+                {
+                    <Skeleton Class="h-14 w-full" />
+                }
+            </div>
+        }
+        else if (_entries is null || _entries.Items.Count == 0)
+        {
+            <EmptyState Title="Nothing recorded here"
+                        Description="@(HasAnyFilter ? "No entries match these filters." : "Changes to assets, assignments and tickets will appear here as they happen.")">
+                <Icon>
+                    <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </Icon>
+            </EmptyState>
+        }
+        else
+        {
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>When</TableHead>
+                        <TableHead>Changed by</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Record</TableHead>
+                        @if (_isSuperAdmin)
+                        {
+                            <TableHead>Tenant</TableHead>
+                        }
+                        <TableHead Class="text-right">Details</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    @foreach (var entry in _entries.Items)
+                    {
+                        <TableRow>
+                            <TableCell Class="whitespace-nowrap">
+                                <div class="font-medium text-foreground">@entry.Timestamp.ToLocalTime().ToString("d MMM yyyy")</div>
+                                <div class="text-muted-foreground">@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss")</div>
+                            </TableCell>
+                            <TableCell>
+                                @if (entry.UserId is not null)
+                                {
+                                    @* Filtering by actor without a user picker: the names already on
+                                       screen are the only ids worth filtering by, and a picker would
+                                       need iams:users:read, which an Auditor does not hold. *@
+                                    <Button Variant="link" Size="none" Class="font-medium"
+                                            OnClick="() => FilterByUser(entry.UserId, entry.UserName)">
+                                        @entry.UserName
+                                    </Button>
+                                }
+                                else
+                                {
+                                    <span class="text-muted-foreground">@entry.UserName</span>
+                                }
+                            </TableCell>
+                            <TableCell>
+                                <Badge Variant="@ActionVariant(entry.Action)">@Humanise(entry.Action)</Badge>
+                            </TableCell>
+                            <TableCell>
+                                <div class="font-medium text-foreground">@Humanise(entry.EntityType)</div>
+                                <div class="text-muted-foreground">#@entry.EntityId</div>
+                            </TableCell>
+                            @if (_isSuperAdmin)
+                            {
+                                <TableCell Class="text-muted-foreground">@entry.TenantId.ToString()[..8]</TableCell>
+                            }
+                            <TableCell Class="text-right">
+                                @if (entry.Changes.Count > 0)
+                                {
+                                    <Button Variant="ghost" Size="sm" OnClick="() => ToggleExpanded(entry.Id)">
+                                        @(_expanded.Contains(entry.Id) ? "Hide" : "Show") @entry.Changes.Count field@(entry.Changes.Count == 1 ? "" : "s")
+                                    </Button>
+                                }
+                                else
+                                {
+                                    <span class="text-muted-foreground">—</span>
+                                }
+                            </TableCell>
+                        </TableRow>
+
+                        @if (_expanded.Contains(entry.Id))
+                        {
+                            <TableRow>
+                                <TableCell colspan="@(_isSuperAdmin ? 6 : 5)" Class="bg-muted/40">
+                                    <div class="space-y-2 py-1">
+                                        @foreach (var change in entry.Changes)
+                                        {
+                                            <div class="sm:flex sm:items-baseline sm:gap-4">
+                                                <div class="font-medium text-foreground sm:w-40 sm:shrink-0">@Humanise(change.Field)</div>
+                                                <div class="flex flex-wrap items-baseline gap-2">
+                                                    <span class="text-muted-foreground line-through">@Display(change.From)</span>
+                                                    <span class="text-muted-foreground">&rarr;</span>
+                                                    <span class="text-foreground">@Display(change.To)</span>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        }
+                    }
+                </TableBody>
+            </Table>
+
+            @if (_entries.TotalPages > 1)
+            {
+                <div class="mt-4 border-t pt-2">
+                    <Pagination CurrentPage="@_entries.Page"
+                                TotalPages="@_entries.TotalPages"
+                                OnPageChange="GoToPage"
+                                MaxVisiblePages="5" />
+                </div>
+            }
+        }
+    </Card>
+</div>
+</PermissionView>
+
+@code {
+    private PagedResponse<AuditLogDto>? _entries;
+    private AuditFilterOptionsDto? _filterOptions;
+    private readonly HashSet<long> _expanded = [];
+
+    private bool _loading = true;
+    private bool _isSuperAdmin;
+
+    private int _page = 1;
+    private const int PageSize = 25;
+
+    private string? _entityType;
+    private string? _action;
+    private string? _fromDate;
+    private string? _toDate;
+    private string? _userId;
+    private string? _userName;
+
+    private bool HasAnyFilter =>
+        !string.IsNullOrEmpty(_entityType) || !string.IsNullOrEmpty(_action) ||
+        !string.IsNullOrEmpty(_fromDate) || !string.IsNullOrEmpty(_toDate) ||
+        _userId is not null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        _isSuperAdmin = authState.User.IsInRole("SuperAdmin");
+
+        _filterOptions = await Api.GetAuditFilterOptionsAsync();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true;
+
+        _entries = await Api.GetAuditLogAsync(
+            page: _page,
+            pageSize: PageSize,
+            entityType: _entityType,
+            action: _action,
+            userId: _userId,
+            fromDate: ParseDate(_fromDate, endOfDay: false),
+            toDate: ParseDate(_toDate, endOfDay: true));
+
+        // An expanded row that is no longer on this page would otherwise keep its state and
+        // reappear open the next time paging lands back on it.
+        _expanded.Clear();
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Any filter change resets to page one: staying on page 7 of a narrower result set lands
+    /// the user on an empty page with no indication why.
+    /// </summary>
+    private async Task ApplyFilter(Action change)
+    {
+        change();
+        _page = 1;
+        await Load();
+    }
+
+    private async Task FilterByUser(string? userId, string userName)
+    {
+        _userName = userName;
+        await ApplyFilter(() => _userId = userId);
+    }
+
+    private async Task ClearFilters()
+    {
+        _entityType = null;
+        _action = null;
+        _fromDate = null;
+        _toDate = null;
+        _userId = null;
+        _userName = null;
+        _page = 1;
+        await Load();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        _page = page;
+        await Load();
+    }
+
+    private void ToggleExpanded(long id)
+    {
+        if (!_expanded.Remove(id)) _expanded.Add(id);
+    }
+
+    /// <summary>
+    /// The date inputs name a calendar day, and the endpoint compares against UTC timestamps.
+    /// The "to" bound takes the end of that day so picking the same day for both ends returns
+    /// that day's entries rather than nothing.
+    /// </summary>
+    private static DateTime? ParseDate(string? value, bool endOfDay)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (!DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            return null;
+
+        var day = DateTime.SpecifyKind(parsed.Date, DateTimeKind.Utc);
+        return endOfDay ? day.AddDays(1).AddTicks(-1) : day;
+    }
+
+    private static string Display(string? value) =>
+        string.IsNullOrEmpty(value) ? "(empty)" : value;
+
+    /// <summary>Turns PascalCase entity types, actions and field names into readable words -
+    /// "AssetAssignment" reads as "Asset Assignment", "PasswordResetSent" as "Password Reset
+    /// Sent".</summary>
+    private static string Humanise(string value) =>
+        string.IsNullOrEmpty(value)
+            ? value
+            : System.Text.RegularExpressions.Regex.Replace(value, "(?<=[a-z0-9])(?=[A-Z])", " ");
+
+    private static string ActionVariant(string action) => action switch
+    {
+        "Created" => "Available",
+        "Deleted" => "destructive",
+        "Updated" => "Assigned",
+        _ => "secondary"
+    };
+}
