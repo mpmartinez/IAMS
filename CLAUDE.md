@@ -141,6 +141,15 @@ account whose invite failed to send strands the user with no way in.
 - **Adding a permission key needs a data migration.** `SeedData.EnsureRolePermissionsAsync` is
   gated on `Tenant.RolePermissionsSeededAt` and never re-runs, so a new key in `Permissions.All`
   reaches no existing tenant. Every current Admin would silently lack it.
+  `20260906031321_GrantAuditViewPermission` is the worked example - copy its shape, not its
+  reasoning. Backfilling unconditionally is only safe for a *brand new* key, where no tenant can
+  have deliberately revoked something that did not exist. A key that renames or splits an
+  existing one must respect the revocations already on the table. Two details there are
+  deliberate: built-in roles carry a null `TenantId` and are shared, so the insert cross-joins
+  `Tenants` rather than joining on `RoleId`; and the id comes from `md5(...)::uuid` rather than
+  `gen_random_uuid()`, which is only built in from PostgreSQL 13 while the database here is
+  supplied externally with no version pinned. Being deterministic also makes the insert
+  idempotent.
 - **`AuthorizeRouteView` renders its `Authorizing` and `NotAuthorized` fragments inside
   `DefaultLayout`.** `MainLayout` therefore mounts on anonymous pages like `/login` while auth
   resolves, and its `OnInitializedAsync` runs. Gate any API call there on an authenticated
