@@ -39,8 +39,15 @@
             </div>
         }
 
-        <!-- Body -->
-        <div class="flex-1 overflow-y-auto @(string.IsNullOrEmpty(BodyClass) ? "" : BodyClass)">
+        <!-- Body.
+             The scrollbar belongs in the dialog's padding gutter, not hard against the content:
+             at plain `overflow-y-auto` it appears at the right edge of the content box, so it
+             sat on top of the cards' right border and a hair from "Select all" on the roles
+             editor. `-mr-3 pr-3` widens the scroll container into the p-6 gutter and puts the
+             same amount back as padding, which leaves the content in exactly the same place
+             when nothing overflows and opens 12px between the content and the scrollbar when
+             it does. -->
+        <div class="flex-1 overflow-y-auto -mr-3 pr-3 @(string.IsNullOrEmpty(BodyClass) ? "" : BodyClass)">
             @ChildContent
         </div>
 
