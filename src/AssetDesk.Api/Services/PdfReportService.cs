@@ -1,5 +1,6 @@
 using System.Globalization;
 using AssetDesk.Api.Entities;
+using AssetDesk.Shared;
 using AssetDesk.Shared.DTOs;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -288,14 +289,6 @@ public class PdfReportService : IPdfReportService
         return parts.Count == 0 ? string.Empty : "Filters — " + string.Join("  •  ", parts);
     }
 
-    /// <summary>
-    /// The app is peso-only, so the stored currency code is not consulted - every amount is a
-    /// peso amount. The parameter stays on the signature because the report row DTOs still
-    /// carry the code.
-    /// </summary>
-    private static string FormatCurrency(decimal? value, string? currency)
-    {
-        _ = currency;
-        return value.HasValue ? $"{Currencies.Symbol}{value.Value:N2}" : "—";
-    }
+    private static string FormatCurrency(decimal? value, string? currency) =>
+        CurrencyFormat.Format(value, currency);
 }

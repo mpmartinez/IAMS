@@ -92,9 +92,9 @@ public static class LookupTypes
     public static string? LockedReason(string type) => type switch
     {
         Currency =>
-            "AssetDesk is peso-only. Every amount in the UI, the PDF reports and the CSV exports " +
-            "is rendered with the peso symbol without consulting this table, so re-activating " +
-            "another currency here would mislabel the figures rather than convert them.",
+            "Every supported currency needs a symbol and a decimal rule defined in code - see " +
+            "CurrencyFormat. Activating a row here for a code that has neither would render its " +
+            "amounts with a peso sign rather than its own.",
         TicketStatus =>
             "TicketWorkflow.CanTransition hardcodes which statuses a ticket may move between. " +
             "Adding or renaming a status here would not teach the workflow engine about it.",

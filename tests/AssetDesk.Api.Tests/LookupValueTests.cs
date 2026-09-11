@@ -260,8 +260,10 @@ public class LookupValueTests
         }
     }
 
+    // USD dropped from this theory: activating its lookup row (multi-currency work) makes it
+    // an accepted currency on create, so it no longer belongs to the "rejected" set. EUR and
+    // JPY stay retired/inactive and are still rejected the same way.
     [Theory]
-    [InlineData("USD")]
     [InlineData("EUR")]
     [InlineData("JPY")]
     public async Task AssetsController_rejects_a_non_peso_currency_on_create(string currency)
@@ -290,26 +292,54 @@ public class LookupValueTests
     }
 
     [Fact]
+    public async Task AssetsController_accepts_USD_now_that_its_lookup_row_is_active()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+
+            var controller = new AssetsController(db, null!, null!, new LookupService(db));
+
+            var result = await controller.CreateAsset(new CreateAssetDto
+            {
+                DeviceType = DeviceTypes.Laptop,
+                Status = AssetStatus.Available,
+                Currency = Currencies.USD
+            });
+
+            var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+            var payload = Assert.IsType<ApiResponse<AssetDto>>(created.Value);
+            Assert.True(payload.Success);
+            Assert.Equal(Currencies.USD, payload.Data!.Currency);
+        }
+    }
+
+    [Fact]
     public async Task LookupsController_rejects_reactivating_a_retired_currency()
     {
         var (db, conn) = TestDb.Create();
         using (db)
         using (conn)
         {
-            var usd = await db.LookupValues.SingleAsync(
-                l => l.LookupType == LookupTypes.Currency && l.Value == Currencies.USD);
-            Assert.False(usd.IsActive);
+            // USD is active as of the multi-currency work, so EUR - still retired - is the
+            // row that exercises "locked type rejects the edit" here.
+            var eur = await db.LookupValues.SingleAsync(
+                l => l.LookupType == LookupTypes.Currency && l.Value == Currencies.EUR);
+            Assert.False(eur.IsActive);
 
             var controller = new LookupsController(db);
 
-            var result = await controller.Update(usd.Id, new UpdateLookupValueDto
+            var result = await controller.Update(eur.Id, new UpdateLookupValueDto
             {
                 IsActive = true
             }, default);
 
             Assert.IsNotType<OkObjectResult>(result.Result);
             Assert.False(
-                (await db.LookupValues.AsNoTracking().SingleAsync(l => l.Id == usd.Id)).IsActive);
+                (await db.LookupValues.AsNoTracking().SingleAsync(l => l.Id == eur.Id)).IsActive);
         }
     }
 

@@ -76,29 +76,28 @@ public static class DeviceTypes
 }
 
 /// <summary>
-/// AssetDesk is peso-only. <see cref="All"/> - the single supported currency - is what
-/// LookupTypes.FallbackValues hands the validator, so PHP is the only code an asset can be
-/// saved with.
+/// The currencies an asset may be recorded in. <see cref="All"/> is what
+/// LookupTypes.FallbackValues hands the validator, and mirrors the active rows in the
+/// Currency lookup.
 ///
-/// <see cref="Retired"/> holds the codes this app used to offer. They are kept as constants
-/// because LookupValueSeed still carries their rows: a lookup row is never deleted, only
-/// deactivated, so history that references them stays readable.
+/// <see cref="Retired"/> holds codes this app used to offer and no longer activates. They are
+/// kept as constants because LookupValueSeed still carries their rows: a lookup row is never
+/// deleted, only deactivated, so history that references them stays readable. Activating one
+/// means giving it a symbol in <see cref="CurrencyFormat"/> as well - JPY additionally needs a
+/// zero-decimal path, which is why the set was widened one currency at a time.
 /// </summary>
 public static class Currencies
 {
     public const string PHP = "PHP";
-
     public const string USD = "USD";
+
     public const string EUR = "EUR";
     public const string GBP = "GBP";
     public const string JPY = "JPY";
     public const string CAD = "CAD";
     public const string AUD = "AUD";
 
-    /// <summary>The peso symbol every amount in the app is rendered with.</summary>
-    public const string Symbol = "₱";
+    public static readonly string[] All = [PHP, USD];
 
-    public static readonly string[] All = [PHP];
-
-    public static readonly string[] Retired = [USD, EUR, GBP, JPY, CAD, AUD];
+    public static readonly string[] Retired = [EUR, GBP, JPY, CAD, AUD];
 }
