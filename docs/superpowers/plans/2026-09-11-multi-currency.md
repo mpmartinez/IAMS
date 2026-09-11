@@ -28,6 +28,7 @@
 
 **Create:**
 - `src/AssetDesk.Shared/CurrencyFormat.cs` — symbol lookup and amount formatting, shared by API and Web
+- `src/AssetDesk.Api/Entities/CurrencyRules.cs` — the three currency/rate rules, called by both the controller and the importer
 - `src/AssetDesk.Api/Migrations/<timestamp>_AddExchangeRate.cs` — column + USD activation
 - `tests/AssetDesk.Api.Tests/CurrencyFormatTests.cs`
 - `tests/AssetDesk.Api.Tests/AssetCurrencyValidationTests.cs`
@@ -449,12 +450,12 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 3: Rate validation in the API
 
 **Files:**
+- Create: `src/AssetDesk.Api/Entities/CurrencyRules.cs`, `tests/AssetDesk.Api.Tests/AssetCurrencyValidationTests.cs`
 - Modify: `src/AssetDesk.Api/Controllers/AssetsController.cs`
-- Create: `tests/AssetDesk.Api.Tests/AssetCurrencyValidationTests.cs`
 
 **Interfaces:**
 - Consumes: `Asset.ExchangeRate`, `CreateAssetDto.ExchangeRate`, `UpdateAssetDto.ExchangeRate` from Task 2.
-- Produces: `public static string? AssetsController.ValidateRate(string currency, decimal rate)` — returns null when valid, otherwise the message. **Public, not internal or private:** the solution has no `InternalsVisibleTo`, so `AssetDesk.Api.Tests` can only reach public members, and the test below calls it directly. Task 4 mirrors these rules in the importer but does not call this method.
+- Produces: `public static string? CurrencyRules.Validate(string currency, decimal rate)` — returns null when valid, otherwise the message. **Task 4's importer calls this same method**, so the three rules exist in exactly one place. It lives in `Entities` rather than on the controller so the importer does not have to depend on a controller, which would invert the usual dependency direction. Public because the solution declares no `InternalsVisibleTo`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -489,7 +490,7 @@ public class AssetCurrencyValidationTests
     [InlineData(-1)]
     public void A_rate_of_zero_or_less_is_rejected(decimal rate)
     {
-        var error = AssetsController.ValidateRate(Currencies.USD, rate);
+        var error = CurrencyRules.Validate(Currencies.USD, rate);
         Assert.NotNull(error);
         Assert.Contains("greater than zero", error);
     }
@@ -497,7 +498,7 @@ public class AssetCurrencyValidationTests
     [Fact]
     public void PHP_must_be_booked_at_exactly_one()
     {
-        var error = AssetsController.ValidateRate(Currencies.PHP, 58.20m);
+        var error = CurrencyRules.Validate(Currencies.PHP, 58.20m);
         Assert.NotNull(error);
         Assert.Contains("PHP", error);
         Assert.Contains("1", error);
@@ -506,19 +507,19 @@ public class AssetCurrencyValidationTests
     [Fact]
     public void PHP_at_one_is_accepted()
     {
-        Assert.Null(AssetsController.ValidateRate(Currencies.PHP, 1m));
+        Assert.Null(CurrencyRules.Validate(Currencies.PHP, 1m));
     }
 
     [Fact]
     public void USD_at_a_real_rate_is_accepted()
     {
-        Assert.Null(AssetsController.ValidateRate(Currencies.USD, 58.20m));
+        Assert.Null(CurrencyRules.Validate(Currencies.USD, 58.20m));
     }
 
     [Fact]
     public void USD_left_at_the_default_rate_of_one_is_rejected()
     {
-        var error = AssetsController.ValidateRate(Currencies.USD, 1m);
+        var error = CurrencyRules.Validate(Currencies.USD, 1m);
         Assert.NotNull(error);
         Assert.Contains("rate is required", error);
     }
@@ -531,22 +532,31 @@ Note `USD at exactly 1` is rejected: the DTO defaults `ExchangeRate` to `1m`, so
 
 Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter "FullyQualifiedName~AssetCurrencyValidationTests"`
 
-Expected: FAIL to compile — `'AssetsController' does not contain a definition for 'ValidateRate'`.
+Expected: FAIL to compile — `The type or namespace name 'CurrencyRules' could not be found`.
 
-- [ ] **Step 3: Add the validator**
+- [ ] **Step 3: Add the shared validator**
 
-In `src/AssetDesk.Api/Controllers/AssetsController.cs`, add as a public static method on the class:
+Create `src/AssetDesk.Api/Entities/CurrencyRules.cs`:
 
 ```csharp
+namespace AssetDesk.Api.Entities;
+
+/// <summary>
+/// The rules binding a currency to its exchange rate. One home for all three, because both
+/// AssetsController and AssetImportService enforce them and a copy in each would drift.
+///
+/// Deliberately here rather than on the controller: AssetImportService is a service, and a
+/// service reaching into a controller inverts the dependency direction the rest of the
+/// codebase follows.
+/// </summary>
+public static class CurrencyRules
+{
     /// <summary>
-    /// The three rate rules, shared by create and update. Returns null when the pair is valid,
-    /// otherwise the message to hand back. AssetImportService enforces the same rules per row
-    /// against its own error type.
-    ///
-    /// Public rather than private so the test project can call it: the solution declares no
-    /// InternalsVisibleTo, so internal would be unreachable from AssetDesk.Api.Tests.
+    /// Returns null when the pair is valid, otherwise the message to show. The wording is kept
+    /// neutral so it reads correctly whether it lands in an API response or against a
+    /// spreadsheet row.
     /// </summary>
-    public static string? ValidateRate(string currency, decimal rate)
+    public static string? Validate(string currency, decimal rate)
     {
         if (rate <= 0)
             return "Exchange rate must be greater than zero.";
@@ -559,6 +569,7 @@ In `src/AssetDesk.Api/Controllers/AssetsController.cs`, add as a public static m
 
         return null;
     }
+}
 ```
 
 - [ ] **Step 4: Call it from create**
@@ -572,7 +583,7 @@ In `CreateAsset`, replace the currency check at `AssetsController.cs:107-111` wi
             return BadRequest(ApiResponse<AssetDto>.Fail(
                 $"'{dto.Currency}' is not a valid currency. Supported: {string.Join(", ", Currencies.All)}."));
 
-        var rateError = ValidateRate(dto.Currency, dto.ExchangeRate);
+        var rateError = CurrencyRules.Validate(dto.Currency, dto.ExchangeRate);
         if (rateError is not null)
             return BadRequest(ApiResponse<AssetDto>.Fail(rateError));
 ```
@@ -596,7 +607,7 @@ In `UpdateAsset`, replace the currency check at `AssetsController.cs:183-185` wi
         // currency without a rate, or a rate without a currency, both land here.
         var effectiveCurrency = dto.Currency ?? asset.Currency;
         var effectiveRate = dto.ExchangeRate ?? asset.ExchangeRate;
-        var rateError = ValidateRate(effectiveCurrency, effectiveRate);
+        var rateError = CurrencyRules.Validate(effectiveCurrency, effectiveRate);
         if (rateError is not null)
             return BadRequest(ApiResponse<AssetDto>.Fail(rateError));
 ```
@@ -654,7 +665,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Create: `tests/AssetDesk.Api.Tests/AssetImportCurrencyTests.cs`
 
 **Interfaces:**
-- Consumes: `Asset.ExchangeRate` from Task 2; the rate rules from Task 3 (re-expressed against `ImportRowException`, not by calling `ValidateRate`, because the importer throws rather than returning messages).
+- Consumes: `Asset.ExchangeRate` from Task 2; `CurrencyRules.Validate(currency, rate)` from Task 3. **Call it — do not restate the three rules here.** The importer's only job is to turn its returned message into an `ImportRowException`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -812,14 +823,11 @@ In `src/AssetDesk.Api/Services/AssetImportService.cs`, replace the currency bloc
         // this one would reject every workbook built against the template customers already
         // have. ReadDecimal returns null when the column is absent.
         var exchangeRate = ReadDecimal(row, headerMap, "ExchangeRate") ?? 1m;
-        if (exchangeRate <= 0)
-            throw new ImportRowException("ExchangeRate must be greater than zero.");
-        if (currency == Currencies.PHP && exchangeRate != 1m)
-            throw new ImportRowException(
-                $"ExchangeRate must be exactly 1 for {Currencies.PHP} - it is the reporting currency.");
-        if (currency != Currencies.PHP && exchangeRate == 1m)
-            throw new ImportRowException(
-                $"An exchange rate is required for {currency} - add an ExchangeRate column with pesos per 1 {currency}.");
+
+        // Same three rules the API enforces, from the same method - see CurrencyRules.
+        var rateError = CurrencyRules.Validate(currency, exchangeRate);
+        if (rateError is not null)
+            throw new ImportRowException(rateError);
 ```
 
 - [ ] **Step 4: Persist it**
