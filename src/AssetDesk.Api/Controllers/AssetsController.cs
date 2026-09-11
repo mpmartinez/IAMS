@@ -104,11 +104,15 @@ public class AssetsController(
         if (!validStatuses.Contains(dto.Status))
             return BadRequest(ApiResponse<AssetDto>.Fail($"Invalid status. Must be one of: {string.Join(", ", validStatuses)}"));
 
-        // Locked to peso. PHP is the only active row in the Currency lookup, so this rejects
-        // anything else a client sends rather than storing a code nothing will render.
+        // The set of acceptable currencies is data-driven: whichever Currency lookup rows are
+        // active. Activating a row is what enables a currency, not a change here.
         if (!await lookups.IsActiveValueAsync(LookupTypes.Currency, dto.Currency))
             return BadRequest(ApiResponse<AssetDto>.Fail(
-                $"'{dto.Currency}' is not a valid currency. AssetDesk is peso-only - use '{Currencies.PHP}'."));
+                $"'{dto.Currency}' is not a valid currency. Supported: {string.Join(", ", Currencies.All)}."));
+
+        var rateError = CurrencyRules.Validate(dto.Currency, dto.ExchangeRate);
+        if (rateError is not null)
+            return BadRequest(ApiResponse<AssetDto>.Fail(rateError));
 
         // Validate warranty dates
         if (dto.WarrantyStartDate.HasValue && dto.WarrantyEndDate.HasValue && dto.WarrantyStartDate > dto.WarrantyEndDate)
@@ -135,6 +139,7 @@ public class AssetsController(
             DeviceType = dto.DeviceType,
             PurchasePrice = dto.PurchasePrice,
             Currency = dto.Currency,
+            ExchangeRate = dto.ExchangeRate,
             WarrantyProvider = dto.WarrantyProvider,
             WarrantyStartDate = dto.WarrantyStartDate,
             WarrantyEndDate = dto.WarrantyEndDate,
@@ -179,10 +184,17 @@ public class AssetsController(
         if (dto.Status is not null && !validStatuses.Contains(dto.Status))
             return BadRequest(ApiResponse<AssetDto>.Fail($"Invalid status. Must be one of: {string.Join(", ", validStatuses)}"));
 
-        // Locked to peso, see the same check in CreateAsset.
         if (dto.Currency is not null && !await lookups.IsActiveValueAsync(LookupTypes.Currency, dto.Currency))
             return BadRequest(ApiResponse<AssetDto>.Fail(
-                $"'{dto.Currency}' is not a valid currency. AssetDesk is peso-only - use '{Currencies.PHP}'."));
+                $"'{dto.Currency}' is not a valid currency. Supported: {string.Join(", ", Currencies.All)}."));
+
+        // Validate the pair that will be stored, not just the half that was sent - changing
+        // currency without a rate, or a rate without a currency, both land here.
+        var effectiveCurrency = dto.Currency ?? asset.Currency;
+        var effectiveRate = dto.ExchangeRate ?? asset.ExchangeRate;
+        var rateError = CurrencyRules.Validate(effectiveCurrency, effectiveRate);
+        if (rateError is not null)
+            return BadRequest(ApiResponse<AssetDto>.Fail(rateError));
 
         // Validate warranty dates
         var startDate = dto.WarrantyStartDate ?? asset.WarrantyStartDate;
@@ -206,6 +218,7 @@ public class AssetsController(
         if (dto.SerialNumber is not null) asset.SerialNumber = dto.SerialNumber;
         if (dto.PurchasePrice.HasValue) asset.PurchasePrice = dto.PurchasePrice;
         if (dto.Currency is not null) asset.Currency = dto.Currency;
+        if (dto.ExchangeRate.HasValue) asset.ExchangeRate = dto.ExchangeRate.Value;
         if (dto.WarrantyProvider is not null) asset.WarrantyProvider = dto.WarrantyProvider;
         if (dto.WarrantyStartDate.HasValue) asset.WarrantyStartDate = dto.WarrantyStartDate;
         if (dto.WarrantyEndDate.HasValue) asset.WarrantyEndDate = dto.WarrantyEndDate;
@@ -512,6 +525,7 @@ public class AssetsController(
         DeviceType = asset.DeviceType,
         PurchasePrice = asset.PurchasePrice,
         Currency = asset.Currency,
+        ExchangeRate = asset.ExchangeRate,
         WarrantyProvider = asset.WarrantyProvider,
         WarrantyStartDate = asset.WarrantyStartDate,
         WarrantyEndDate = asset.WarrantyEndDate,

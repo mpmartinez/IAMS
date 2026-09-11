@@ -287,7 +287,7 @@ public class LookupValueTests
             var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
             var payload = Assert.IsType<ApiResponse<AssetDto>>(badRequest.Value);
             Assert.False(payload.Success);
-            Assert.Contains("peso-only", payload.Message);
+            Assert.Contains("is not a valid currency", payload.Message);
         }
     }
 
@@ -303,11 +303,14 @@ public class LookupValueTests
 
             var controller = new AssetsController(db, null!, null!, new LookupService(db));
 
+            // ExchangeRate must be a real rate, not the DTO default of 1 - CurrencyRules
+            // rejects USD booked at exactly 1 (see AssetCurrencyValidationTests).
             var result = await controller.CreateAsset(new CreateAssetDto
             {
                 DeviceType = DeviceTypes.Laptop,
                 Status = AssetStatus.Available,
-                Currency = Currencies.USD
+                Currency = Currencies.USD,
+                ExchangeRate = 58.20m
             });
 
             var created = Assert.IsType<CreatedAtActionResult>(result.Result);
