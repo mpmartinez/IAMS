@@ -85,6 +85,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
             entity.Property(e => e.DeviceType).HasMaxLength(50).IsRequired();
             entity.Property(e => e.PurchasePrice).HasPrecision(18, 2);
             entity.Property(e => e.Currency).HasMaxLength(3).HasDefaultValue("PHP");
+            entity.Property(e => e.ExchangeRate).HasPrecision(18, 6).HasDefaultValue(1m);
             entity.Property(e => e.WarrantyProvider).HasMaxLength(200);
             entity.Property(e => e.Status).HasMaxLength(50).IsRequired();
 

@@ -16,6 +16,13 @@ public class Asset : ITenantEntity
     public required string DeviceType { get; set; }
     public decimal? PurchasePrice { get; set; }
     public string Currency { get; set; } = "PHP";
+
+    /// <summary>
+    /// Pesos per one unit of <see cref="Currency"/>, as booked against the supplier invoice.
+    /// Exactly 1 for PHP. The peso value is derived - PurchasePrice * ExchangeRate - rather
+    /// than stored, so it cannot drift out of agreement with the rate on this same row.
+    /// </summary>
+    public decimal ExchangeRate { get; set; } = 1m;
     public string? WarrantyProvider { get; set; }
     public DateTime? WarrantyStartDate { get; set; }
     public DateTime? WarrantyEndDate { get; set; }

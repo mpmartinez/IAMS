@@ -70,4 +70,20 @@ public class CurrencyFormatTests
         Assert.DoesNotContain("peso-only", reason);
         Assert.Contains("symbol", reason);
     }
+
+    [Fact]
+    public async Task A_new_asset_defaults_to_a_rate_of_exactly_one()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create();
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var asset = await TestDb.SeedAssetAsync(db, tenantId, "LAP-0001");
+
+            Assert.Equal(1m, asset.ExchangeRate);
+            Assert.Equal(Currencies.PHP, asset.Currency);
+        }
+    }
 }

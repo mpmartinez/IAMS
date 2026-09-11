@@ -28,6 +28,7 @@ public record AssetDto
     public required string DeviceType { get; init; }
     public decimal? PurchasePrice { get; init; }
     public string Currency { get; init; } = "PHP";
+    public decimal ExchangeRate { get; init; } = 1m;
     public string? WarrantyProvider { get; init; }
     public DateTime? WarrantyStartDate { get; init; }
     public DateTime? WarrantyEndDate { get; init; }
@@ -99,6 +100,9 @@ public record CreateAssetDto
     [StringLength(3, MinimumLength = 3, ErrorMessage = "Currency must be a 3-letter code")]
     public string Currency { get; init; } = "PHP";
 
+    [Range(0.000001, 1000000, ErrorMessage = "Exchange rate must be greater than zero")]
+    public decimal ExchangeRate { get; init; } = 1m;
+
     [StringLength(200, ErrorMessage = "Warranty provider cannot exceed 200 characters")]
     public string? WarrantyProvider { get; init; }
 
@@ -146,6 +150,9 @@ public record UpdateAssetDto
 
     [StringLength(3, MinimumLength = 3, ErrorMessage = "Currency must be a 3-letter code")]
     public string? Currency { get; init; }
+
+    [Range(0.000001, 1000000, ErrorMessage = "Exchange rate must be greater than zero")]
+    public decimal? ExchangeRate { get; init; }
 
     [StringLength(200, ErrorMessage = "Warranty provider cannot exceed 200 characters")]
     public string? WarrantyProvider { get; init; }
