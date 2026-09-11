@@ -125,10 +125,19 @@ public class AssetImportService(AppDbContext db, ILogger<AssetImportService> log
         var currency = ReadString(row, headerMap, "Currency");
         if (string.IsNullOrWhiteSpace(currency))
             currency = Currencies.PHP;
-        // Locked to peso - PHP is the only active row in the Currency lookup.
         if (!await lookups.IsActiveValueAsync(LookupTypes.Currency, currency, ct))
             throw new ImportRowException(
-                $"Invalid Currency '{currency}'. AssetDesk is peso-only - leave the column blank or use '{Currencies.PHP}'.");
+                $"Invalid Currency '{currency}'. Supported: {string.Join(", ", Currencies.All)}.");
+
+        // Deliberately NOT in ExpectedHeaders: a header listed there is required, and adding
+        // this one would reject every workbook built against the template customers already
+        // have. ReadDecimal returns null when the column is absent.
+        var exchangeRate = ReadDecimal(row, headerMap, "ExchangeRate") ?? 1m;
+
+        // Same three rules the API enforces, from the same method - see CurrencyRules.
+        var rateError = CurrencyRules.Validate(currency, exchangeRate);
+        if (rateError is not null)
+            throw new ImportRowException(rateError);
 
         var modelYear = ReadInt(row, headerMap, "ModelYear");
         if (modelYear is < 1900 or > 2100)
@@ -151,6 +160,7 @@ public class AssetImportService(AppDbContext db, ILogger<AssetImportService> log
             DeviceType = deviceType,
             Status = status,
             Currency = currency,
+            ExchangeRate = exchangeRate,
             Name = ReadString(row, headerMap, "Name"),
             Manufacturer = ReadString(row, headerMap, "Manufacturer"),
             Model = ReadString(row, headerMap, "Model"),
