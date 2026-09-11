@@ -315,11 +315,14 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
                 a.DeviceType,
                 a.Status,
                 a.PurchasePrice,
-                a.Currency
+                a.Currency,
+                a.ExchangeRate
             })
             .ToListAsync();
 
-        var totalValue = assets.Sum(a => a.PurchasePrice ?? 0);
+        // Every total is in pesos; a row keeps the currency it was booked in. Summing the raw
+        // price would add a USD figure to a peso figure.
+        var totalValue = assets.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate);
         var totalCount = assets.Count;
         var avgValue = totalCount > 0 ? totalValue / totalCount : 0;
 
@@ -331,8 +334,8 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
             {
                 DeviceType = g.Key,
                 AssetCount = g.Count(),
-                TotalValue = g.Sum(a => a.PurchasePrice ?? 0),
-                AverageValue = g.Count() > 0 ? g.Sum(a => a.PurchasePrice ?? 0) / g.Count() : 0,
+                TotalValue = g.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate),
+                AverageValue = g.Count() > 0 ? g.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate) / g.Count() : 0,
                 Currency = primaryCurrency
             })
             .OrderByDescending(x => x.TotalValue)
@@ -344,7 +347,7 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
             {
                 Status = g.Key,
                 AssetCount = g.Count(),
-                TotalValue = g.Sum(a => a.PurchasePrice ?? 0)
+                TotalValue = g.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate)
             })
             .OrderByDescending(x => x.TotalValue)
             .ToList();
@@ -375,7 +378,8 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
                 a.DeviceType,
                 a.Status,
                 a.PurchasePrice,
-                a.Currency
+                a.Currency,
+                a.ExchangeRate
             })
             .ToListAsync();
 
@@ -387,14 +391,14 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
             {
                 DeviceType = g.Key,
                 AssetCount = g.Count(),
-                TotalValue = g.Sum(a => a.PurchasePrice ?? 0),
-                AverageValue = g.Count() > 0 ? g.Sum(a => a.PurchasePrice ?? 0) / g.Count() : 0,
+                TotalValue = g.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate),
+                AverageValue = g.Count() > 0 ? g.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate) / g.Count() : 0,
                 Currency = primaryCurrency
             })
             .OrderByDescending(x => x.TotalValue)
             .ToList();
 
-        var csv = GenerateAssetValueCsv(byDeviceType, assets.Sum(a => a.PurchasePrice ?? 0), primaryCurrency);
+        var csv = GenerateAssetValueCsv(byDeviceType, assets.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate), primaryCurrency);
         var fileName = $"Asset Value {DateTime.UtcNow:yyyy-MM-dd}.csv";
 
         return File(Encoding.UTF8.GetBytes(csv), "text/csv", fileName);
@@ -556,11 +560,12 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
                 a.DeviceType,
                 a.Status,
                 a.PurchasePrice,
-                a.Currency
+                a.Currency,
+                a.ExchangeRate
             })
             .ToListAsync();
 
-        var totalValue = assets.Sum(a => a.PurchasePrice ?? 0);
+        var totalValue = assets.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate);
         var totalCount = assets.Count;
         var avgValue = totalCount > 0 ? totalValue / totalCount : 0;
 
@@ -572,8 +577,8 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
             {
                 DeviceType = g.Key,
                 AssetCount = g.Count(),
-                TotalValue = g.Sum(a => a.PurchasePrice ?? 0),
-                AverageValue = g.Count() > 0 ? g.Sum(a => a.PurchasePrice ?? 0) / g.Count() : 0,
+                TotalValue = g.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate),
+                AverageValue = g.Count() > 0 ? g.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate) / g.Count() : 0,
                 Currency = primaryCurrency
             })
             .OrderByDescending(x => x.TotalValue)
@@ -585,7 +590,7 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
             {
                 Status = g.Key,
                 AssetCount = g.Count(),
-                TotalValue = g.Sum(a => a.PurchasePrice ?? 0)
+                TotalValue = g.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate)
             })
             .OrderByDescending(x => x.TotalValue)
             .ToList();

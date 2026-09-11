@@ -45,6 +45,7 @@ public class DashboardController(AppDbContext db) : ControllerBase
                 a.Status,
                 a.PurchasePrice,
                 a.Currency,
+                a.ExchangeRate,
                 a.WarrantyEndDate,
                 a.AssignedToUserId,
                 AssignedToUserName = a.AssignedToUser != null ? a.AssignedToUser.FullName : null,
@@ -60,10 +61,9 @@ public class DashboardController(AppDbContext db) : ControllerBase
         var inUseAssets = assets.Count(a => a.Status == AssetStatus.InUse);
         var maintenanceAssets = assets.Count(a => a.Status == AssetStatus.Maintenance);
 
-        // Every asset is denominated in peso - see Currencies.
-        var totalValue = assets
-            .Where(a => a.PurchasePrice.HasValue)
-            .Sum(a => a.PurchasePrice!.Value);
+        // Every total is in pesos; a row keeps the currency it was booked in. Summing the raw
+        // price would add a USD figure to a peso figure.
+        var totalValue = assets.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate);
 
         var primaryCurrency = Currencies.PHP;
 
@@ -102,7 +102,7 @@ public class DashboardController(AppDbContext db) : ControllerBase
             {
                 DeviceType = g.Key,
                 Count = g.Count(),
-                TotalValue = g.Sum(a => a.PurchasePrice ?? 0)
+                TotalValue = g.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate)
             })
             .OrderByDescending(x => x.Count)
             .ToList();
