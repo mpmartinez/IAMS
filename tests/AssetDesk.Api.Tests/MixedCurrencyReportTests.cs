@@ -38,18 +38,20 @@ public class MixedCurrencyReportTests
         });
 
         // A second group, so the per-group assertions below are about grouping and not just
-        // about the grand total wearing a different name. USD 500 at 58.20 = 29,100 pesos, and
+        // about the grand total wearing a different name. USD 580 at 52.00 = 30,160 pesos, and
         // it is the only asset in both its device type and its status - so if the conversion
         // leaked into the wrong bucket, or the grouping key were ignored, the numbers move.
+        // (580 * 52.00, rather than the laptops' rate of 58.20, is what makes the grand total -
+        // and so the grand average below - divide evenly by the asset count.)
         db.Assets.Add(new Asset
         {
             TenantId = tenantId,
             AssetTag = "MON-0001",
             DeviceType = DeviceTypes.Monitor,
             Status = AssetStatus.InUse,
-            PurchasePrice = 500m,
+            PurchasePrice = 580m,
             Currency = Currencies.USD,
-            ExchangeRate = 58.20m
+            ExchangeRate = 52.00m
         });
 
         await db.SaveChangesAsync();
@@ -73,8 +75,9 @@ public class MixedCurrencyReportTests
                 Assert.IsType<ApiResponse<AssetValueSummaryDto>>(
                     Assert.IsType<OkObjectResult>(result.Result).Value).Data);
 
-            // 50,000 + (1,200 * 58.20) + (500 * 58.20) = 148,940. Naive summing gives 51,700.
-            Assert.Equal(148940m, summary.GrandTotalValue);
+            // 50,000 + (1,200 * 58.20) + (580 * 52.00) = 150,000. Naive summing gives 51,780.
+            Assert.Equal(150000m, summary.GrandTotalValue);
+            Assert.Equal(50000m, summary.AverageAssetValue);
             Assert.Equal(3, summary.TotalAssetCount);
             Assert.Equal(Currencies.PHP, summary.PrimaryCurrency);
 
@@ -88,15 +91,15 @@ public class MixedCurrencyReportTests
 
             var monitors = Assert.Single(summary.ByDeviceType, g => g.DeviceType == DeviceTypes.Monitor);
             Assert.Equal(1, monitors.AssetCount);
-            Assert.Equal(29100m, monitors.TotalValue);
-            Assert.Equal(29100m, monitors.AverageValue);
+            Assert.Equal(30160m, monitors.TotalValue);
+            Assert.Equal(30160m, monitors.AverageValue);
 
             Assert.Equal(summary.GrandTotalValue, summary.ByDeviceType.Sum(g => g.TotalValue));
 
             // Same split by status, which is a different grouping key over the same rows.
             Assert.Equal(2, summary.ByStatus.Count);
             Assert.Equal(119840m, Assert.Single(summary.ByStatus, g => g.Status == AssetStatus.Available).TotalValue);
-            Assert.Equal(29100m, Assert.Single(summary.ByStatus, g => g.Status == AssetStatus.InUse).TotalValue);
+            Assert.Equal(30160m, Assert.Single(summary.ByStatus, g => g.Status == AssetStatus.InUse).TotalValue);
         }
     }
 
@@ -118,12 +121,12 @@ public class MixedCurrencyReportTests
                 Assert.IsType<ApiResponse<DashboardDto>>(
                     Assert.IsType<OkObjectResult>(result.Result).Value).Data);
 
-            Assert.Equal(148940m, dashboard.TotalAssetValue);
+            Assert.Equal(150000m, dashboard.TotalAssetValue);
 
             Assert.Equal(2, dashboard.AssetsByType.Count);
             Assert.Equal(119840m,
                 Assert.Single(dashboard.AssetsByType, g => g.DeviceType == DeviceTypes.Laptop).TotalValue);
-            Assert.Equal(29100m,
+            Assert.Equal(30160m,
                 Assert.Single(dashboard.AssetsByType, g => g.DeviceType == DeviceTypes.Monitor).TotalValue);
         }
     }
