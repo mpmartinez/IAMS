@@ -61,6 +61,85 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
     }
 
     /// <summary>
+    /// Net book value across the estate, as of a date. Retired and Lost assets are excluded, and
+    /// anything that cannot be depreciated is reported with the reason rather than folded in as
+    /// zero - a total that quietly omits a fifth of the estate looks authoritative and is not.
+    /// </summary>
+    [HttpGet("depreciation")]
+    public async Task<ActionResult<ApiResponse<DepreciationSummaryDto>>> GetDepreciationReport(
+        [FromQuery] DateTime? asOf = null)
+    {
+        var effectiveAsOf = asOf ?? DateTime.UtcNow;
+
+        var assets = await db.Assets
+            .Where(a => a.Status != AssetStatus.Retired && a.Status != AssetStatus.Lost)
+            .OrderBy(a => a.AssetTag)
+            .Select(a => new
+            {
+                a.AssetTag,
+                a.DeviceType,
+                a.Name,
+                a.PurchasePrice,
+                a.Currency,
+                a.ExchangeRate,
+                a.PurchaseDate
+            })
+            .ToListAsync();
+
+        var policies = await db.DepreciationPolicies
+            .ToDictionaryAsync(p => p.DeviceType);
+
+        var rows = new List<DepreciationReportRow>(assets.Count);
+
+        foreach (var a in assets)
+        {
+            policies.TryGetValue(a.DeviceType, out var policy);
+
+            var d = DepreciationCalculator.Calculate(
+                a.PurchasePrice, a.ExchangeRate, a.PurchaseDate, policy, effectiveAsOf);
+
+            rows.Add(new DepreciationReportRow
+            {
+                AssetTag = a.AssetTag,
+                DeviceType = a.DeviceType,
+                Name = a.Name,
+                PurchaseDate = a.PurchaseDate,
+                CostBasis = d.CostBasis,
+                Currency = a.Currency,
+                PurchasePrice = a.PurchasePrice,
+                UsefulLifeMonths = policy?.UsefulLifeMonths,
+                ElapsedMonths = d.IsDepreciable ? d.ElapsedMonths : null,
+                AccumulatedDepreciation = d.IsDepreciable ? d.AccumulatedDepreciation : null,
+                NetBookValue = d.IsDepreciable ? d.NetBookValue : null,
+                IsDepreciable = d.IsDepreciable,
+                IsFullyDepreciated = d.IsFullyDepreciated,
+                NotDepreciableReason = d.NotDepreciableReason
+            });
+        }
+
+        var summary = new DepreciationSummaryDto
+        {
+            // Cost basis spans every reported asset; book value only the depreciable ones.
+            TotalCostBasis = rows.Sum(r => r.CostBasis),
+            TotalAccumulatedDepreciation = rows.Sum(r => r.AccumulatedDepreciation ?? 0m),
+            TotalNetBookValue = rows.Sum(r => r.NetBookValue ?? 0m),
+            DepreciableCount = rows.Count(r => r.IsDepreciable),
+            NotDepreciableCount = rows.Count(r => !r.IsDepreciable),
+            NotDepreciableByReason = rows
+                .Where(r => r.NotDepreciableReason is not null)
+                .GroupBy(r => r.NotDepreciableReason!)
+                .Select(g => new NotDepreciableReasonCount { Reason = g.Key, Count = g.Count() })
+                .OrderByDescending(x => x.Count)
+                .ToList(),
+            PrimaryCurrency = Currencies.PHP,
+            AsOf = effectiveAsOf,
+            Rows = rows
+        };
+
+        return Ok(ApiResponse<DepreciationSummaryDto>.Ok(summary));
+    }
+
+    /// <summary>
     /// Export asset inventory report as CSV
     /// </summary>
     [HttpGet("inventory/export")]
