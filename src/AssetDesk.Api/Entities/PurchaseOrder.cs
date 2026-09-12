@@ -101,12 +101,16 @@ public static class PurchaseOrderWorkflow
         status is PurchaseOrderStatus.Ordered or PurchaseOrderStatus.PartiallyReceived;
 
     /// <summary>
-    /// The status the quantities imply. A terminal status is returned unchanged - receiving is
-    /// refused against Cancelled anyway, but this must not resurrect one if it is ever asked.
+    /// The status the quantities imply. Draft, Received and Cancelled are all returned unchanged:
+    /// Draft has not been ordered yet, so it is not quantity-driven either, and Received/Cancelled
+    /// are terminal - receiving is refused against any of the three anyway, but this must not
+    /// drag one forward or back if it is ever asked.
     /// </summary>
     public static string StatusFor(int totalOrdered, int totalReceived, string currentStatus)
     {
-        if (currentStatus is PurchaseOrderStatus.Cancelled or PurchaseOrderStatus.Draft)
+        if (currentStatus is PurchaseOrderStatus.Cancelled
+            or PurchaseOrderStatus.Draft
+            or PurchaseOrderStatus.Received)
             return currentStatus;
 
         if (totalReceived <= 0) return PurchaseOrderStatus.Ordered;

@@ -30,6 +30,8 @@ public class PurchaseOrderWorkflowTests
     [InlineData(PurchaseOrderStatus.Cancelled, PurchaseOrderStatus.Ordered)]
     [InlineData(PurchaseOrderStatus.Cancelled, PurchaseOrderStatus.Draft)]
     [InlineData(PurchaseOrderStatus.Ordered, PurchaseOrderStatus.Draft)]
+    [InlineData(PurchaseOrderStatus.PartiallyReceived, PurchaseOrderStatus.Draft)]
+    [InlineData(PurchaseOrderStatus.PartiallyReceived, PurchaseOrderStatus.Ordered)]
     public void Illegal_transitions_are_refused(string from, string to)
     {
         Assert.False(PurchaseOrderWorkflow.CanTransition(from, to));
@@ -65,6 +67,16 @@ public class PurchaseOrderWorkflowTests
         Assert.Equal(
             PurchaseOrderStatus.Cancelled,
             PurchaseOrderWorkflow.StatusFor(10, 10, PurchaseOrderStatus.Cancelled));
+    }
+
+    [Fact]
+    public void A_received_order_is_not_dragged_backward_by_its_quantities()
+    {
+        // Receiving is refused against a received order, so StatusFor should never be asked -
+        // but if it is, it must not reopen it.
+        Assert.Equal(
+            PurchaseOrderStatus.Received,
+            PurchaseOrderWorkflow.StatusFor(10, 0, PurchaseOrderStatus.Received));
     }
 
     [Fact]
