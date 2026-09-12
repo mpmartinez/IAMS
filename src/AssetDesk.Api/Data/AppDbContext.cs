@@ -35,6 +35,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<LookupValue> LookupValues => Set<LookupValue>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+    public DbSet<DepreciationPolicy> DepreciationPolicies => Set<DepreciationPolicy>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -523,6 +524,28 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
 
             entity.Property(e => e.Key).HasMaxLength(100);
             entity.Property(e => e.Value).HasMaxLength(1000);
+        });
+
+        modelBuilder.Entity<DepreciationPolicy>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            // One policy per device type per tenant.
+            entity.HasIndex(e => new { e.TenantId, e.DeviceType }).IsUnique();
+
+            entity.Property(e => e.DeviceType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.ResidualPercent).HasPrecision(5, 2);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Global query filter for tenant isolation - same shape as every other tenant entity.
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
         });
 
         // Normalise every DateTime to UTC on the way to the database.
