@@ -55,6 +55,9 @@ public static class Permissions
 
     public const string DepreciationManage = "iams:depreciation:manage";
 
+    public const string ProcurementView = "iams:procurement:view";
+    public const string ProcurementManage = "iams:procurement:manage";
+
     public static readonly PermissionDescriptor[] All =
     [
         new(AssetsView, "Assets", "View assets", "See the asset list and individual asset records."),
@@ -92,6 +95,11 @@ public static class Permissions
 
         new(DepreciationManage, "Depreciation", "Manage depreciation policy",
             "Set the useful life and residual value used to calculate book value, per device type."),
+
+        new(ProcurementView, "Procurement", "View purchasing",
+            "See suppliers, purchase orders and what has been received."),
+        new(ProcurementManage, "Procurement", "Manage purchasing",
+            "Create suppliers and purchase orders, and receive deliveries."),
     ];
 
     public static readonly string[] Keys = All.Select(p => p.Key).ToArray();
@@ -122,10 +130,11 @@ public static class Permissions
             AssignmentsView, AssignmentsAssign, AssignmentsReturn,
             TicketsFile, TicketsQueue, TicketsManage,
             UsersRead, AttachmentsManage, WarrantyManage,
+            ProcurementView, ProcurementManage,
         ],
 
         // A role called Auditor that cannot open the audit trail would be a contradiction.
-        Roles.Auditor => [AssignmentsView, TicketsFile, ReportsView, AuditView],
+        Roles.Auditor => [AssignmentsView, TicketsFile, ReportsView, AuditView, ProcurementView],
 
         Roles.Management => [TicketsFile],
 

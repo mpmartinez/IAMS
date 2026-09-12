@@ -42,8 +42,8 @@ public class PermissionCatalogTests
     }
 
     [Theory]
-    [InlineData(Roles.Staff, 13)]
-    [InlineData(Roles.Auditor, 4)]
+    [InlineData(Roles.Staff, 15)]
+    [InlineData(Roles.Auditor, 5)]
     [InlineData(Roles.Management, 1)]
     [InlineData(Roles.Employee, 1)]
     public void BuiltInRoles_HaveTheExpectedGrantCount(string role, int expected)

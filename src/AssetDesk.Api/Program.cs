@@ -145,6 +145,8 @@ builder.Services.AddAuthorizationBuilder()
     .RequirePermission("CanSendTestNotifications", Permissions.NotificationsTest)
     .RequirePermission("CanViewAuditLog", Permissions.AuditView)
     .RequirePermission("CanManageDepreciation", Permissions.DepreciationManage)
+    .RequirePermission("CanViewProcurement", Permissions.ProcurementView)
+    .RequirePermission("CanManageProcurement", Permissions.ProcurementManage)
     // Platform-level: not tenant-tunable.
     .AddPolicy("SuperAdmin", policy => policy.RequireRole(Roles.SuperAdmin))
     .AddPolicy("CanManageTenants", policy => policy.RequireRole(Roles.SuperAdmin));

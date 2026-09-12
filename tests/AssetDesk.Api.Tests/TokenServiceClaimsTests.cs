@@ -98,8 +98,8 @@ public class TokenServiceClaimsTests
             .Select(c => c.Value)
             .ToList();
 
-        // Exactly the 13 keys DefaultsFor(Staff) grants - no more, no fewer, no duplicates.
-        Assert.Equal(13, Permissions.DefaultsFor(Roles.Staff).Count);
+        // Exactly the 15 keys DefaultsFor(Staff) grants - no more, no fewer, no duplicates.
+        Assert.Equal(15, Permissions.DefaultsFor(Roles.Staff).Count);
         Assert.Equal(
             Permissions.DefaultsFor(Roles.Staff).OrderBy(k => k),
             permissionClaims.OrderBy(k => k));

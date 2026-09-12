@@ -181,4 +181,32 @@ public class SupplierApiTests
             Assert.Equal(1, await db.Suppliers.IgnoreQueryFilters().CountAsync());
         }
     }
+
+    [Fact]
+    public void Both_procurement_keys_are_in_the_catalog_under_one_group()
+    {
+        var view = Assert.Single(
+            AssetDesk.Api.Authorization.Permissions.All,
+            p => p.Key == AssetDesk.Api.Authorization.Permissions.ProcurementView);
+        var manage = Assert.Single(
+            AssetDesk.Api.Authorization.Permissions.All,
+            p => p.Key == AssetDesk.Api.Authorization.Permissions.ProcurementManage);
+
+        Assert.Equal("iams:procurement:view", view.Key);
+        Assert.Equal("iams:procurement:manage", manage.Key);
+        Assert.Equal("Procurement", view.Group);
+        Assert.Equal("Procurement", manage.Group);
+    }
+
+    [Fact]
+    public void Staff_can_run_procurement_and_an_Auditor_can_only_read_it()
+    {
+        var staff = AssetDesk.Api.Authorization.Permissions.DefaultsFor(Roles.Staff);
+        Assert.Contains(AssetDesk.Api.Authorization.Permissions.ProcurementView, staff);
+        Assert.Contains(AssetDesk.Api.Authorization.Permissions.ProcurementManage, staff);
+
+        var auditor = AssetDesk.Api.Authorization.Permissions.DefaultsFor(Roles.Auditor);
+        Assert.Contains(AssetDesk.Api.Authorization.Permissions.ProcurementView, auditor);
+        Assert.DoesNotContain(AssetDesk.Api.Authorization.Permissions.ProcurementManage, auditor);
+    }
 }

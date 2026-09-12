@@ -11,7 +11,7 @@ namespace AssetDesk.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewProcurement")]
 public class SuppliersController(AppDbContext db, ITenantProvider tenantProvider) : ControllerBase
 {
     /// <summary>
@@ -36,6 +36,7 @@ public class SuppliersController(AppDbContext db, ITenantProvider tenantProvider
     }
 
     [HttpPost]
+    [Authorize(Policy = "CanManageProcurement")]
     public async Task<ActionResult<ApiResponse<SupplierDto>>> Create(UpsertSupplierDto dto)
     {
         if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
@@ -62,6 +63,7 @@ public class SuppliersController(AppDbContext db, ITenantProvider tenantProvider
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = "CanManageProcurement")]
     public async Task<ActionResult<ApiResponse<SupplierDto>>> Update(int id, UpsertSupplierDto dto)
     {
         if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
@@ -92,6 +94,7 @@ public class SuppliersController(AppDbContext db, ITenantProvider tenantProvider
 
     /// <summary>Deactivates rather than deletes - purchase orders reference suppliers.</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = "CanManageProcurement")]
     public async Task<ActionResult<ApiResponse<object>>> Delete(int id)
     {
         if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
