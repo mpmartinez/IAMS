@@ -39,6 +39,7 @@ public class DepreciationCalculatorTests
         var last = Standard(new DateTime(2026, 3, 31), new DateTime(2026, 3, 31));
 
         Assert.Equal(first.ElapsedMonths, last.ElapsedMonths);
+        Assert.Equal(1500m, first.AccumulatedDepreciation);
         Assert.Equal(first.NetBookValue, last.NetBookValue);
     }
 
@@ -162,5 +163,54 @@ public class DepreciationCalculatorTests
             60000m, 1m, new DateTime(2026, 3, 1), null, new DateTime(2026, 6, 1));
 
         Assert.Equal(60000m, r.CostBasis);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(101)]
+    public void A_residual_outside_zero_to_a_hundred_is_reported_not_applied(decimal residualPercent)
+    {
+        var r = DepreciationCalculator.Calculate(
+            60000m, 1m, new DateTime(2026, 3, 1), Policy(36, residualPercent), new DateTime(2026, 6, 1));
+
+        Assert.False(r.IsDepreciable);
+        Assert.Equal(NotDepreciableReasons.InvalidResidual, r.NotDepreciableReason);
+    }
+
+    [Fact]
+    public void A_hundred_percent_residual_is_the_valid_boundary_and_never_depreciates_below_cost()
+    {
+        // 100% residual: depreciable amount is zero, so book value should hold at cost.
+        var r = DepreciationCalculator.Calculate(
+            60000m, 1m, new DateTime(2026, 3, 1), Policy(36, 100m), new DateTime(2029, 2, 28));
+
+        Assert.True(r.IsDepreciable);
+        Assert.Equal(0m, r.AccumulatedDepreciation);
+        Assert.Equal(60000m, r.NetBookValue);
+    }
+
+    [Fact]
+    public void A_zero_percent_residual_is_the_valid_boundary_and_depreciates_to_zero()
+    {
+        var r = DepreciationCalculator.Calculate(
+            60000m, 1m, new DateTime(2026, 3, 1), Policy(36, 0m), new DateTime(2029, 2, 28));
+
+        Assert.True(r.IsDepreciable);
+        Assert.Equal(60000m, r.AccumulatedDepreciation);
+        Assert.Equal(0m, r.NetBookValue);
+    }
+
+    [Fact]
+    public void Intermediate_values_are_not_rounded()
+    {
+        // 10,000 over 3 months, no residual: monthly is 3333.333... which does not divide
+        // evenly. If the calculator rounded that intermediate to 2dp, the sum over 3 months
+        // would land at 9999.99, not 10,000.
+        var r = DepreciationCalculator.Calculate(
+            10000m, 1m, new DateTime(2026, 1, 10), Policy(3, 0m), new DateTime(2026, 3, 15));
+
+        Assert.Equal(3, r.ElapsedMonths);
+        Assert.Equal(10000m, r.AccumulatedDepreciation);
+        Assert.Equal(0m, r.NetBookValue);
     }
 }

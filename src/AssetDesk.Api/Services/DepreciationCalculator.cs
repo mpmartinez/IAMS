@@ -9,6 +9,7 @@ public static class NotDepreciableReasons
     public const string NoPurchaseDate = "No purchase date";
     public const string NoPolicy = "No depreciation policy for this device type";
     public const string InvalidUsefulLife = "Depreciation policy has a useful life of zero or less";
+    public const string InvalidResidual = "Depreciation policy has a residual outside 0 to 100 percent";
 }
 
 /// <param name="IsDepreciable">False when <paramref name="NotDepreciableReason"/> explains why not.</param>
@@ -55,6 +56,12 @@ public static class DepreciationCalculator
         // failure than a row reported as undepreciable.
         if (policy.UsefulLifeMonths <= 0)
             return NotDepreciable(NotDepreciableReasons.InvalidUsefulLife, costBasis);
+
+        // Second line of defence, same reasoning as the useful-life guard above: the policy
+        // screen is meant to keep this in 0-100, but nothing in the database enforces that
+        // range today, and a pure function can be called by anything.
+        if (policy.ResidualPercent < 0m || policy.ResidualPercent > 100m)
+            return NotDepreciable(NotDepreciableReasons.InvalidResidual, costBasis);
 
         var residual = costBasis * policy.ResidualPercent / 100m;
         var depreciable = costBasis - residual;
