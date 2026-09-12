@@ -95,6 +95,9 @@
                         <PermissionView Permission="iams:audit:view">
                             <NavItem Href="/admin/audit" Icon="clipboard-list" Label="Audit Trail" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                         </PermissionView>
+                        <PermissionView Permission="iams:depreciation:manage">
+                            <NavItem Href="/admin/depreciation" Icon="chart" Label="Depreciation" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
+                        </PermissionView>
                     </div>
                 }
 
@@ -627,9 +630,11 @@
         // /admin/roles, and a bare heading with no links under it would look broken. Auditor is
         // the case that makes this matter now: it holds iams:audit:view and neither of the other
         // two, so without the third clause its only Admin-section link would have no heading.
+        // iams:depreciation:manage joins the same OR for the same reason.
         _showAdminGroup = await PermissionChecker.HasPermissionAsync("iams:users:view")
             || await PermissionChecker.HasPermissionAsync("iams:roles:view")
-            || await PermissionChecker.HasPermissionAsync("iams:audit:view");
+            || await PermissionChecker.HasPermissionAsync("iams:audit:view")
+            || await PermissionChecker.HasPermissionAsync("iams:depreciation:manage");
 
         // File tickets but do not work the queue. Excluding queue holders is what keeps these out
         // of Staff's and Admin's sidebar - they reach the same tickets through /tickets, and a

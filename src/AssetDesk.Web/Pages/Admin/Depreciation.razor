@@ -1,0 +1,217 @@
+@page "/admin/depreciation"
+@using AssetDesk.Web.Components.UI
+@using System.Globalization
+@attribute [Authorize]
+@inject ApiClient Api
+@inject SnackbarService Snackbar
+
+<PageTitle>Depreciation Policy - AssetDesk</PageTitle>
+
+<PermissionView Permission="iams:depreciation:manage" ShowDeniedMessage="true">
+<div class="space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-foreground">Depreciation Policy</h1>
+        <p class="text-muted-foreground mt-1">
+            The useful life and residual value each device type depreciates against. A device
+            type with no policy set here contributes nothing to net book value - it is reported
+            as not depreciable until a policy exists.
+        </p>
+    </div>
+
+    <Card Class="overflow-hidden">
+        @if (_loading)
+        {
+            <div class="p-4 sm:p-5 space-y-2">
+                @for (int i = 0; i < 5; i++)
+                {
+                    <div class="h-12 rounded-xl skeleton"></div>
+                }
+            </div>
+        }
+        else if (_deviceTypes.Count == 0)
+        {
+            <div class="p-4 sm:p-5">
+                <EmptyState Title="No device types" Description="Add a device type under Reference Data first." />
+            </div>
+        }
+        else
+        {
+            <Table WrapperClass="-mx-4 sm:mx-0">
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Device Type</TableHead>
+                        <TableHead>Useful Life</TableHead>
+                        <TableHead>Residual</TableHead>
+                        <TableHead Class="text-right">&nbsp;</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    @foreach (var deviceType in _deviceTypes)
+                    {
+                        var hasPolicy = _policies.ContainsKey(deviceType);
+                        <TableRow @key="deviceType">
+                            <TableCell Class="font-medium">@deviceType</TableCell>
+                            <TableCell>
+                                @if (hasPolicy)
+                                {
+                                    <span>@MonthsFor(deviceType) months</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted-foreground">Not depreciated</span>
+                                }
+                            </TableCell>
+                            <TableCell>@(hasPolicy ? $"{ResidualFor(deviceType):0.##}%" : "—")</TableCell>
+                            <TableCell Class="text-right">
+                                <div class="flex items-center justify-end gap-1">
+                                    <Button Size="sm" Variant="outline" OnClick="() => OpenEditor(deviceType)">
+                                        @(hasPolicy ? "Edit" : "Set policy")
+                                    </Button>
+                                    @if (hasPolicy)
+                                    {
+                                        <Button Size="sm" Variant="ghost" OnClick="() => RemoveAsync(deviceType)">Remove</Button>
+                                    }
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    }
+                </TableBody>
+            </Table>
+        }
+    </Card>
+</div>
+
+<!-- Set/Edit policy modal -->
+<Modal IsOpen="@_showModal" Title="@($"Depreciation policy - {_editingDeviceType}")" OnClose="CloseModal">
+    <ChildContent>
+        <div class="space-y-4">
+            <FormField LabelText="Useful life (months)" Description="How many months this device type depreciates over.">
+                <Input Type="number" Value="@_formMonths" ValueChanged="v => _formMonths = v" Placeholder="36" Min="1" />
+            </FormField>
+
+            <FormField LabelText="Residual (%)" Description="Value retained at the end of its useful life, as a percentage of cost.">
+                <Input Type="number" Value="@_formResidual" ValueChanged="v => _formResidual = v" Placeholder="10" Min="0" Max="100" Step="0.01" />
+            </FormField>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <Alert Variant="destructive">@_error</Alert>
+            }
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <Button Variant="ghost" OnClick="CloseModal">Cancel</Button>
+        <Button OnClick="SaveClicked" Loading="@(_savingType == _editingDeviceType)">Save</Button>
+    </FooterContent>
+</Modal>
+</PermissionView>
+
+@code {
+    private List<string> _deviceTypes = [];
+    private Dictionary<string, DepreciationPolicyDto> _policies = new();
+    private bool _loading = true;
+    private string? _error;
+    private string? _savingType;
+
+    private bool _showModal;
+    private string? _editingDeviceType;
+    private string _formMonths = "";
+    private string _formResidual = "";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _deviceTypes = (await Api.GetDeviceTypesAsync())?.ToList() ?? [];
+        var policies = await Api.GetDepreciationPoliciesAsync();
+        _policies = policies.ToDictionary(p => p.DeviceType);
+        _loading = false;
+    }
+
+    private int MonthsFor(string deviceType) =>
+        _policies.TryGetValue(deviceType, out var p) ? p.UsefulLifeMonths : 0;
+
+    private decimal ResidualFor(string deviceType) =>
+        _policies.TryGetValue(deviceType, out var p) ? p.ResidualPercent : 0m;
+
+    private void OpenEditor(string deviceType)
+    {
+        _editingDeviceType = deviceType;
+        _error = null;
+
+        if (_policies.TryGetValue(deviceType, out var p))
+        {
+            _formMonths = p.UsefulLifeMonths.ToString(CultureInfo.InvariantCulture);
+            _formResidual = p.ResidualPercent.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            _formMonths = "";
+            _formResidual = "";
+        }
+
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editingDeviceType = null;
+        _error = null;
+    }
+
+    // A number input's DOM value is always invariant-formatted regardless of browser locale, so
+    // parsing it under CurrentCulture would silently misread it for a reader whose locale uses
+    // "." as a group separator - see the identical note on Assets/Edit.razor's ParseDecimal.
+    private static decimal ParseResidual(string value) =>
+        decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0m;
+
+    private async Task SaveClicked()
+    {
+        if (_editingDeviceType is null) return;
+
+        int.TryParse(_formMonths, NumberStyles.Integer, CultureInfo.InvariantCulture, out var months);
+        var residual = ParseResidual(_formResidual);
+
+        await SaveAsync(_editingDeviceType, months, residual);
+    }
+
+    private async Task SaveAsync(string deviceType, int months, decimal residual)
+    {
+        _error = null;
+        _savingType = deviceType;
+
+        var (success, error) = await Api.SaveDepreciationPolicyAsync(new UpsertDepreciationPolicyDto
+        {
+            DeviceType = deviceType,
+            UsefulLifeMonths = months,
+            ResidualPercent = residual
+        });
+
+        _savingType = null;
+
+        // Surface the API's message rather than inventing one - it is the authority on the rules.
+        if (!success) { _error = error; return; }
+
+        Snackbar.Success("Depreciation policy saved");
+        _showModal = false;
+        _editingDeviceType = null;
+        await LoadAsync();
+    }
+
+    private async Task RemoveAsync(string deviceType)
+    {
+        var (success, error) = await Api.DeleteDepreciationPolicyAsync(deviceType);
+        if (success)
+        {
+            Snackbar.Success("Depreciation policy removed");
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Error(error ?? "Could not remove the policy.");
+        }
+    }
+}

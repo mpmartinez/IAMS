@@ -1089,6 +1089,45 @@ public class ApiClient(HttpClient http, AuthService authService)
         return (true, null);
     }
 
+    // Depreciation policy - per-device-type useful life and residual percent. Gated on
+    // iams:depreciation:manage; see /admin/depreciation. The API is the source of truth for
+    // validation (useful life, residual range, active device type), so errors are surfaced
+    // verbatim rather than re-checked here.
+    public async Task<List<DepreciationPolicyDto>> GetDepreciationPoliciesAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<DepreciationPolicyDto>>>("api/depreciationpolicies");
+        return response?.Data ?? [];
+    }
+
+    public async Task<(bool Success, string? Error)> SaveDepreciationPolicyAsync(UpsertDepreciationPolicyDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PutAsJsonAsync("api/depreciationpolicies", dto);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to save policy.");
+        }
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> DeleteDepreciationPolicyAsync(string deviceType)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.DeleteAsync($"api/depreciationpolicies/{Uri.EscapeDataString(deviceType)}");
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to remove policy.");
+        }
+
+        return (true, null);
+    }
+
     // Platform SMTP settings (SuperAdmin only) - what makes forgot-password mail actually
     // send. The stored password is never returned by the API; HasPassword is the only signal
     // the UI gets, and an empty Password on save means "keep the current one".
