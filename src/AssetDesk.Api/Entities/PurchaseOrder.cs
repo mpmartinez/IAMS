@@ -27,6 +27,7 @@ public class PurchaseOrder : ITenantEntity
     public DateTime? UpdatedAt { get; set; }
 
     public ICollection<PurchaseOrderLine> Lines { get; set; } = [];
+    public ICollection<GoodsReceipt> Receipts { get; set; } = [];
 }
 
 public class PurchaseOrderLine

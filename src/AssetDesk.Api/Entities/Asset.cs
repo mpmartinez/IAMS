@@ -37,6 +37,14 @@ public class Asset : ITenantEntity
     /// <summary>Stamped by a QR verification scan. Drives inventory-accuracy reporting.</summary>
     public DateTime? LastVerifiedAt { get; set; }
 
+    /// <summary>
+    /// The goods-receipt line that created this asset, when it was created by receiving a
+    /// purchase order. Null for an asset entered by hand or imported - which is honest: the
+    /// system then knows which assets it can account for and which it cannot.
+    /// </summary>
+    public int? GoodsReceiptLineId { get; set; }
+    public GoodsReceiptLine? GoodsReceiptLine { get; set; }
+
     // Legacy/additional fields
     public string? Name { get; set; }
     public string? Location { get; set; }
