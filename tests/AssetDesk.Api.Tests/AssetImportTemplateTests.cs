@@ -86,4 +86,24 @@ public class AssetImportTemplateTests
         // importer rejects, because Currencies.All holds only these two.
         Assert.Equal(Currencies.All.Order(), offered.Order());
     }
+
+    [Fact]
+    public void The_currency_validation_covers_only_the_Currency_column()
+    {
+        using var wb = new XLWorkbook(TemplatePath());
+        var sheet = wb.Worksheet("Assets");
+        var headers = sheet.Row(1).CellsUsed().Select(c => c.GetString().Trim()).ToList();
+        var currencyColumn = headers.IndexOf("Currency") + 1; // ClosedXML columns are 1-based
+
+        // Inserting ExchangeRate next to Currency widened this validation's range from
+        // I2:I1000 to I2:J1000, so any value typed into ExchangeRate had to come from the
+        // Currency list on the Reference sheet - errorStyle="stop" made every rate rejected.
+        var currencyValidation = sheet.DataValidations.Single(dv => dv.InputMessage == "Choose a currency");
+
+        foreach (var range in currencyValidation.Ranges)
+        {
+            Assert.Equal(currencyColumn, range.RangeAddress.FirstAddress.ColumnNumber);
+            Assert.Equal(currencyColumn, range.RangeAddress.LastAddress.ColumnNumber);
+        }
+    }
 }
