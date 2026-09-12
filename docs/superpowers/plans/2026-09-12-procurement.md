@@ -710,7 +710,7 @@ If `ApiResponse<T>.Ok`/`.Fail` differ from this in the codebase, match `AssetsCo
 
 ```bash
 cd src/AssetDesk.Api && dotnet ef migrations add AddSuppliers
-dotnet ef migrations script --idempotent --no-build | grep -A 14 'CREATE TABLE "Suppliers"'
+dotnet ef migrations script --idempotent | grep -A 14 'CREATE TABLE "Suppliers"'
 ```
 
 Expected: `"Name" character varying(200) NOT NULL`, a unique index over `("TenantId","Name")`, and the FK to `Tenants` with `ON DELETE RESTRICT`. The SQLite suite cannot prove this.
@@ -1052,7 +1052,7 @@ builder.Services.AddScoped<IPurchaseOrderNumberAllocator, PurchaseOrderNumberAll
 
 ```bash
 cd src/AssetDesk.Api && dotnet ef migrations add AddPurchaseOrders
-dotnet ef migrations script --idempotent --no-build | grep -A 16 'CREATE TABLE "PurchaseOrders"'
+dotnet ef migrations script --idempotent | grep -A 16 'CREATE TABLE "PurchaseOrders"'
 ```
 
 Expected: a unique index over `("TenantId","PoNumber")`, `"UnitPrice" numeric(18,2)` on the lines table, and the lines FK cascading from `PurchaseOrders` while the tenant FK restricts.
@@ -2159,7 +2159,7 @@ And inside the existing `modelBuilder.Entity<Asset>` block:
 
 ```bash
 cd src/AssetDesk.Api && dotnet ef migrations add AddGoodsReceipts
-dotnet ef migrations script --idempotent --no-build | grep -E 'ExchangeRate|GoodsReceiptLineId' | head -6
+dotnet ef migrations script --idempotent | grep -E 'ExchangeRate|GoodsReceiptLineId' | head -6
 ```
 
 Expected: `"ExchangeRate" numeric(18,6) NOT NULL DEFAULT 1.0` on `GoodsReceipts`, and `"GoodsReceiptLineId" integer NULL` added to `Assets`.
