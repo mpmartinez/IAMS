@@ -67,10 +67,12 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
     /// </summary>
     [HttpGet("depreciation")]
     public async Task<ActionResult<ApiResponse<DepreciationSummaryDto>>> GetDepreciationReport(
-        [FromQuery] DateTime? asOf = null)
-    {
-        var effectiveAsOf = asOf ?? DateTime.UtcNow;
+        [FromQuery] DateTime? asOf = null) =>
+        Ok(ApiResponse<DepreciationSummaryDto>.Ok(
+            await BuildDepreciationSummaryAsync(asOf ?? DateTime.UtcNow)));
 
+    private async Task<DepreciationSummaryDto> BuildDepreciationSummaryAsync(DateTime asOf)
+    {
         var assets = await db.Assets
             .Where(a => a.Status != AssetStatus.Retired && a.Status != AssetStatus.Lost)
             .OrderBy(a => a.AssetTag)
@@ -82,21 +84,27 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
                 a.PurchasePrice,
                 a.Currency,
                 a.ExchangeRate,
-                a.PurchaseDate
+                a.PurchaseDate,
+                a.TenantId
             })
             .ToListAsync();
 
+        // Keyed on tenant + device type, not device type alone: with the query filter admitting
+        // every tenant's rows for a super-admin caller, two tenants can each have a Laptop
+        // policy, and a DeviceType-only dictionary throws on the duplicate key. Looking each
+        // asset up under its own TenantId matches it against its own organisation's policy.
         var policies = await db.DepreciationPolicies
-            .ToDictionaryAsync(p => p.DeviceType);
+            .AsNoTracking()
+            .ToDictionaryAsync(p => (p.TenantId, p.DeviceType));
 
         var rows = new List<DepreciationReportRow>(assets.Count);
 
         foreach (var a in assets)
         {
-            policies.TryGetValue(a.DeviceType, out var policy);
+            policies.TryGetValue((a.TenantId, a.DeviceType), out var policy);
 
             var d = DepreciationCalculator.Calculate(
-                a.PurchasePrice, a.ExchangeRate, a.PurchaseDate, policy, effectiveAsOf);
+                a.PurchasePrice, a.ExchangeRate, a.PurchaseDate, policy, asOf);
 
             rows.Add(new DepreciationReportRow
             {
@@ -117,7 +125,7 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
             });
         }
 
-        var summary = new DepreciationSummaryDto
+        return new DepreciationSummaryDto
         {
             // Cost basis spans every reported asset; book value only the depreciable ones.
             TotalCostBasis = rows.Sum(r => r.CostBasis),
@@ -132,11 +140,9 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
                 .OrderByDescending(x => x.Count)
                 .ToList(),
             PrimaryCurrency = Currencies.PHP,
-            AsOf = effectiveAsOf,
+            AsOf = asOf,
             Rows = rows
         };
-
-        return Ok(ApiResponse<DepreciationSummaryDto>.Ok(summary));
     }
 
     /// <summary>
