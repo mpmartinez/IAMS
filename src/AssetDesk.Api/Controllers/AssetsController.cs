@@ -312,9 +312,10 @@ public class AssetsController(
                 .GroupBy(a => a.DeviceType)
                 .Select(g => new { DeviceType = g.Key, Count = g.Count() })
                 .ToListAsync(),
+            // Pesos, converted at the rate each asset was booked at.
             TotalValue = await db.Assets
                 .Where(a => a.PurchasePrice.HasValue)
-                .SumAsync(a => a.PurchasePrice ?? 0),
+                .SumAsync(a => (a.PurchasePrice ?? 0) * a.ExchangeRate),
             AssignedAssets = await db.Assets.CountAsync(a => a.AssignedToUserId != null),
             ExpiringWarranties = await db.Assets
                 .CountAsync(a => a.WarrantyEndDate.HasValue && a.WarrantyEndDate <= DateTime.UtcNow.AddMonths(3) && a.WarrantyEndDate > DateTime.UtcNow)

@@ -204,7 +204,8 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
                 UpdatedAt = a.UpdatedAt
             }).ToList(),
             TotalCurrentAssets = currentAssets.Count,
-            TotalAssetValue = currentAssets.Sum(a => a.PurchasePrice ?? 0),
+            // Pesos. Each row above keeps the currency it was booked in; the total converts.
+            TotalAssetValue = currentAssets.Sum(a => (a.PurchasePrice ?? 0) * a.ExchangeRate),
             TotalPastAssignments = pastAssignmentsCount
         });
     }
@@ -247,7 +248,8 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
                 Location = a.Asset.Location
             }).ToList(),
             TotalUnreturnedAssets = unreturnedAssets.Count,
-            TotalUnreturnedValue = unreturnedAssets.Sum(a => a.Asset.PurchasePrice ?? 0)
+            // Pesos, converted at the rate each asset was booked at.
+            TotalUnreturnedValue = unreturnedAssets.Sum(a => (a.Asset.PurchasePrice ?? 0) * a.Asset.ExchangeRate)
         });
     }
 
@@ -331,7 +333,8 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
                 UserName = g.Key.FullName,
                 Department = g.Key.Department,
                 UnreturnedCount = g.Count(),
-                TotalValue = g.Sum(a => a.Asset.PurchasePrice ?? 0),
+                // Pesos, converted at the rate each asset was booked at.
+                TotalValue = g.Sum(a => (a.Asset.PurchasePrice ?? 0) * a.Asset.ExchangeRate),
                 OldestAssignment = g.Min(a => a.AssignedAt)
             })
             .OrderByDescending(u => u.UnreturnedCount)
