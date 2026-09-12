@@ -104,6 +104,16 @@ public class PurchaseOrdersController(
         if (supplier is null)
             return BadRequest(ApiResponse<PurchaseOrderDto>.Fail("Supplier not found."));
 
+        // Deactivation is the only way a supplier is retired - Delete sets IsActive rather than
+        // removing the row, because orders reference it. Refusing here rather than only hiding
+        // inactive suppliers in the picker is what makes the retirement mean something: an id
+        // from a stale tab or a scripted client would otherwise produce a fully valid, numbered,
+        // receivable order against a supplier somebody retired for cause. Named separately from
+        // "not found" so an operator can tell a wrong id from a retired supplier.
+        if (!supplier.IsActive)
+            return BadRequest(ApiResponse<PurchaseOrderDto>.Fail(
+                $"Supplier '{supplier.Name}' is inactive and cannot be ordered from."));
+
         var order = new PurchaseOrder
         {
             TenantId = tenantId,

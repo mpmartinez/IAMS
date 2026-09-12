@@ -225,6 +225,32 @@ public class PurchaseOrderApiTests
     }
 
     [Fact]
+    public async Task A_deactivated_supplier_cannot_be_ordered_from()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var supplier = await SeedSupplierAsync(db, tenantId);
+
+            // Deactivating is how a supplier is retired - the row stays because orders reference
+            // it. The picker hides inactive suppliers, but a stale tab or a scripted client can
+            // still name the id, and that must not produce a numbered, receivable order.
+            await new SuppliersController(db, new FakeTenantProvider(tenantId)).Delete(supplier.Id);
+
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantId))
+                .Create(NewOrder(supplier.Id));
+
+            var refusal = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var body = Assert.IsType<ApiResponse<PurchaseOrderDto>>(refusal.Value);
+            Assert.Contains("inactive", body.Message);
+            Assert.Empty(await db.PurchaseOrders.ToListAsync());
+        }
+    }
+
+    [Fact]
     public async Task Sending_a_draft_makes_it_Ordered_and_sending_twice_is_refused()
     {
         var tenantId = Guid.NewGuid();
