@@ -1,3 +1,4 @@
+using System.Data.Common;
 using AssetDesk.Api.Data;
 using AssetDesk.Api.Entities;
 using AssetDesk.Shared.DTOs;
@@ -61,98 +62,186 @@ public class GoodsReceiptService(
             db.ChangeTracker.Clear();
 
             await using var tx = await db.Database.BeginTransactionAsync(ct);
-
-            var order = await db.PurchaseOrders
-                .Include(p => p.Lines)
-                .FirstOrDefaultAsync(p => p.Id == purchaseOrderId, ct);
-
-            if (order is null)
-                return ServiceResult<int>.Fail("Purchase order not found.");
-
-            if (!PurchaseOrderWorkflow.IsOpen(order.Status))
-                return ServiceResult<int>.Fail(
-                    $"A {order.Status} purchase order cannot receive goods.");
-
-            var receipt = new GoodsReceipt
+            try
             {
-                TenantId = order.TenantId,
-                PurchaseOrderId = order.Id,
-                ReceiptDate = dto.ReceiptDate,
-                ExchangeRate = dto.ExchangeRate,
-                ReceivedByUserId = actingUserId,
-                Notes = dto.Notes
-            };
+                var order = await db.PurchaseOrders
+                    .Include(p => p.Lines)
+                    .FirstOrDefaultAsync(p => p.Id == purchaseOrderId, ct);
 
-            var tagCache = new Dictionary<string, int>();
+                if (order is null)
+                    return ServiceResult<int>.Fail("Purchase order not found.");
 
-            foreach (var incoming in dto.Lines)
-            {
-                var line = order.Lines.FirstOrDefault(l => l.Id == incoming.PurchaseOrderLineId);
-                if (line is null)
-                    return ServiceResult<int>.Fail("That line does not belong to this purchase order.");
-
-                // The invariant, re-read inside the transaction. The caller may also have
-                // pre-checked this for a friendlier message; that pre-check is not what holds.
-                // Two concurrent receipts must not both claim the last unit.
-                if (line.ReceivedQuantity + incoming.QuantityReceived > line.Quantity)
+                if (!PurchaseOrderWorkflow.IsOpen(order.Status))
                     return ServiceResult<int>.Fail(
-                        $"{line.DeviceType}: {line.Quantity - line.ReceivedQuantity} of {line.Quantity} outstanding, " +
-                        $"cannot receive {incoming.QuantityReceived}.");
+                        $"A {order.Status} purchase order cannot receive goods.");
 
-                var receiptLine = new GoodsReceiptLine
+                var receipt = new GoodsReceipt
                 {
-                    PurchaseOrderLineId = line.Id,
-                    QuantityReceived = incoming.QuantityReceived
+                    TenantId = order.TenantId,
+                    PurchaseOrderId = order.Id,
+                    ReceiptDate = dto.ReceiptDate,
+                    ExchangeRate = dto.ExchangeRate,
+                    ReceivedByUserId = actingUserId,
+                    Notes = dto.Notes
                 };
-                receipt.Lines.Add(receiptLine);
 
-                line.ReceivedQuantity += incoming.QuantityReceived;
-            }
+                var tagCache = new Dictionary<string, int>();
 
-            db.GoodsReceipts.Add(receipt);
-
-            // Saved before the assets so each receipt line has an id to point at.
-            await db.SaveChangesAsync(ct);
-
-            foreach (var receiptLine in receipt.Lines)
-            {
-                var line = order.Lines.First(l => l.Id == receiptLine.PurchaseOrderLineId);
-
-                for (var i = 0; i < receiptLine.QuantityReceived; i++)
+                foreach (var incoming in dto.Lines)
                 {
-                    db.Assets.Add(new Asset
+                    var line = order.Lines.FirstOrDefault(l => l.Id == incoming.PurchaseOrderLineId);
+                    if (line is null)
+                        return ServiceResult<int>.Fail("That line does not belong to this purchase order.");
+
+                    // The over-receipt invariant, as a conditional claim rather than a re-read.
+                    // Reading ReceivedQuantity, comparing it in memory and then writing back an
+                    // incremented absolute value is a lost update at READ COMMITTED: two
+                    // overlapping receipts both read 0, both agree that 8 of 10 is fine, and
+                    // both write 8 - over-receiving, with assets created for units nobody
+                    // ordered. PurchaseOrderLine carries no concurrency token, so nothing else
+                    // would catch it.
+                    //
+                    // This UPDATE ... WHERE ReceivedQuantity + n <= Quantity is the invariant:
+                    // the predicate is re-evaluated against the row at write time under that
+                    // row's lock, and the increment is relative, so a concurrent receipt either
+                    // blocks here and then matches nothing, or has already landed in the value
+                    // being added to. Same shape as the conditional claims in
+                    // TicketService.FulfilAsync.
+                    var claimed = await db.PurchaseOrderLines
+                        .Where(l => l.Id == line.Id
+                                 && l.ReceivedQuantity + incoming.QuantityReceived <= l.Quantity)
+                        .ExecuteUpdateAsync(setters => setters
+                            .SetProperty(
+                                l => l.ReceivedQuantity,
+                                l => l.ReceivedQuantity + incoming.QuantityReceived), ct);
+
+                    if (claimed != 1)
                     {
-                        TenantId = order.TenantId,
-                        AssetTag = await tags.NextAsync(line.DeviceType, tagCache, ct),
-                        DeviceType = line.DeviceType,
-                        Name = line.Description,
-                        Status = AssetStatus.Available,
-                        PurchasePrice = line.UnitPrice,
-                        Currency = order.Currency,
-                        ExchangeRate = dto.ExchangeRate,
-                        PurchaseDate = dto.ReceiptDate,
-                        GoodsReceiptLineId = receiptLine.Id
+                        // There is deliberately no in-memory pre-check ahead of this. One would
+                        // only restate the condition, and it is not what holds; leaving the
+                        // claim as the single refusal path means every refused over-receipt -
+                        // in production and in the tests - provably came from the conditional
+                        // UPDATE. The quantities below are read off the tracked line to give a
+                        // human a reason. Under a genuine race they may be a moment stale,
+                        // which is fine for prose and is not what the decision rested on.
+                        logger.LogWarning(
+                            "Receiving {Quantity} against purchase order line {LineId} was refused: " +
+                            "the claim would have taken the line past its ordered quantity.",
+                            incoming.QuantityReceived, line.Id);
+
+                        return ServiceResult<int>.Fail(
+                            $"{line.DeviceType}: {line.Quantity - line.ReceivedQuantity} of {line.Quantity} outstanding, " +
+                            $"cannot receive {incoming.QuantityReceived}.");
+                    }
+
+                    receipt.Lines.Add(new GoodsReceiptLine
+                    {
+                        PurchaseOrderLineId = line.Id,
+                        QuantityReceived = incoming.QuantityReceived
                     });
                 }
+
+                db.GoodsReceipts.Add(receipt);
+
+                // Saved before the assets so each receipt line has an id to point at.
+                await db.SaveChangesAsync(ct);
+
+                foreach (var receiptLine in receipt.Lines)
+                {
+                    var line = order.Lines.First(l => l.Id == receiptLine.PurchaseOrderLineId);
+
+                    for (var i = 0; i < receiptLine.QuantityReceived; i++)
+                    {
+                        db.Assets.Add(new Asset
+                        {
+                            TenantId = order.TenantId,
+                            AssetTag = await tags.NextAsync(line.DeviceType, tagCache, ct),
+                            DeviceType = line.DeviceType,
+                            Name = line.Description,
+                            Status = AssetStatus.Available,
+                            PurchasePrice = line.UnitPrice,
+                            Currency = order.Currency,
+                            ExchangeRate = dto.ExchangeRate,
+                            PurchaseDate = dto.ReceiptDate,
+                            GoodsReceiptLineId = receiptLine.Id
+                        });
+                    }
+                }
+
+                // The claims above went round the change tracker, so order.Lines still holds the
+                // pre-claim counts and summing those here would derive the wrong status. Read
+                // the totals back instead: this query runs inside the same transaction, so it
+                // sees its own writes. Assigning the new values onto the tracked lines would
+                // work too, but it would mark them Modified and make EF re-issue an UPDATE for a
+                // row this transaction has already written - noise, and it would quietly put an
+                // absolute write back next to the relative one that is the invariant.
+                // PurchaseOrderLine is not in AuditSaveChangesInterceptor.AuditedTypes, so
+                // unlike FulfilAsync there is no audit trail depending on the tracked entity.
+                var totals = await db.PurchaseOrderLines
+                    .Where(l => l.PurchaseOrderId == order.Id)
+                    .Select(l => new { l.Quantity, l.ReceivedQuantity })
+                    .ToListAsync(ct);
+
+                var totalOrdered = totals.Sum(t => t.Quantity);
+                var totalReceived = totals.Sum(t => t.ReceivedQuantity);
+
+                order.Status = PurchaseOrderWorkflow.StatusFor(totalOrdered, totalReceived, order.Status);
+                order.UpdatedAt = DateTime.UtcNow;
+
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+
+                receiptId = receipt.Id;
+
+                logger.LogInformation(
+                    "Received {Lines} line(s) against purchase order {PoNumber}, creating {Assets} asset(s)",
+                    receipt.Lines.Count, order.PoNumber, receipt.Lines.Sum(l => l.QuantityReceived));
+
+                // The committed ReceivedQuantity values are still not the ones this context has
+                // tracked. Anything reading the order afterwards on the same scoped DbContext -
+                // the controller re-reads it through GetById to build its response - gets the
+                // tracked instances back by identity resolution and would report the counts as
+                // they were before the delivery. Detaching is the cheap, honest fix: the data is
+                // committed, so the next read comes from the database.
+                db.ChangeTracker.Clear();
+
+                return ServiceResult<int>.Ok(receiptId);
             }
+            // Only a durable failure becomes a failure result. A transient one (a database
+            // restart, a dropped connection) is precisely what the execution strategy exists to
+            // replay, so it must propagate and reach the strategy rather than be reported to the
+            // caller as a rejected delivery. Neither path rolls back by hand: the `await using`
+            // above rolls the transaction back as it is disposed, so this is about the response
+            // the caller gets, not about data integrity.
+            catch (DbUpdateException ex) when (!IsTransient(ex))
+            {
+                // The exception text names constraints, columns and tables; it belongs in the
+                // log, not in a message handed back to a caller.
+                logger.LogError(ex,
+                    "Receiving against purchase order {PurchaseOrderId} failed and was rolled back.",
+                    purchaseOrderId);
 
-            var totalOrdered = order.Lines.Sum(l => l.Quantity);
-            var totalReceived = order.Lines.Sum(l => l.ReceivedQuantity);
-            order.Status = PurchaseOrderWorkflow.StatusFor(totalOrdered, totalReceived, order.Status);
-            order.UpdatedAt = DateTime.UtcNow;
-
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-
-            receiptId = receipt.Id;
-
-            logger.LogInformation(
-                "Received {Lines} line(s) against purchase order {PoNumber}, creating {Assets} asset(s)",
-                receipt.Lines.Count, order.PoNumber, receipt.Lines.Sum(l => l.QuantityReceived));
-
-            return ServiceResult<int>.Ok(receipt.Id);
+                return ServiceResult<int>.Fail("Could not record the delivery. Please try again.");
+            }
         });
 
         return result;
+    }
+
+    /// <summary>
+    /// Walks the inner-exception chain for a provider exception the driver itself classes as
+    /// transient (Npgsql sets this for connection and timeout failures). The same test
+    /// TicketService applies to its own transaction; kept private here rather than shared so
+    /// this fix stays inside the operation it is fixing.
+    /// </summary>
+    private static bool IsTransient(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is DbException { IsTransient: true })
+                return true;
+        }
+
+        return false;
     }
 }

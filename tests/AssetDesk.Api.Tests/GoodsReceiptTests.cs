@@ -196,6 +196,79 @@ public class GoodsReceiptTests
         }
     }
 
+    /// <summary>
+    /// The over-receipt guard is a conditional UPDATE, not a read-then-compare. There is no
+    /// in-memory pre-check left in ReceiveAsync, so the only thing that can refuse the second
+    /// delivery below is the claim's own WHERE clause - the line already holds 8 of 10, and
+    /// "ReceivedQuantity + 3 &lt;= Quantity" matches no row, so ExecuteUpdateAsync affects zero
+    /// rows and the transaction is abandoned. The message is asserted in full because that exact
+    /// string is produced nowhere but the claim-rejected branch.
+    ///
+    /// This proves the guard is *conditional*, which is what a single caller can demonstrate.
+    /// It does not prove it is *atomic* - see the note on a genuine concurrency test in the
+    /// task 8 report.
+    /// </summary>
+    [Fact]
+    public async Task Over_receiving_is_refused_by_the_conditional_claim_not_by_a_stale_read()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, line) = await SeedOrderedAsync(db, tenantId);
+            var service = ServiceFor(db);
+
+            Assert.True((await service.ReceiveAsync(order.Id, Receive(line.Id, 8), "user-1")).Success);
+
+            var result = await service.ReceiveAsync(order.Id, Receive(line.Id, 3), "user-1");
+
+            Assert.False(result.Success);
+            Assert.Equal("Laptop: 2 of 10 outstanding, cannot receive 3.", result.Message);
+
+            // Read the database, not the graph the service left behind: the claim writes round
+            // the change tracker, so an assertion served by identity resolution would be
+            // asserting against pre-claim values rather than what was committed.
+            db.ChangeTracker.Clear();
+
+            var reloaded = await db.PurchaseOrders.Include(p => p.Lines).SingleAsync();
+            Assert.Equal(8, reloaded.Lines.First().ReceivedQuantity);
+            Assert.Equal(PurchaseOrderStatus.PartiallyReceived, reloaded.Status);
+            Assert.Equal(8, await db.Assets.CountAsync());
+            Assert.Equal(1, await db.GoodsReceipts.CountAsync());
+        }
+    }
+
+    /// <summary>
+    /// The counts the claim wrote are the ones a caller sees afterwards. ExecuteUpdateAsync
+    /// bypasses the change tracker, so without the detach at the end of ReceiveAsync this query -
+    /// tracked, exactly like the one the controller re-reads the order with to build its
+    /// response - would hand back the stale instances and report nothing was received.
+    /// </summary>
+    [Fact]
+    public async Task A_tracked_re_read_after_receiving_reports_the_claimed_quantity()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, line) = await SeedOrderedAsync(db, tenantId);
+
+            await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 8), "user-1");
+
+            var reloaded = await db.PurchaseOrders
+                .Where(p => p.Id == order.Id)
+                .Include(p => p.Lines)
+                .FirstAsync();
+
+            Assert.Equal(8, reloaded.Lines.First().ReceivedQuantity);
+            Assert.Equal(2, reloaded.Lines.First().OutstandingQuantity);
+        }
+    }
+
     [Theory]
     [InlineData(PurchaseOrderStatus.Draft)]
     [InlineData(PurchaseOrderStatus.Cancelled)]
