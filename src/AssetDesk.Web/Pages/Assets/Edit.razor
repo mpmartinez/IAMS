@@ -1,5 +1,6 @@
 @page "/assets/new"
 @page "/assets/{Id:int}/edit"
+@using System.Globalization
 @using AssetDesk.Shared
 @using AssetDesk.Web.Components.UI
 @attribute [Authorize]
@@ -485,9 +486,12 @@
                     Location = asset.Location ?? "",
                     Status = asset.Status,
                     AssignedToUserId = asset.AssignedToUserId ?? "",
-                    PurchasePrice = asset.PurchasePrice?.ToString() ?? "",
+                    // InvariantCulture, not the ambient one: these two feed an
+                    // <input type="number">, whose DOM value is always invariant-formatted.
+                    // Under de-DE, 58.20m formats as "58,20" and the input renders empty.
+                    PurchasePrice = asset.PurchasePrice?.ToString(CultureInfo.InvariantCulture) ?? "",
                     Currency = asset.Currency,
-                    ExchangeRate = asset.ExchangeRate.ToString(),
+                    ExchangeRate = asset.ExchangeRate.ToString(CultureInfo.InvariantCulture),
                     PurchaseDate = asset.PurchaseDate?.ToString("yyyy-MM-dd") ?? "",
                     WarrantyProvider = asset.WarrantyProvider ?? "",
                     WarrantyStartDate = asset.WarrantyStartDate?.ToString("yyyy-MM-dd") ?? "",
@@ -673,9 +677,9 @@
                 Location = NullIfEmpty(_model.Location),
                 Status = _model.Status,
                 AssignedToUserId = NullIfEmpty(_model.AssignedToUserId),
-                PurchasePrice = decimal.TryParse(_model.PurchasePrice, out var price) ? price : null,
+                PurchasePrice = ParseDecimal(_model.PurchasePrice),
                 Currency = _model.Currency,
-                ExchangeRate = decimal.TryParse(_model.ExchangeRate, out var rate) ? rate : 1m,
+                ExchangeRate = ParseDecimal(_model.ExchangeRate) ?? 1m,
                 PurchaseDate = DateTime.TryParse(_model.PurchaseDate, out var pdate) ? pdate : null,
                 WarrantyProvider = NullIfEmpty(_model.WarrantyProvider),
                 WarrantyStartDate = DateTime.TryParse(_model.WarrantyStartDate, out var wsdate) ? wsdate : null,
@@ -697,9 +701,9 @@
                 Location = NullIfEmpty(_model.Location),
                 Status = _model.Status,
                 AssignedToUserId = _model.AssignedToUserId ?? "",
-                PurchasePrice = decimal.TryParse(_model.PurchasePrice, out var price) ? price : null,
+                PurchasePrice = ParseDecimal(_model.PurchasePrice),
                 Currency = _model.Currency,
-                ExchangeRate = decimal.TryParse(_model.ExchangeRate, out var rate) ? rate : null,
+                ExchangeRate = ParseDecimal(_model.ExchangeRate),
                 PurchaseDate = DateTime.TryParse(_model.PurchaseDate, out var pdate) ? pdate : null,
                 WarrantyProvider = NullIfEmpty(_model.WarrantyProvider),
                 WarrantyStartDate = DateTime.TryParse(_model.WarrantyStartDate, out var wsdate) ? wsdate : null,
@@ -722,6 +726,18 @@
             Snackbar.Error(error ?? "Failed to save asset");
         }
     }
+
+    /// <summary>
+    /// Reads a value that came out of an &lt;input type="number"&gt;. Such a DOM value is ALWAYS
+    /// invariant-formatted whatever the browser locale, so parsing it under CurrentCulture is
+    /// wrong in both directions: a de-DE reader takes the "." in "58.2" for a group separator
+    /// and returns 582 - ten times the rate, which CurrencyRules.Validate happily accepts
+    /// because it is not 1, silently inflating every peso total for that asset tenfold.
+    /// </summary>
+    private static decimal? ParseDecimal(string? value) =>
+        decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
