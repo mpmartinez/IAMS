@@ -237,6 +237,10 @@ else
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                             <DetailItem Label="Purchase Price" Value="@FormatPrice(_asset.PurchasePrice, _asset.Currency)" />
                             <DetailItem Label="Purchase Date" Value="@(_asset.PurchaseDate?.ToString("MMM dd, yyyy") ?? "—")" />
+                            @if (_depreciation is not null)
+                            {
+                                <DetailItem Label="Book Value" Value="@BookValueDisplay()" />
+                            }
                             <DetailItem Label="Warranty Provider" Value="@(_asset.WarrantyProvider ?? "—")" />
                             <div>
                                 <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Warranty Period</p>
@@ -753,6 +757,7 @@ else
     private bool _deleting;
     private bool _showDeleteModal;
     private AssetDto? _asset;
+    private DepreciationReportRow? _depreciation;
 
     // Assignment state
     private List<AssetAssignmentDto>? _assignmentHistory;
@@ -804,9 +809,23 @@ else
         _asset = await Api.GetAssetAsync(Id);
         _loading = false;
 
-        // Load assignment history and attachments in background
+        // Load assignment history, attachments, and depreciation in background
         _ = LoadAssignmentHistory();
         _ = LoadAttachments();
+        _ = LoadDepreciationAsync();
+    }
+
+    private async Task LoadDepreciationAsync()
+    {
+        if (_asset is null) return;
+
+        // The report returns every asset; we want one row. Wasteful for a large estate, and
+        // deliberately accepted rather than adding a second calculation path that could drift
+        // from DepreciationCalculator. If it becomes a problem, the fix is an assetTag filter
+        // on the existing endpoint, not a client-side formula.
+        var summary = await Api.GetDepreciationReportAsync();
+        _depreciation = summary?.Rows.FirstOrDefault(r => r.AssetTag == _asset.AssetTag);
+        StateHasChanged();
     }
 
     private async Task LoadAssignmentHistory()
@@ -956,6 +975,17 @@ else
     // A row shows the amount in the currency it was booked in.
     private static string FormatPrice(decimal? price, string? currency) =>
         CurrencyFormat.Format(price, currency);
+
+    // Net book value is always PHP - every asset's depreciation is computed and reported in
+    // pesos regardless of the currency it was purchased in.
+    private string BookValueDisplay()
+    {
+        if (_depreciation is null) return "—";
+        if (!_depreciation.IsDepreciable) return _depreciation.NotDepreciableReason ?? "—";
+
+        var formatted = CurrencyFormat.Format(_depreciation.NetBookValue, CurrencyFormat.Php);
+        return _depreciation.IsFullyDepreciated ? $"{formatted} (fully depreciated)" : formatted;
+    }
 
     private string GetWarrantyPeriod()
     {

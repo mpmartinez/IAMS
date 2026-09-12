@@ -238,6 +238,63 @@
                 </div>
             </div>
         </Card>
+
+        <!-- Depreciation / Book Value Report -->
+        <Card Class="p-5 lg:p-6">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
+                    <svg class="w-6 h-6 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <CardTitle Class="text-lg">Book Value (Depreciation)</CardTitle>
+                    <CardDescription Class="mt-1">Net book value across the estate, as of today</CardDescription>
+
+                    @if (_depreciationSummary != null)
+                    {
+                        <div class="mt-4 p-3 bg-teal-100 dark:bg-teal-900/30 rounded-xl">
+                            <div class="text-2xl font-bold text-teal-600 dark:text-teal-400">
+                                @FormatCurrency(_depreciationSummary.TotalNetBookValue, _depreciationSummary.PrimaryCurrency)
+                            </div>
+                            <div class="text-xs text-muted-foreground">
+                                @_depreciationSummary.DepreciableCount depreciable assets
+                            </div>
+                        </div>
+
+                        @if (_depreciationSummary.NotDepreciableCount > 0)
+                        {
+                            <p class="mt-2 text-xs text-muted-foreground">
+                                @_depreciationSummary.NotDepreciableCount of @(_depreciationSummary.DepreciableCount + _depreciationSummary.NotDepreciableCount) assets not depreciable
+                                — @FormatNotDepreciableReasons(_depreciationSummary.NotDepreciableByReason)
+                            </p>
+                        }
+                    }
+
+                    <div class="mt-4 grid grid-cols-3 gap-2">
+                        <Button Variant="outline" Size="sm" OnClick="ViewDepreciationReport">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Preview
+                        </Button>
+                        <Button Size="sm" OnClick="ExportDepreciationReport">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            CSV
+                        </Button>
+                        <Button Variant="secondary" Size="sm" OnClick="ExportDepreciationPdf">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            PDF
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </Card>
     </div>
 
     <!-- Report Preview Modal -->
@@ -268,6 +325,7 @@
     private string[]? _statuses;
     private List<UserListItem>? _users;
     private AssetValueSummaryDto? _assetValueSummary;
+    private DepreciationSummaryDto? _depreciationSummary;
 
     private string _inventoryDeviceType = "";
     private string _inventoryStatus = "";
@@ -289,6 +347,7 @@
 
         await LoadFilters();
         await LoadAssetValueSummary();
+        await LoadDepreciationSummary();
     }
 
     private async Task LoadFilters()
@@ -307,6 +366,15 @@
         try
         {
             _assetValueSummary = await Api.GetAssetValueReportAsync();
+        }
+        catch { }
+    }
+
+    private async Task LoadDepreciationSummary()
+    {
+        try
+        {
+            _depreciationSummary = await Api.GetDepreciationReportAsync();
         }
         catch { }
     }
@@ -497,6 +565,102 @@
         await DownloadReport("asset-value", null, pdf: true);
     }
 
+    private async Task ViewDepreciationReport()
+    {
+        _previewTitle = "Depreciation Report";
+        _showPreview = true;
+        _isLoadingPreview = true;
+        StateHasChanged();
+
+        try
+        {
+            var data = await Api.GetDepreciationReportAsync();
+            if (data != null)
+            {
+                _previewContent = @<div>
+                    <div class="grid grid-cols-3 gap-4 mb-4">
+                        <div class="p-4 bg-muted/50 rounded-xl">
+                            <div class="text-sm text-muted-foreground">Cost Basis</div>
+                            <div class="text-2xl font-bold text-foreground">@FormatCurrency(data.TotalCostBasis, data.PrimaryCurrency)</div>
+                        </div>
+                        <div class="p-4 bg-muted/50 rounded-xl">
+                            <div class="text-sm text-muted-foreground">Accumulated Depreciation</div>
+                            <div class="text-2xl font-bold text-foreground">@FormatCurrency(data.TotalAccumulatedDepreciation, data.PrimaryCurrency)</div>
+                        </div>
+                        <div class="p-4 bg-teal-100 dark:bg-teal-900/30 rounded-xl">
+                            <div class="text-sm text-teal-600 dark:text-teal-400">Net Book Value</div>
+                            <div class="text-2xl font-bold text-teal-600 dark:text-teal-400">@FormatCurrency(data.TotalNetBookValue, data.PrimaryCurrency)</div>
+                        </div>
+                    </div>
+
+                    @* The point of this report: a total that silently dropped the assets it could not
+                       compute would look authoritative and would not be. Show the gap and why. *@
+                    @if (data.NotDepreciableCount > 0)
+                    {
+                        <p class="mb-4 text-sm text-muted-foreground">
+                            @data.NotDepreciableCount of @(data.DepreciableCount + data.NotDepreciableCount) assets not depreciable
+                            — @FormatNotDepreciableReasons(data.NotDepreciableByReason)
+                        </p>
+                    }
+
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Asset Tag</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead Class="text-right">Cost Basis</TableHead>
+                                <TableHead Class="text-right">Accumulated</TableHead>
+                                <TableHead Class="text-right">Net Book Value</TableHead>
+                                <TableHead>State</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            @foreach (var row in data.Rows.Take(50))
+                            {
+                                <TableRow>
+                                    <TableCell Class="text-foreground">@row.AssetTag</TableCell>
+                                    <TableCell Class="text-muted-foreground">@row.DeviceType</TableCell>
+                                    <TableCell Class="text-right">@FormatCurrency(row.CostBasis, data.PrimaryCurrency)</TableCell>
+                                    <TableCell Class="text-right text-muted-foreground">@FormatCurrency(row.AccumulatedDepreciation, data.PrimaryCurrency)</TableCell>
+                                    <TableCell Class="text-right font-medium">@FormatCurrency(row.NetBookValue, data.PrimaryCurrency)</TableCell>
+                                    <TableCell Class="text-muted-foreground">
+                                        @if (row.IsDepreciable)
+                                        {
+                                            @(row.IsFullyDepreciated ? "Fully depreciated" : "Depreciating")
+                                        }
+                                        else
+                                        {
+                                            @row.NotDepreciableReason
+                                        }
+                                    </TableCell>
+                                </TableRow>
+                            }
+                        </TableBody>
+                    </Table>
+                    @if (data.Rows.Count > 50)
+                    {
+                        <div class="mt-4 text-center text-sm text-muted-foreground">Showing first 50 of @data.Rows.Count rows</div>
+                    }
+                </div>;
+            }
+        }
+        catch (Exception ex)
+        {
+            _previewContent = @<div class="text-destructive">Error: @ex.Message</div>;
+        }
+        _isLoadingPreview = false;
+    }
+
+    private async Task ExportDepreciationReport()
+    {
+        await DownloadReport("depreciation", null, pdf: false);
+    }
+
+    private async Task ExportDepreciationPdf()
+    {
+        await DownloadReport("depreciation", null, pdf: true);
+    }
+
     private RenderFragment BuildTablePreview<T>(List<T> data, string[] headers, Func<T, object[]> rowMapper) => @<div>
         <div class="mb-4 text-sm text-muted-foreground">@data.Count rows</div>
         <Table>
@@ -547,4 +711,12 @@
     // amount supply that row's currency, callers passing a total supply PrimaryCurrency.
     private static string FormatCurrency(decimal? value, string? currency = CurrencyFormat.Php) =>
         CurrencyFormat.Format(value, currency);
+
+    // Reasons read as full sentences elsewhere (CSV/PDF), e.g. "No purchase date". Lead with the
+    // count instead - "9 no purchase date" - so it reads as a clause, not two sentences mashed together.
+    private static string FormatNotDepreciableReasons(IEnumerable<NotDepreciableReasonCount> reasons) =>
+        string.Join(", ", reasons.Select(r => $"{r.Count} {LowercaseFirst(r.Reason)}"));
+
+    private static string LowercaseFirst(string s) =>
+        s.Length == 0 ? s : char.ToLowerInvariant(s[0]) + s[1..];
 }

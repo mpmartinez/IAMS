@@ -441,6 +441,18 @@ public class ApiClient(HttpClient http, AuthService authService)
         return response?.Data;
     }
 
+    public async Task<DepreciationSummaryDto?> GetDepreciationReportAsync(DateTime? asOf = null)
+    {
+        var client = await GetAuthenticatedClient();
+        var query = "api/reports/depreciation";
+        // Round-trip format ("o"): the endpoint compares against UTC timestamps, and the
+        // default ToString() would hand it a local, culture-shaped string instead.
+        if (asOf.HasValue) query += $"?asOf={Uri.EscapeDataString(asOf.Value.ToString("o"))}";
+
+        var response = await client.GetFromJsonAsync<ApiResponse<DepreciationSummaryDto>>(query);
+        return response?.Data;
+    }
+
     public string GetReportExportUrl(string reportType, Dictionary<string, string>? filters = null)
         => BuildReportUrl(reportType, "export", filters);
 
