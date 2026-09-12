@@ -114,7 +114,7 @@ public class PurchaseOrderApiTests
         AssetDesk.Api.Data.AppDbContext db, ITenantProvider tenants) =>
         new(db, tenants, new PurchaseOrderNumberAllocator(db), new LookupService(db),
             new GoodsReceiptService(db, new AssetTagGenerator(db), NullLogger<GoodsReceiptService>.Instance),
-            NullLogger<PurchaseOrdersController>.Instance);
+            NullLogger<PurchaseOrdersController>.Instance, new PdfReportService());
 
     private static async Task<Supplier> SeedSupplierAsync(
         AssetDesk.Api.Data.AppDbContext db, Guid tenantId, string name = "Acme Computers")
@@ -272,6 +272,34 @@ public class PurchaseOrderApiTests
             Assert.IsType<BadRequestObjectResult>(result.Result);
             Assert.Equal(PurchaseOrderStatus.Received,
                 (await db.PurchaseOrders.SingleAsync()).Status);
+        }
+    }
+
+    [Fact]
+    public async Task The_pdf_renders_and_is_a_real_pdf()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var supplier = await SeedSupplierAsync(db, tenantId);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
+            await controller.Create(NewOrder(supplier.Id));
+            var order = await db.PurchaseOrders.SingleAsync();
+
+            var pdfController = new PurchaseOrdersController(
+                db, new FakeTenantProvider(tenantId), new PurchaseOrderNumberAllocator(db),
+                new LookupService(db), null!, NullLogger<PurchaseOrdersController>.Instance,
+                new PdfReportService());
+
+            var file = Assert.IsType<FileContentResult>(await pdfController.GetPdf(order.Id));
+
+            Assert.Equal("application/pdf", file.ContentType);
+            Assert.True(file.FileContents.Length > 1000);
+            // %PDF- magic - QuestPDF would throw on a column mismatch before reaching here.
+            Assert.Equal("%PDF-", System.Text.Encoding.ASCII.GetString(file.FileContents, 0, 5));
         }
     }
 }

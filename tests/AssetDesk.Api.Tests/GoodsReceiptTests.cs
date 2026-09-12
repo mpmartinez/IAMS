@@ -411,7 +411,8 @@ public class GoodsReceiptTests
                 new PurchaseOrderNumberAllocator(db),
                 new LookupService(db),
                 ServiceFor(db),
-                null!);
+                null!,
+                new PdfReportService());
 
             var result = await controller.Receive(orderB.Id, Receive(lineB.Id, 1));
 

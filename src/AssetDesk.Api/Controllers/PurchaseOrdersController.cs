@@ -19,7 +19,8 @@ public class PurchaseOrdersController(
     IPurchaseOrderNumberAllocator numbers,
     ILookupService lookups,
     IGoodsReceiptService receipts,
-    ILogger<PurchaseOrdersController> logger) : ControllerBase
+    ILogger<PurchaseOrdersController> logger,
+    IPdfReportService pdf) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<PurchaseOrderDto>>>> GetAll()
@@ -52,6 +53,25 @@ public class PurchaseOrdersController(
         return order is null
             ? NotFound(ApiResponse<PurchaseOrderDto>.Fail("Purchase order not found."))
             : Ok(ApiResponse<PurchaseOrderDto>.Ok(Map(order)));
+    }
+
+    [HttpGet("{id:int}/pdf")]
+    public async Task<IActionResult> GetPdf(int id)
+    {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var order = await db.PurchaseOrders
+            .Where(p => p.TenantId == tenantId && p.Id == id)
+            .Include(p => p.Supplier)
+            .Include(p => p.Lines)
+            .FirstOrDefaultAsync();
+
+        if (order is null)
+            return NotFound(ApiResponse<object>.Fail("Purchase order not found."));
+
+        var dto = Map(order);
+        return File(pdf.BuildPurchaseOrderPdf(dto), "application/pdf", $"{dto.Reference}.pdf");
     }
 
     [HttpPost]

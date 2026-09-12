@@ -15,6 +15,7 @@ public interface IPdfReportService
     byte[] BuildWarrantyExpiryPdf(List<WarrantyExpiryReportRow> data, string? warrantyStatus, int? daysThreshold);
     byte[] BuildAssetValuePdf(AssetValueSummaryDto summary);
     byte[] BuildDepreciationPdf(DepreciationSummaryDto summary);
+    byte[] BuildPurchaseOrderPdf(PurchaseOrderDto order);
 }
 
 public class PdfReportService : IPdfReportService
@@ -249,6 +250,49 @@ public class PdfReportService : IPdfReportService
                             : row.NotDepreciableReason ?? "");
                     }
                 });
+            });
+        });
+    }
+
+    public byte[] BuildPurchaseOrderPdf(PurchaseOrderDto order)
+    {
+        var filters = BuildFilterLine(
+            ("Supplier", order.SupplierName),
+            ("Order date", order.OrderDate.ToString("yyyy-MM-dd")),
+            ("Status", order.Status));
+
+        return BuildDocument($"Purchase Order {order.Reference}", filters, order.Lines.Count, content =>
+        {
+            content.Column(col =>
+            {
+                col.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(c =>
+                    {
+                        c.RelativeColumn(2);   // device type
+                        c.RelativeColumn(4);   // description
+                        c.RelativeColumn(1);   // quantity
+                        c.RelativeColumn(2);   // unit price
+                        c.RelativeColumn(2);   // line total
+                    });
+
+                    AddHeaderRow(table, "Device Type", "Description", "Qty", "Unit Price", "Total");
+
+                    foreach (var line in order.Lines)
+                    {
+                        AddBodyCell(table, line.DeviceType);
+                        AddBodyCell(table, line.Description ?? "—");
+                        AddBodyCell(table, line.Quantity.ToString());
+                        AddBodyCell(table, FormatCurrency(line.UnitPrice, order.Currency));
+                        AddBodyCell(table, FormatCurrency(line.LineTotal, order.Currency));
+                    }
+                });
+
+                col.Item().PaddingTop(10).AlignRight().Text(
+                    $"Order total  {FormatCurrency(order.OrderTotal, order.Currency)}");
+
+                if (!string.IsNullOrWhiteSpace(order.Notes))
+                    col.Item().PaddingTop(10).Text(order.Notes);
             });
         });
     }
