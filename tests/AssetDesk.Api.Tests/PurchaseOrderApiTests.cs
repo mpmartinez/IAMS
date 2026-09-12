@@ -4,6 +4,7 @@ using AssetDesk.Api.Services;
 using AssetDesk.Shared.DTOs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AssetDesk.Api.Tests;
 
@@ -111,7 +112,9 @@ public class PurchaseOrderApiTests
 
     private static PurchaseOrdersController ControllerFor(
         AssetDesk.Api.Data.AppDbContext db, ITenantProvider tenants) =>
-        new(db, tenants, new PurchaseOrderNumberAllocator(db), new LookupService(db));
+        new(db, tenants, new PurchaseOrderNumberAllocator(db), new LookupService(db),
+            new GoodsReceiptService(db, new AssetTagGenerator(db), NullLogger<GoodsReceiptService>.Instance),
+            NullLogger<PurchaseOrdersController>.Instance);
 
     private static async Task<Supplier> SeedSupplierAsync(
         AssetDesk.Api.Data.AppDbContext db, Guid tenantId, string name = "Acme Computers")

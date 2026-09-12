@@ -86,3 +86,22 @@ public record PurchaseOrderDto
     public decimal OrderTotal { get; init; }
     public List<PurchaseOrderLineDto> Lines { get; init; } = [];
 }
+
+public record ReceiveLineDto
+{
+    public int PurchaseOrderLineId { get; init; }
+
+    [Range(1, 100000, ErrorMessage = "Quantity received must be at least 1")]
+    public int QuantityReceived { get; init; }
+}
+
+public record ReceiveGoodsDto
+{
+    public DateTime ReceiptDate { get; init; } = DateTime.UtcNow;
+
+    [Range(0.000001, 1000000, ErrorMessage = "Exchange rate must be greater than zero")]
+    public decimal ExchangeRate { get; init; } = 1m;
+
+    public string? Notes { get; init; }
+    public List<ReceiveLineDto> Lines { get; init; } = [];
+}

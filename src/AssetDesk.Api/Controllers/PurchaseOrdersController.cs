@@ -17,7 +17,9 @@ public class PurchaseOrdersController(
     AppDbContext db,
     ITenantProvider tenantProvider,
     IPurchaseOrderNumberAllocator numbers,
-    ILookupService lookups) : ControllerBase
+    ILookupService lookups,
+    IGoodsReceiptService receipts,
+    ILogger<PurchaseOrdersController> logger) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<PurchaseOrderDto>>>> GetAll()
@@ -123,6 +125,38 @@ public class PurchaseOrdersController(
     [Authorize(Policy = "CanManageProcurement")]
     public Task<ActionResult<ApiResponse<PurchaseOrderDto>>> Cancel(int id) =>
         TransitionAsync(id, PurchaseOrderStatus.Cancelled);
+
+    [HttpPost("{id:int}/receive")]
+    [Authorize(Policy = "CanManageProcurement")]
+    public async Task<ActionResult<ApiResponse<PurchaseOrderDto>>> Receive(int id, ReceiveGoodsDto dto)
+    {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<PurchaseOrderDto>.Fail("Select an organisation first."));
+
+        // Resolve through an explicit tenant filter before handing the id to the service, so a
+        // caller cannot receive against another organisation's order. The global query filter is
+        // not enough on its own - it admits every tenant's orders for a super admin.
+        var exists = await db.PurchaseOrders
+            .AnyAsync(p => p.Id == id && p.TenantId == tenantId);
+        if (!exists)
+            return NotFound(ApiResponse<PurchaseOrderDto>.Fail("Purchase order not found."));
+
+        var actingUserId = User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        var result = await receipts.ReceiveAsync(id, dto, actingUserId);
+
+        if (!result.Success)
+        {
+            // A refused delivery is worth a trace: it means what arrived disagreed with what the
+            // order says, which someone standing at the loading bay will have to reconcile.
+            logger.LogWarning(
+                "Receiving against purchase order {PurchaseOrderId} was refused: {Reason}",
+                id, result.Message);
+
+            return BadRequest(ApiResponse<PurchaseOrderDto>.Fail(result.Message ?? "Receiving failed."));
+        }
+
+        return await GetById(id);
+    }
 
     /// <summary>
     /// The only statuses a user may set directly. PartiallyReceived and Received come from the
