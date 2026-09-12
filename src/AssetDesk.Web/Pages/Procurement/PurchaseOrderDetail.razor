@@ -191,8 +191,8 @@ else
                     </FormField>
                     @if (_order.Currency != CurrencyFormat.Php)
                     {
-                        <FormField LabelText="@($"Exchange Rate ({CurrencyFormat.SymbolFor(CurrencyFormat.Php)} per 1 {_order.Currency})")">
-                            <Input Type="number" @bind-Value="_exchangeRate" Placeholder="58.20" />
+                        <FormField LabelText="@($"Exchange Rate ({CurrencyFormat.SymbolFor(CurrencyFormat.Php)} per 1 {_order.Currency})")" Required="true">
+                            <Input Type="number" @bind-Value="_exchangeRate" Placeholder="58.20" Required="true" />
                         </FormField>
                     }
                 </div>
@@ -345,7 +345,10 @@ else
 
         _receiptDate = DateTime.Today.ToString("yyyy-MM-dd");
         // A peso order always books at 1 - the field for it is hidden entirely, see the markup.
-        _exchangeRate = "1";
+        // A foreign-currency order starts EMPTY rather than at "1": pre-filling 1 hid the
+        // Placeholder="58.20" hint and let a USD delivery get booked at parity with pesos
+        // without the user ever having typed a rate. Leaving it blank forces a deliberate entry.
+        _exchangeRate = _order.Currency == CurrencyFormat.Php ? "1" : "";
         _receiveNotes = "";
         _receiveError = null;
 
@@ -380,14 +383,33 @@ else
             return;
         }
 
+        // Always exactly 1 for a peso order - the field is hidden rather than left editable, so
+        // there is nothing here for the user to get wrong. For every other currency the field
+        // starts empty (see OpenReceiveModal) and there is deliberately no "?? 1m" fallback here:
+        // that used to make a blank or unparsable field silently book the delivery at parity with
+        // pesos, exactly the mistake the server now refuses outright. A missing or invalid rate
+        // is refused here, before the request is even sent.
+        decimal exchangeRate;
+        if (_order!.Currency == CurrencyFormat.Php)
+        {
+            exchangeRate = 1m;
+        }
+        else if (ParseDecimal(_exchangeRate) is { } parsedRate && parsedRate > 0)
+        {
+            exchangeRate = parsedRate;
+        }
+        else
+        {
+            _receiveError = $"Enter the exchange rate ({CurrencyFormat.SymbolFor(CurrencyFormat.Php)} per 1 {_order.Currency}).";
+            return;
+        }
+
         _receiving = true;
 
         var dto = new ReceiveGoodsDto
         {
             ReceiptDate = DateTime.TryParse(_receiptDate, out var receiptDate) ? receiptDate : DateTime.UtcNow,
-            // Always exactly 1 for a peso order - the field is hidden rather than left editable,
-            // so there is nothing here for the user to get wrong.
-            ExchangeRate = _order!.Currency == CurrencyFormat.Php ? 1m : (ParseDecimal(_exchangeRate) ?? 1m),
+            ExchangeRate = exchangeRate,
             Notes = string.IsNullOrWhiteSpace(_receiveNotes) ? null : _receiveNotes.Trim(),
             Lines = lines
         };

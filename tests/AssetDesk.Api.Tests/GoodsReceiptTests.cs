@@ -346,6 +346,102 @@ public class GoodsReceiptTests
         }
     }
 
+    /// <summary>
+    /// GoodsReceiptService used to validate only dto.ExchangeRate &lt;= 0m, so a USD order
+    /// received at rate 1 sailed through and created assets AssetsController.CreateAsset would
+    /// have rejected outright - dollars booked as pesos. CurrencyRules.Validate is now the
+    /// authoritative check inside the transaction delegate, so this must be refused, and refused
+    /// before anything is written: no receipt, no claimed quantity, no asset.
+    /// </summary>
+    [Fact]
+    public async Task Receiving_a_USD_order_at_rate_one_is_refused_and_creates_nothing()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, line) = await SeedOrderedAsync(db, tenantId, Currencies.USD, 10, 1200m);
+
+            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 2, rate: 1m), "user-1");
+
+            Assert.False(result.Success);
+            Assert.Equal(
+                "An exchange rate is required for USD - pesos per 1 USD.",
+                result.Message);
+            Assert.Equal(0, await db.Assets.CountAsync());
+            Assert.Equal(0, await db.GoodsReceipts.CountAsync());
+            Assert.Equal(0, (await db.PurchaseOrders.Include(p => p.Lines).SingleAsync()).Lines.First().ReceivedQuantity);
+        }
+    }
+
+    /// <summary>
+    /// The mirror image: a PHP order (the reporting currency) received at any rate other than 1
+    /// would inflate every asset it creates by that factor. CurrencyRules forbids it outright,
+    /// and GoodsReceiptService must refuse it the same way it refuses a USD order left at 1.
+    /// </summary>
+    [Fact]
+    public async Task Receiving_a_PHP_order_at_a_rate_other_than_one_is_refused_and_creates_nothing()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, line) = await SeedOrderedAsync(db, tenantId, Currencies.PHP, 10, 50000m);
+
+            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 2, rate: 58.20m), "user-1");
+
+            Assert.False(result.Success);
+            Assert.Equal(
+                "PHP is the reporting currency, so its exchange rate must be exactly 1.",
+                result.Message);
+            Assert.Equal(0, await db.Assets.CountAsync());
+            Assert.Equal(0, await db.GoodsReceipts.CountAsync());
+            Assert.Equal(0, (await db.PurchaseOrders.Include(p => p.Lines).SingleAsync()).Lines.First().ReceivedQuantity);
+        }
+    }
+
+    /// <summary>The ordinary case must not regress: a PHP order received at rate 1 still succeeds.</summary>
+    [Fact]
+    public async Task Receiving_a_PHP_order_at_rate_one_still_succeeds()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, line) = await SeedOrderedAsync(db, tenantId, Currencies.PHP, 10, 50000m);
+
+            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 2, rate: 1m), "user-1");
+
+            Assert.True(result.Success);
+            Assert.Equal(2, await db.Assets.CountAsync());
+        }
+    }
+
+    /// <summary>The ordinary case must not regress: a USD order received at a real rate still succeeds.</summary>
+    [Fact]
+    public async Task Receiving_a_USD_order_at_a_real_rate_still_succeeds()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, line) = await SeedOrderedAsync(db, tenantId, Currencies.USD, 10, 1200m);
+
+            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 2, rate: 58.20m), "user-1");
+
+            Assert.True(result.Success);
+            Assert.Equal(2, await db.Assets.CountAsync());
+        }
+    }
+
     [Fact]
     public async Task Two_deliveries_at_different_rates_produce_assets_carrying_each_batchs_own_rate()
     {

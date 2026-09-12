@@ -100,6 +100,19 @@ public class GoodsReceiptService(
                     return ServiceResult<int>.Fail(
                         $"A {order.Status} purchase order cannot receive goods.");
 
+                // The authoritative check: CurrencyRules.Validate is the single home for the
+                // rules binding a currency to its exchange rate (AssetsController and
+                // AssetImportService both call it too), and this is the first point in this
+                // method the order's currency is known - order is read inside the delegate, so
+                // there is nothing to validate against before this. The dto.ExchangeRate <= 0m
+                // check above is only a fast, friendly pre-check for the common typo; it cannot
+                // catch a PHP order at a non-1 rate or a foreign-currency order left at 1, which
+                // is exactly what this call exists to refuse. Every asset this receipt creates
+                // takes Currency from the order and ExchangeRate from the dto, so a bad pair here
+                // is a bad pair on every asset created below - refuse before anything is written.
+                if (CurrencyRules.Validate(order.Currency, dto.ExchangeRate) is { } currencyError)
+                    return ServiceResult<int>.Fail(currencyError);
+
                 // Take the ORDER's row lock before claiming any line. The lock is the point; the
                 // assignment is only how you get it - an UPDATE takes the row's write lock and
                 // holds it until this transaction ends.
