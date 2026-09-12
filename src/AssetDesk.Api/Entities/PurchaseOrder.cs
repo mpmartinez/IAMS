@@ -64,3 +64,54 @@ public static class PurchaseOrderStatus
 
     public static bool IsValid(string status) => All.Contains(status);
 }
+
+/// <summary>
+/// The single source of truth for how a purchase order may move between statuses. Shaped after
+/// TicketWorkflow, which is the house pattern.
+///
+/// PartiallyReceived and Received are produced by <see cref="StatusFor"/> from the quantities,
+/// never set by hand: a status a user could set independently of what has arrived would
+/// immediately disagree with it.
+/// </summary>
+public static class PurchaseOrderWorkflow
+{
+    private static readonly Dictionary<string, string[]> Transitions = new()
+    {
+        [PurchaseOrderStatus.Draft] = [PurchaseOrderStatus.Ordered, PurchaseOrderStatus.Cancelled],
+        [PurchaseOrderStatus.Ordered] =
+        [
+            PurchaseOrderStatus.PartiallyReceived,
+            PurchaseOrderStatus.Received,
+            PurchaseOrderStatus.Cancelled
+        ],
+        [PurchaseOrderStatus.PartiallyReceived] =
+        [
+            PurchaseOrderStatus.Received,
+            PurchaseOrderStatus.Cancelled
+        ],
+        [PurchaseOrderStatus.Received] = [],
+        [PurchaseOrderStatus.Cancelled] = []
+    };
+
+    public static bool CanTransition(string from, string to) =>
+        Transitions.TryGetValue(from, out var allowed) && allowed.Contains(to);
+
+    /// <summary>Goods can only be received against an order that has been placed and is not finished.</summary>
+    public static bool IsOpen(string status) =>
+        status is PurchaseOrderStatus.Ordered or PurchaseOrderStatus.PartiallyReceived;
+
+    /// <summary>
+    /// The status the quantities imply. A terminal status is returned unchanged - receiving is
+    /// refused against Cancelled anyway, but this must not resurrect one if it is ever asked.
+    /// </summary>
+    public static string StatusFor(int totalOrdered, int totalReceived, string currentStatus)
+    {
+        if (currentStatus is PurchaseOrderStatus.Cancelled or PurchaseOrderStatus.Draft)
+            return currentStatus;
+
+        if (totalReceived <= 0) return PurchaseOrderStatus.Ordered;
+        return totalReceived >= totalOrdered
+            ? PurchaseOrderStatus.Received
+            : PurchaseOrderStatus.PartiallyReceived;
+    }
+}
