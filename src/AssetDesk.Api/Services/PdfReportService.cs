@@ -205,10 +205,13 @@ public class PdfReportService : IPdfReportService
         {
             content.Column(col =>
             {
+                // The populations differ - cost basis spans every reported asset, the other two
+                // only the depreciable ones - so the three do not subtract to each other. Say so
+                // in the labels rather than leave a reader to discover it by arithmetic.
                 col.Item().Text(
-                    $"Cost basis {FormatCurrency(summary.TotalCostBasis, summary.PrimaryCurrency)}   •   " +
-                    $"Accumulated {FormatCurrency(summary.TotalAccumulatedDepreciation, summary.PrimaryCurrency)}   •   " +
-                    $"Net book value {FormatCurrency(summary.TotalNetBookValue, summary.PrimaryCurrency)}");
+                    $"Cost basis (all assets) {FormatCurrency(summary.TotalCostBasis, summary.PrimaryCurrency)}   •   " +
+                    $"Accumulated (depreciable only) {FormatCurrency(summary.TotalAccumulatedDepreciation, summary.PrimaryCurrency)}   •   " +
+                    $"Net book value (depreciable only) {FormatCurrency(summary.TotalNetBookValue, summary.PrimaryCurrency)}");
 
                 if (summary.NotDepreciableCount > 0)
                 {

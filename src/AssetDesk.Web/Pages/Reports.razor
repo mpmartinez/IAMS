@@ -580,15 +580,18 @@
                 _previewContent = @<div>
                     <div class="grid grid-cols-3 gap-4 mb-4">
                         <div class="p-4 bg-muted/50 rounded-xl">
-                            <div class="text-sm text-muted-foreground">Cost Basis</div>
+                            @* The three totals span different populations - cost basis covers every
+                               reported asset, the other two only the depreciable ones - so they do
+                               not subtract to each other. Labelled rather than left to be guessed. *@
+                            <div class="text-sm text-muted-foreground">Cost Basis (all assets)</div>
                             <div class="text-2xl font-bold text-foreground">@FormatCurrency(data.TotalCostBasis, data.PrimaryCurrency)</div>
                         </div>
                         <div class="p-4 bg-muted/50 rounded-xl">
-                            <div class="text-sm text-muted-foreground">Accumulated Depreciation</div>
+                            <div class="text-sm text-muted-foreground">Accumulated (depreciable only)</div>
                             <div class="text-2xl font-bold text-foreground">@FormatCurrency(data.TotalAccumulatedDepreciation, data.PrimaryCurrency)</div>
                         </div>
                         <div class="p-4 bg-teal-100 dark:bg-teal-900/30 rounded-xl">
-                            <div class="text-sm text-teal-600 dark:text-teal-400">Net Book Value</div>
+                            <div class="text-sm text-teal-600 dark:text-teal-400">Net Book Value (depreciable only)</div>
                             <div class="text-2xl font-bold text-teal-600 dark:text-teal-400">@FormatCurrency(data.TotalNetBookValue, data.PrimaryCurrency)</div>
                         </div>
                     </div>
