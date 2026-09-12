@@ -84,7 +84,7 @@ public class SupplierApiTests
     {
         var tenantA = Guid.NewGuid();
         var tenantB = Guid.NewGuid();
-        var (db, conn) = TestDb.Create(new FakeTenantProvider(null, isSuperAdmin: true));
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantA, isSuperAdmin: true));
         using (db)
         using (conn)
         {
@@ -95,14 +95,43 @@ public class SupplierApiTests
             db.Suppliers.Add(bSupplier);
             await db.SaveChangesAsync();
 
-            // A super admin has no tenant of their own; the controller must refuse rather than
-            // reach into whichever tenant's row happens to match.
-            var result = await ControllerFor(db, new FakeTenantProvider(null, isSuperAdmin: true))
+            // A super admin whose current tenant is A must still be refused when the row
+            // belongs to tenant B. The global query filter's IsSuperAdmin() bypass lets tenant
+            // B's row through - it is the explicit .Where(TenantId == tenantId) in Update that
+            // must be the thing doing the refusing.
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantA, isSuperAdmin: true))
                 .Update(bSupplier.Id, Dto("Renamed By Mistake"));
 
             Assert.IsNotType<OkObjectResult>(result.Result);
             var reloaded = await db.Suppliers.IgnoreQueryFilters().SingleAsync(s => s.Id == bSupplier.Id);
             Assert.Equal("Acme Computers", reloaded.Name);
+        }
+    }
+
+    [Fact]
+    public async Task A_super_admin_caller_cannot_deactivate_another_tenants_supplier()
+    {
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantA, isSuperAdmin: true));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantA);
+            await TestDb.SeedTenantAsync(db, tenantB);
+
+            var bSupplier = new Supplier { TenantId = tenantB, Name = "Acme Computers" };
+            db.Suppliers.Add(bSupplier);
+            await db.SaveChangesAsync();
+
+            // Same shape as the Update test above: a super admin in tenant A must not be able
+            // to deactivate tenant B's supplier via Delete.
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantA, isSuperAdmin: true))
+                .Delete(bSupplier.Id);
+
+            Assert.IsNotType<OkObjectResult>(result.Result);
+            var reloaded = await db.Suppliers.IgnoreQueryFilters().SingleAsync(s => s.Id == bSupplier.Id);
+            Assert.True(reloaded.IsActive);
         }
     }
 
@@ -125,6 +154,31 @@ public class SupplierApiTests
             // deleted - the same reasoning LookupValue documents for its rows.
             var reloaded = await db.Suppliers.SingleAsync();
             Assert.False(reloaded.IsActive);
+        }
+    }
+
+    [Fact]
+    public async Task Updating_a_deactivated_supplier_with_IsActive_true_reactivates_it()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
+            await controller.Create(Dto("Acme Computers"));
+            var supplier = await db.Suppliers.SingleAsync();
+            await controller.Delete(supplier.Id);
+
+            // A deactivated supplier is not a dead end: reactivating it (rather than creating a
+            // duplicate) must be possible via Update.
+            var result = await controller.Update(supplier.Id, Dto("Acme Computers") with { IsActive = true });
+
+            Assert.IsType<OkObjectResult>(result.Result);
+            var reloaded = await db.Suppliers.SingleAsync();
+            Assert.True(reloaded.IsActive);
+            Assert.Equal(1, await db.Suppliers.IgnoreQueryFilters().CountAsync());
         }
     }
 }

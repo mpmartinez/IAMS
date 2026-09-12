@@ -82,6 +82,7 @@ public class SuppliersController(AppDbContext db, ITenantProvider tenantProvider
         supplier.Phone = dto.Phone;
         supplier.Address = dto.Address;
         supplier.Notes = dto.Notes;
+        supplier.IsActive = dto.IsActive;
         supplier.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();

@@ -24,4 +24,5 @@ public record UpsertSupplierDto
     [StringLength(50)] public string? Phone { get; init; }
     [StringLength(500)] public string? Address { get; init; }
     public string? Notes { get; init; }
+    public bool IsActive { get; init; } = true;
 }
