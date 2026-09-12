@@ -31,7 +31,7 @@ public class AssetImportTemplateTests
     }
 
     private static AssetImportService ServiceFor(AppDbContext db) =>
-        new(db, NullLogger<AssetImportService>.Instance, new LookupService(db));
+        new(db, NullLogger<AssetImportService>.Instance, new LookupService(db), new AssetTagGenerator(db));
 
     [Fact]
     public void The_template_offers_an_ExchangeRate_column_next_to_Currency()

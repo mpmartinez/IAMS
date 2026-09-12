@@ -102,7 +102,7 @@ public class AssetDtoExchangeRateTests
             ms.Position = 0;
 
             var service = new AssetImportService(
-                db, NullLogger<AssetImportService>.Instance, new LookupService(db));
+                db, NullLogger<AssetImportService>.Instance, new LookupService(db), new AssetTagGenerator(db));
 
             var result = await service.ImportAsync(ms);
 

@@ -160,6 +160,7 @@ builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<IQrCodeService, QrCodeService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IAssetImportService, AssetImportService>();
+builder.Services.AddScoped<IAssetTagGenerator, AssetTagGenerator>();
 builder.Services.AddSingleton<IPdfReportService, PdfReportService>();
 builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddScoped<ISystemSettingService, SystemSettingService>();

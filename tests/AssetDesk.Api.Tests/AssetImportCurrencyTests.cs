@@ -38,7 +38,7 @@ public class AssetImportCurrencyTests
     }
 
     private static AssetImportService ServiceFor(AppDbContext db) =>
-        new(db, NullLogger<AssetImportService>.Instance, new LookupService(db));
+        new(db, NullLogger<AssetImportService>.Instance, new LookupService(db), new AssetTagGenerator(db));
 
     private static string[] LegacyRow(string currency, string price) =>
         ["Test Laptop", DeviceTypes.Laptop, AssetStatus.Available, "Dell", "XPS", "2024",

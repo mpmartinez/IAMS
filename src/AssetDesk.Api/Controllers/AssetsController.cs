@@ -14,7 +14,8 @@ namespace AssetDesk.Api.Controllers;
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AssetsController(
-    AppDbContext db, IQrCodeService qrCodeService, IAssetImportService importService, ILookupService lookups) : ControllerBase
+    AppDbContext db, IQrCodeService qrCodeService, IAssetImportService importService, ILookupService lookups,
+    IAssetTagGenerator tags) : ControllerBase
 {
     // Staff only. The register carries purchase prices and full assignment history, so
     // browsing it is not something every employee needs. Employees reach exactly one asset
@@ -127,7 +128,7 @@ public class AssetsController(
         }
 
         // Generate unique AssetTag
-        var assetTag = await GenerateAssetTagAsync(dto.DeviceType);
+        var assetTag = await tags.NextAsync(dto.DeviceType, new Dictionary<string, int>());
 
         var asset = new Asset
         {
@@ -475,44 +476,6 @@ public class AssetsController(
     {
         var tags = await db.Assets.Select(a => a.AssetTag).OrderBy(t => t).ToListAsync();
         return Ok(tags);
-    }
-
-    private async Task<string> GenerateAssetTagAsync(string deviceType)
-    {
-        // Format: XXX-YYYYMMDD-NNNN (e.g., LAP-20251218-0001)
-        var prefix = deviceType switch
-        {
-            DeviceTypes.Laptop => "LAP",
-            DeviceTypes.Desktop => "DSK",
-            DeviceTypes.Monitor => "MON",
-            DeviceTypes.Phone => "PHN",
-            DeviceTypes.Tablet => "TAB",
-            DeviceTypes.Printer => "PRN",
-            DeviceTypes.Network => "NET",
-            DeviceTypes.Server => "SVR",
-            DeviceTypes.Peripheral => "PER",
-            DeviceTypes.Software => "SFT",
-            _ => "OTH"
-        };
-
-        var datePart = DateTime.UtcNow.ToString("yyyyMMdd");
-        var baseTag = $"{prefix}-{datePart}-";
-
-        // Find the highest sequence number for today
-        var todayTags = await db.Assets
-            .Where(a => a.AssetTag.StartsWith(baseTag))
-            .Select(a => a.AssetTag)
-            .ToListAsync();
-
-        var maxSequence = 0;
-        foreach (var tag in todayTags)
-        {
-            var sequencePart = tag.Replace(baseTag, "");
-            if (int.TryParse(sequencePart, out var seq) && seq > maxSequence)
-                maxSequence = seq;
-        }
-
-        return $"{baseTag}{(maxSequence + 1):D4}";
     }
 
     private static AssetDto MapToDto(Asset asset) => new()

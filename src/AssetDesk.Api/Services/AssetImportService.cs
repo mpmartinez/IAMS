@@ -11,7 +11,8 @@ public interface IAssetImportService
     Task<ImportAssetsResultDto> ImportAsync(Stream xlsxStream, CancellationToken ct = default);
 }
 
-public class AssetImportService(AppDbContext db, ILogger<AssetImportService> logger, ILookupService lookups) : IAssetImportService
+public class AssetImportService(
+    AppDbContext db, ILogger<AssetImportService> logger, ILookupService lookups, IAssetTagGenerator tags) : IAssetImportService
 {
     private static readonly string[] ExpectedHeaders =
     [
@@ -152,7 +153,7 @@ public class AssetImportService(AppDbContext db, ILogger<AssetImportService> log
         if (warrantyStart.HasValue && warrantyEnd.HasValue && warrantyStart > warrantyEnd)
             throw new ImportRowException("WarrantyStartDate cannot be after WarrantyEndDate.");
 
-        var assetTag = await GenerateAssetTagAsync(deviceType, tagSequenceCache, ct);
+        var assetTag = await tags.NextAsync(deviceType, tagSequenceCache, ct);
 
         return new Asset
         {
@@ -174,49 +175,6 @@ public class AssetImportService(AppDbContext db, ILogger<AssetImportService> log
             Location = ReadString(row, headerMap, "Location"),
             Notes = ReadString(row, headerMap, "Notes")
         };
-    }
-
-    private async Task<string> GenerateAssetTagAsync(
-        string deviceType,
-        Dictionary<string, int> sequenceCache,
-        CancellationToken ct)
-    {
-        var prefix = deviceType switch
-        {
-            DeviceTypes.Laptop => "LAP",
-            DeviceTypes.Desktop => "DSK",
-            DeviceTypes.Monitor => "MON",
-            DeviceTypes.Phone => "PHN",
-            DeviceTypes.Tablet => "TAB",
-            DeviceTypes.Printer => "PRN",
-            DeviceTypes.Network => "NET",
-            DeviceTypes.Server => "SVR",
-            DeviceTypes.Peripheral => "PER",
-            DeviceTypes.Software => "SFT",
-            _ => "OTH"
-        };
-
-        var datePart = DateTime.UtcNow.ToString("yyyyMMdd");
-        var baseTag = $"{prefix}-{datePart}-";
-
-        if (!sequenceCache.TryGetValue(baseTag, out var current))
-        {
-            var todayTags = await db.Assets
-                .Where(a => a.AssetTag.StartsWith(baseTag))
-                .Select(a => a.AssetTag)
-                .ToListAsync(ct);
-
-            current = 0;
-            foreach (var tag in todayTags)
-            {
-                if (int.TryParse(tag.Replace(baseTag, ""), out var seq) && seq > current)
-                    current = seq;
-            }
-        }
-
-        current++;
-        sequenceCache[baseTag] = current;
-        return $"{baseTag}{current:D4}";
     }
 
     private static string? ReadString(IXLRow row, Dictionary<string, int> headerMap, string column)

@@ -67,7 +67,7 @@ public class AssetCurrencyValidationTests
     // left the whole suite green.
 
     private static AssetsController ControllerFor(AppDbContext db) =>
-        new(db, null!, null!, new LookupService(db));
+        new(db, null!, null!, new LookupService(db), new AssetTagGenerator(db));
 
     private static string FailureMessage(ActionResult<ApiResponse<AssetDto>> result)
     {

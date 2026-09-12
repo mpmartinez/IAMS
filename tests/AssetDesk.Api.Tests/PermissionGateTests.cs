@@ -55,7 +55,7 @@ public class PermissionGateTests
             NullLogger<TicketsController>.Instance);
 
     private static AssetsController BuildAssetsController(Data.AppDbContext db) =>
-        new(db, new UnusedQrCodeService(), new UnusedAssetImportService(), new UnusedLookupService());
+        new(db, new UnusedQrCodeService(), new UnusedAssetImportService(), new UnusedLookupService(), new UnusedAssetTagGenerator());
 
     // These three dependencies are never touched by the code paths under test (scan/{tag} and
     // Tickets.Get read straight from the DbContext), so a throwing stub both satisfies the
@@ -92,6 +92,12 @@ public class PermissionGateTests
         public Task<bool> IsActiveValueAsync(string lookupType, string value, CancellationToken ct = default) =>
             throw new NotSupportedException();
         public Task<List<string>> GetActiveValuesAsync(string lookupType, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+    }
+
+    private class UnusedAssetTagGenerator : IAssetTagGenerator
+    {
+        public Task<string> NextAsync(string deviceType, Dictionary<string, int> sequenceCache, CancellationToken ct = default) =>
             throw new NotSupportedException();
     }
 
