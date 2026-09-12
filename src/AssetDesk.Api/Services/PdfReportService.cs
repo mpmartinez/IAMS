@@ -14,6 +14,7 @@ public interface IPdfReportService
     byte[] BuildAssignedByUserPdf(List<AssignedAssetsByUserReportRow> data, string? userName);
     byte[] BuildWarrantyExpiryPdf(List<WarrantyExpiryReportRow> data, string? warrantyStatus, int? daysThreshold);
     byte[] BuildAssetValuePdf(AssetValueSummaryDto summary);
+    byte[] BuildDepreciationPdf(DepreciationSummaryDto summary);
 }
 
 public class PdfReportService : IPdfReportService
@@ -192,6 +193,59 @@ public class PdfReportService : IPdfReportService
                         }
                     });
                 }
+            });
+        });
+    }
+
+    public byte[] BuildDepreciationPdf(DepreciationSummaryDto summary)
+    {
+        var filters = BuildFilterLine(("As of", summary.AsOf.ToString("yyyy-MM-dd")));
+
+        return BuildDocument("Depreciation Report", filters, summary.Rows.Count, content =>
+        {
+            content.Column(col =>
+            {
+                col.Item().Text(
+                    $"Cost basis {FormatCurrency(summary.TotalCostBasis, summary.PrimaryCurrency)}   •   " +
+                    $"Accumulated {FormatCurrency(summary.TotalAccumulatedDepreciation, summary.PrimaryCurrency)}   •   " +
+                    $"Net book value {FormatCurrency(summary.TotalNetBookValue, summary.PrimaryCurrency)}");
+
+                if (summary.NotDepreciableCount > 0)
+                {
+                    var reasons = string.Join("; ",
+                        summary.NotDepreciableByReason.Select(x => $"{x.Count} {x.Reason.ToLowerInvariant()}"));
+                    col.Item().PaddingTop(4).Text(
+                        $"{summary.NotDepreciableCount} of {summary.Rows.Count} assets not depreciable — {reasons}");
+                }
+
+                col.Item().PaddingTop(10).Table(table =>
+                {
+                    table.ColumnsDefinition(c =>
+                    {
+                        c.RelativeColumn(2);   // asset tag
+                        c.RelativeColumn(2);   // device type
+                        c.RelativeColumn(2);   // cost basis
+                        c.RelativeColumn(2);   // accumulated
+                        c.RelativeColumn(2);   // net book value
+                        c.RelativeColumn(3);   // status
+                    });
+
+                    AddHeaderRow(table,
+                        "Asset Tag", "Device Type", "Cost Basis",
+                        "Accumulated", "Net Book Value", "Status");
+
+                    foreach (var row in summary.Rows)
+                    {
+                        AddBodyCell(table, row.AssetTag);
+                        AddBodyCell(table, row.DeviceType);
+                        AddBodyCell(table, FormatCurrency(row.CostBasis, summary.PrimaryCurrency));
+                        AddBodyCell(table, FormatCurrency(row.AccumulatedDepreciation, summary.PrimaryCurrency));
+                        AddBodyCell(table, FormatCurrency(row.NetBookValue, summary.PrimaryCurrency));
+                        AddBodyCell(table, row.IsDepreciable
+                            ? (row.IsFullyDepreciated ? "Fully depreciated" : "Depreciating")
+                            : row.NotDepreciableReason ?? "");
+                    }
+                });
             });
         });
     }

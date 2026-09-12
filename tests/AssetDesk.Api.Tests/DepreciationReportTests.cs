@@ -242,4 +242,28 @@ public class DepreciationReportTests
             Assert.Equal(21000m, rowB.NetBookValue);
         }
     }
+
+    [Fact]
+    public async Task The_CSV_export_names_the_undepreciable_assets_too()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await SeedAsync(db, tenantId);
+
+            var file = Assert.IsType<FileContentResult>(
+                await new ReportsController(db, null!).ExportDepreciationReport(new DateTime(2026, 2, 1)));
+
+            var csv = System.Text.Encoding.UTF8.GetString(file.FileContents);
+
+            Assert.Contains("LAP-0001", csv);
+            Assert.Contains("MON-0001", csv);
+            Assert.Contains(NotDepreciableReasons.NoPolicy, csv);
+            Assert.DoesNotContain("LAP-0099", csv);   // Retired, excluded
+            Assert.Equal("text/csv", file.ContentType);
+        }
+    }
 }

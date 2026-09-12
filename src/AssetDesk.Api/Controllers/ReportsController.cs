@@ -145,6 +145,48 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
         };
     }
 
+    [HttpGet("depreciation/export")]
+    public async Task<IActionResult> ExportDepreciationReport([FromQuery] DateTime? asOf = null)
+    {
+        var summary = await BuildDepreciationSummaryAsync(asOf ?? DateTime.UtcNow);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Asset Tag,Device Type,Name,Purchase Date,Purchase Price,Currency,Cost Basis (PHP),Useful Life (months),Elapsed Months,Accumulated Depreciation (PHP),Net Book Value (PHP),Status");
+
+        foreach (var r in summary.Rows)
+        {
+            var status = r.IsDepreciable
+                ? (r.IsFullyDepreciated ? "Fully depreciated" : "Depreciating")
+                : r.NotDepreciableReason;
+
+            sb.AppendLine(string.Join(',',
+                EscapeCsv(r.AssetTag),
+                EscapeCsv(r.DeviceType),
+                EscapeCsv(r.Name),
+                r.PurchaseDate?.ToString("yyyy-MM-dd") ?? "",
+                r.PurchasePrice?.ToString("F2", CultureInfo.InvariantCulture) ?? "",
+                EscapeCsv(r.Currency),
+                r.CostBasis.ToString("F2", CultureInfo.InvariantCulture),
+                r.UsefulLifeMonths?.ToString(CultureInfo.InvariantCulture) ?? "",
+                r.ElapsedMonths?.ToString(CultureInfo.InvariantCulture) ?? "",
+                r.AccumulatedDepreciation?.ToString("F2", CultureInfo.InvariantCulture) ?? "",
+                r.NetBookValue?.ToString("F2", CultureInfo.InvariantCulture) ?? "",
+                EscapeCsv(status)));
+        }
+
+        var fileName = $"Depreciation {summary.AsOf:yyyy-MM-dd}.csv";
+        return File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", fileName);
+    }
+
+    [HttpGet("depreciation/pdf")]
+    public async Task<IActionResult> ExportDepreciationPdf([FromQuery] DateTime? asOf = null)
+    {
+        var summary = await BuildDepreciationSummaryAsync(asOf ?? DateTime.UtcNow);
+        var bytes = pdf.BuildDepreciationPdf(summary);
+        var fileName = $"Depreciation {summary.AsOf:yyyy-MM-dd}.pdf";
+        return File(bytes, "application/pdf", fileName);
+    }
+
     /// <summary>
     /// Export asset inventory report as CSV
     /// </summary>
