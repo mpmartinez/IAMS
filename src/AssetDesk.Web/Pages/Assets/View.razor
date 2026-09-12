@@ -271,6 +271,25 @@ else
                     </CardContent>
                 </Card>
 
+                @if (!string.IsNullOrEmpty(_asset.PurchaseOrderReference))
+                {
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Procurement</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                                <DetailItem Label="Supplier" Value="@(_asset.SupplierName ?? "—")" />
+                                @* Not a link to /purchase-orders/{id}: AssetDto carries only the
+                                   formatted reference (e.g. "PO-0042"), not the order's numeric
+                                   id the route needs, and adding that id was not part of this
+                                   change - see the task report. *@
+                                <DetailItem Label="Purchase Order" Value="@_asset.PurchaseOrderReference" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                }
+
                 @if (!string.IsNullOrEmpty(_asset.Notes))
                 {
                     <Card>

@@ -1,0 +1,432 @@
+@page "/purchase-orders/{Id:int}"
+@using System.Globalization
+@using AssetDesk.Shared
+@attribute [Authorize]
+@inject ApiClient Api
+@inject AuthService AuthService
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+@inject SnackbarService Snackbar
+@inject PermissionChecker PermissionChecker
+
+<PageTitle>@(_order?.Reference ?? "Purchase Order") - AssetDesk</PageTitle>
+
+<PermissionView Permission="iams:procurement:view" ShowDeniedMessage="true">
+@if (_loading)
+{
+    <div class="space-y-6 animate-pulse">
+        <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-lg skeleton"></div>
+            <div class="h-8 w-48 rounded skeleton"></div>
+        </div>
+        <div class="bg-card rounded-2xl border border-border p-6">
+            <div class="space-y-4">
+                <div class="h-6 w-1/3 rounded skeleton"></div>
+                <div class="h-4 w-1/2 rounded skeleton"></div>
+            </div>
+        </div>
+    </div>
+}
+else if (_order is null)
+{
+    <Card Class="p-6">
+        <EmptyState Title="Purchase order not found" Description="It may have been removed, or belongs to another organisation.">
+            <a href="/purchase-orders" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl font-medium hover:bg-primary/90 transition-all duration-200">
+                Back to Purchase Orders
+            </a>
+        </EmptyState>
+    </Card>
+}
+else
+{
+    <div class="space-y-4 sm:space-y-6">
+        <!-- Header -->
+        <div class="flex flex-col gap-4">
+            <div class="flex items-center gap-2 sm:gap-4">
+                <a href="/purchase-orders" class="p-2 rounded-lg text-muted-foreground hover:text-muted-foreground hover:bg-muted transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-xl sm:text-2xl font-bold text-foreground truncate">@_order.Reference</h1>
+                        <Badge Variant="@StatusVariant(_order.Status)">@_order.Status</Badge>
+                    </div>
+                    <p class="text-sm text-muted-foreground mt-1">@(_order.SupplierName ?? "—")</p>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <Button Variant="outline" OnClick="DownloadPdf">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    PDF
+                </Button>
+                <PermissionView Permission="iams:procurement:manage">
+                    @if (CanSend(_order.Status))
+                    {
+                        <Button OnClick="SendOrder" Loading="@_transitioning">Send to Supplier</Button>
+                    }
+                    @if (CanReceive(_order.Status))
+                    {
+                        <Button OnClick="OpenReceiveModal">Receive Goods</Button>
+                    }
+                    @if (CanCancel(_order.Status))
+                    {
+                        <Button Variant="outline" Class="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" OnClick="() => _showCancelModal = true">
+                            Cancel
+                        </Button>
+                    }
+                </PermissionView>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div class="lg:col-span-2 space-y-4 sm:space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Order Details</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                            <DetailItem Label="Order Date" Value="@_order.OrderDate.ToString("MMM dd, yyyy")" />
+                            <DetailItem Label="Expected Date" Value="@(_order.ExpectedDate?.ToString("MMM dd, yyyy") ?? "—")" />
+                            <DetailItem Label="Currency" Value="@_order.Currency" />
+                            <DetailItem Label="Order Total" Value="@CurrencyFormat.Format(_order.OrderTotal, _order.Currency)" />
+                        </div>
+                        @if (!string.IsNullOrEmpty(_order.Notes))
+                        {
+                            <div class="mt-4">
+                                <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Notes</p>
+                                <p class="text-sm text-foreground whitespace-pre-wrap">@_order.Notes</p>
+                            </div>
+                        }
+                    </CardContent>
+                </Card>
+
+                <Card Class="overflow-hidden">
+                    <div class="p-4 sm:p-5 pb-2">
+                        <h3 class="text-lg font-semibold leading-none tracking-tight text-foreground">Lines</h3>
+                    </div>
+                    <Table WrapperClass="-mx-4 sm:mx-0">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Device Type</TableHead>
+                                <TableHead>Description</TableHead>
+                                <TableHead Class="text-right">Ordered</TableHead>
+                                <TableHead Class="text-right">Received</TableHead>
+                                <TableHead Class="text-right">Outstanding</TableHead>
+                                <TableHead Class="text-right">Unit Price</TableHead>
+                                <TableHead Class="text-right">Line Total</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            @foreach (var line in _order.Lines)
+                            {
+                                <TableRow @key="line.Id">
+                                    <TableCell>@line.DeviceType</TableCell>
+                                    <TableCell>@(line.Description ?? "—")</TableCell>
+                                    <TableCell Class="text-right">@line.Quantity</TableCell>
+                                    <TableCell Class="text-right">@line.ReceivedQuantity</TableCell>
+                                    <TableCell Class="text-right">
+                                        @if (line.OutstandingQuantity > 0)
+                                        {
+                                            <span class="text-amber-600 dark:text-amber-400">@line.OutstandingQuantity</span>
+                                        }
+                                        else
+                                        {
+                                            <span>0</span>
+                                        }
+                                    </TableCell>
+                                    @* Always the order's own currency - a USD order showing peso
+                                       signs here is the exact bug the multi-currency review caught. *@
+                                    <TableCell Class="text-right">@CurrencyFormat.Format(line.UnitPrice, _order.Currency)</TableCell>
+                                    <TableCell Class="text-right">@CurrencyFormat.Format(line.LineTotal, _order.Currency)</TableCell>
+                                </TableRow>
+                            }
+                        </TableBody>
+                    </Table>
+                </Card>
+            </div>
+
+            <div class="space-y-4 sm:space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Delivery Progress</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        @* The order carries only running received/outstanding quantities per
+                           line, not a receipt-by-receipt history (date, rate, notes per
+                           delivery) - PurchaseOrderDto has no such list and there is no endpoint
+                           for it, so this is the progress the API can actually support today
+                           rather than an invented one. See the task report for the same note. *@
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Units ordered</span>
+                                <span class="text-foreground font-medium">@_order.Lines.Sum(l => l.Quantity)</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Units received</span>
+                                <span class="text-foreground font-medium">@_order.Lines.Sum(l => l.ReceivedQuantity)</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Units outstanding</span>
+                                <span class="text-foreground font-medium">@_order.Lines.Sum(l => l.OutstandingQuantity)</span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receive Modal -->
+    <Modal IsOpen="@_showReceiveModal" Title="Receive Goods" OnClose="CloseReceiveModal" Size="lg">
+        <ChildContent>
+            <div class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField LabelText="Receipt Date">
+                        <Input Type="date" @bind-Value="_receiptDate" />
+                    </FormField>
+                    @if (_order.Currency != CurrencyFormat.Php)
+                    {
+                        <FormField LabelText="@($"Exchange Rate ({CurrencyFormat.SymbolFor(CurrencyFormat.Php)} per 1 {_order.Currency})")">
+                            <Input Type="number" @bind-Value="_exchangeRate" Placeholder="58.20" />
+                        </FormField>
+                    }
+                </div>
+
+                <FormField LabelText="Notes">
+                    <Textarea Value="@_receiveNotes" ValueChanged="v => _receiveNotes = v" Rows="2" Placeholder="Invoice number, delivery notes..." Class="resize-none" />
+                </FormField>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-foreground">Lines received</label>
+                    <div class="space-y-2">
+                        @foreach (var line in _receiveLines)
+                        {
+                            <div class="flex items-end gap-3 rounded-xl border border-border p-3">
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-foreground">@line.Line.DeviceType</p>
+                                    <p class="text-xs text-muted-foreground">
+                                        Outstanding: @line.Line.OutstandingQuantity of @line.Line.Quantity
+                                    </p>
+                                </div>
+                                <div class="w-24">
+                                    <FormField LabelText="Qty">
+                                        <Input Type="number" Value="@line.QuantityReceived" ValueChanged="v => line.QuantityReceived = v ?? string.Empty" Min="0" Max="@line.Line.OutstandingQuantity.ToString()" />
+                                    </FormField>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_receiveError))
+                {
+                    <Alert Variant="destructive">@_receiveError</Alert>
+                }
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="CloseReceiveModal">Cancel</Button>
+            <Button OnClick="ReceiveGoods" Loading="@_receiving">Receive</Button>
+        </FooterContent>
+    </Modal>
+
+    <!-- Cancel Modal -->
+    <Modal IsOpen="@_showCancelModal" Title="Cancel Purchase Order" OnClose="() => _showCancelModal = false">
+        <ChildContent>
+            <p class="text-muted-foreground">
+                Cancel <strong>@_order.Reference</strong>? This cannot be undone, and nothing further can be received against it.
+            </p>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="() => _showCancelModal = false">Keep Order</Button>
+            <Button Variant="destructive" OnClick="CancelOrder" Loading="@_transitioning">Cancel Order</Button>
+        </FooterContent>
+    </Modal>
+}
+</PermissionView>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private PurchaseOrderDto? _order;
+    private bool _loading = true;
+    private bool _transitioning;
+
+    private bool _showCancelModal;
+
+    private bool _showReceiveModal;
+    private bool _receiving;
+    private string? _receiveError;
+    private string _receiptDate = DateTime.Today.ToString("yyyy-MM-dd");
+    private string _exchangeRate = "1";
+    private string _receiveNotes = "";
+    private List<ReceiveLineFormModel> _receiveLines = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Matches the page's PermissionView gate above - see the identical note on
+        // Pages/Procurement/Suppliers.razor.
+        if (!await PermissionChecker.HasPermissionAsync("iams:procurement:view"))
+        {
+            _loading = false;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _order = await Api.GetPurchaseOrderAsync(Id);
+        _loading = false;
+    }
+
+    // These three mirror PurchaseOrderWorkflow.CanTransition/IsOpen on the API side - the server
+    // enforces the actual rule regardless, so this is only hiding actions that would otherwise
+    // be guaranteed to fail, not reimplementing the workflow.
+    private static bool CanSend(string status) => status == "Draft";
+    private static bool CanCancel(string status) => status is "Draft" or "Ordered" or "PartiallyReceived";
+    private static bool CanReceive(string status) => status is "Ordered" or "PartiallyReceived";
+
+    private static string StatusVariant(string status) => status switch
+    {
+        "Draft" => "secondary",
+        "Ordered" => "info",
+        "PartiallyReceived" => "warning",
+        "Received" => "success",
+        "Cancelled" => "destructive",
+        _ => "default"
+    };
+
+    private async Task SendOrder()
+    {
+        _transitioning = true;
+        var (success, error) = await Api.SendPurchaseOrderAsync(Id);
+        _transitioning = false;
+
+        if (success)
+        {
+            Snackbar.Success("Purchase order sent to supplier");
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Error(error ?? "Failed to send purchase order");
+        }
+    }
+
+    private async Task CancelOrder()
+    {
+        _transitioning = true;
+        var (success, error) = await Api.CancelPurchaseOrderAsync(Id);
+        _transitioning = false;
+        _showCancelModal = false;
+
+        if (success)
+        {
+            Snackbar.Success("Purchase order cancelled");
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Error(error ?? "Failed to cancel purchase order");
+        }
+    }
+
+    private void OpenReceiveModal()
+    {
+        if (_order is null) return;
+
+        _receiptDate = DateTime.Today.ToString("yyyy-MM-dd");
+        // A peso order always books at 1 - the field for it is hidden entirely, see the markup.
+        _exchangeRate = "1";
+        _receiveNotes = "";
+        _receiveError = null;
+
+        // Pre-fill each line with what is still outstanding - the point of this form is
+        // receiving what has not arrived yet, not re-entering the whole order.
+        _receiveLines = _order.Lines
+            .Where(l => l.OutstandingQuantity > 0)
+            .Select(l => new ReceiveLineFormModel { Line = l, QuantityReceived = l.OutstandingQuantity.ToString() })
+            .ToList();
+
+        _showReceiveModal = true;
+    }
+
+    private void CloseReceiveModal() => _showReceiveModal = false;
+
+    private async Task ReceiveGoods()
+    {
+        _receiveError = null;
+
+        var lines = new List<ReceiveLineDto>();
+        foreach (var line in _receiveLines)
+        {
+            if (!int.TryParse(line.QuantityReceived, NumberStyles.Integer, CultureInfo.InvariantCulture, out var quantity) || quantity <= 0)
+                continue;
+
+            lines.Add(new ReceiveLineDto { PurchaseOrderLineId = line.Line.Id, QuantityReceived = quantity });
+        }
+
+        if (lines.Count == 0)
+        {
+            _receiveError = "Enter a quantity received for at least one line.";
+            return;
+        }
+
+        _receiving = true;
+
+        var dto = new ReceiveGoodsDto
+        {
+            ReceiptDate = DateTime.TryParse(_receiptDate, out var receiptDate) ? receiptDate : DateTime.UtcNow,
+            // Always exactly 1 for a peso order - the field is hidden rather than left editable,
+            // so there is nothing here for the user to get wrong.
+            ExchangeRate = _order!.Currency == CurrencyFormat.Php ? 1m : (ParseDecimal(_exchangeRate) ?? 1m),
+            Notes = string.IsNullOrWhiteSpace(_receiveNotes) ? null : _receiveNotes.Trim(),
+            Lines = lines
+        };
+
+        // Reuses ApiClient's ReadErrorMessageAsync under the hood - a rejected receipt names
+        // which line is over-received and by how much, and that message needs to reach the user
+        // verbatim rather than collapse into a generic failure.
+        var (success, error) = await Api.ReceiveGoodsAsync(Id, dto);
+        _receiving = false;
+
+        if (!success)
+        {
+            _receiveError = error;
+            return;
+        }
+
+        Snackbar.Success("Goods received");
+        _showReceiveModal = false;
+        await LoadAsync();
+    }
+
+    private async Task DownloadPdf()
+    {
+        var url = Api.GetPurchaseOrderPdfUrl(Id);
+        var token = await AuthService.GetTokenAsync();
+        var baseUrl = (Configuration["ApiBaseUrl"] ?? "https://localhost:5021").TrimEnd('/');
+        await JS.InvokeVoidAsync("downloadWithAuth", $"{baseUrl}/{url}", token);
+    }
+
+    // Same DOM-value parsing rule as Assets/Edit.razor.ParseDecimal: a number input is always
+    // invariant-formatted, so parsing it under CurrentCulture can silently misread the value.
+    private static decimal? ParseDecimal(string? value) =>
+        decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+
+    private sealed class ReceiveLineFormModel
+    {
+        public required PurchaseOrderLineDto Line { get; set; }
+        public string QuantityReceived { get; set; } = "";
+    }
+}

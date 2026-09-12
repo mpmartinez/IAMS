@@ -31,7 +31,13 @@ public class AssetsController(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        var query = db.Assets.Include(a => a.AssignedToUser).AsQueryable();
+        // The GoodsReceiptLine chain is only for provenance display (MapToDto), not filtered or
+        // sorted on here - a dotted Include of reference navigations is enough, no ThenInclude
+        // needed since every hop is a single reference, not a collection.
+        var query = db.Assets
+            .Include(a => a.AssignedToUser)
+            .Include(a => a.GoodsReceiptLine!.GoodsReceipt!.PurchaseOrder!.Supplier)
+            .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -76,6 +82,7 @@ public class AssetsController(
     {
         var asset = await db.Assets
             .Include(a => a.AssignedToUser)
+            .Include(a => a.GoodsReceiptLine!.GoodsReceipt!.PurchaseOrder!.Supplier)
             .FirstOrDefaultAsync(a => a.Id == id);
 
         return asset is null
@@ -496,6 +503,10 @@ public class AssetsController(
         Status = asset.Status,
         AssignedToUserId = asset.AssignedToUserId,
         AssignedToUserName = asset.AssignedToUser?.FullName,
+        SupplierName = asset.GoodsReceiptLine?.GoodsReceipt?.PurchaseOrder?.Supplier?.Name,
+        PurchaseOrderReference = asset.GoodsReceiptLine?.GoodsReceipt?.PurchaseOrder is { } po
+            ? $"PO-{po.PoNumber:D4}"
+            : null,
         Name = asset.Name,
         Location = asset.Location,
         PurchaseDate = asset.PurchaseDate,

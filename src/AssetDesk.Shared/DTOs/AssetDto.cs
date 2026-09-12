@@ -36,6 +36,16 @@ public record AssetDto
     public string? AssignedToUserId { get; init; }
     public string? AssignedToUserName { get; init; }
 
+    /// <summary>
+    /// Where this asset came from, when it was created by receiving a purchase order rather than
+    /// entered by hand or imported. Both null together, never one without the other - see
+    /// AssetsController.MapToDto.
+    /// </summary>
+    public string? SupplierName { get; init; }
+
+    /// <summary>Rendered PO-0042, matching PurchaseOrderDto.Reference.</summary>
+    public string? PurchaseOrderReference { get; init; }
+
     // Legacy/additional fields
     public string? Name { get; init; }
     public string? Location { get; init; }

@@ -1252,6 +1252,76 @@ public class ApiClient(HttpClient http, AuthService authService)
         return (true, null);
     }
 
+    // Purchase orders - gated on iams:procurement:view; create, send, cancel and receive
+    // additionally need iams:procurement:manage. See /purchase-orders.
+    public async Task<List<PurchaseOrderDto>> GetPurchaseOrdersAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<PurchaseOrderDto>>>("api/purchaseorders");
+        return response?.Data ?? [];
+    }
+
+    public async Task<PurchaseOrderDto?> GetPurchaseOrderAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<PurchaseOrderDto>>($"api/purchaseorders/{id}");
+        return response?.Data;
+    }
+
+    public async Task<(bool Success, string? Error)> CreatePurchaseOrderAsync(CreatePurchaseOrderDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync("api/purchaseorders", dto);
+
+        // Same ValidationProblemDetails-vs-ApiResponse split as SaveSupplierAsync: the DTO's
+        // [Range]/[StringLength] attributes can reject before the controller's own line/currency
+        // checks ever run.
+        if (!response.IsSuccessStatusCode)
+            return (false, await ReadErrorMessageAsync(response) ?? "Failed to create purchase order.");
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> SendPurchaseOrderAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsync($"api/purchaseorders/{id}/send", null);
+
+        if (!response.IsSuccessStatusCode)
+            return (false, await ReadErrorMessageAsync(response) ?? "Failed to send purchase order.");
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> CancelPurchaseOrderAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsync($"api/purchaseorders/{id}/cancel", null);
+
+        if (!response.IsSuccessStatusCode)
+            return (false, await ReadErrorMessageAsync(response) ?? "Failed to cancel purchase order.");
+
+        return (true, null);
+    }
+
+    /// <summary>
+    /// Receiving is where a rejected call matters most: the message names which line is
+    /// over-received and by how much, and ReadErrorMessageAsync is what gets that to the user
+    /// verbatim instead of a generic "Failed to receive goods."
+    /// </summary>
+    public async Task<(bool Success, string? Error)> ReceiveGoodsAsync(int id, ReceiveGoodsDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync($"api/purchaseorders/{id}/receive", dto);
+
+        if (!response.IsSuccessStatusCode)
+            return (false, await ReadErrorMessageAsync(response) ?? "Failed to receive goods.");
+
+        return (true, null);
+    }
+
+    public string GetPurchaseOrderPdfUrl(int id) => $"api/purchaseorders/{id}/pdf";
+
     // Platform SMTP settings (SuperAdmin only) - what makes forgot-password mail actually
     // send. The stored password is never returned by the API; HasPassword is the only signal
     // the UI gets, and an empty Password on save means "keep the current one".

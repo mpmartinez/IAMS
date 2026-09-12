@@ -1,0 +1,353 @@
+@page "/purchase-orders"
+@using System.Globalization
+@using AssetDesk.Shared
+@attribute [Authorize]
+@inject ApiClient Api
+@inject SnackbarService Snackbar
+@inject PermissionChecker PermissionChecker
+@inject NavigationManager Navigation
+
+<PageTitle>Purchase Orders - AssetDesk</PageTitle>
+
+<PermissionView Permission="iams:procurement:view" ShowDeniedMessage="true">
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold text-foreground">Purchase Orders</h1>
+            <p class="text-muted-foreground mt-1">
+                Orders placed with suppliers. Receiving one creates an asset for every unit that
+                arrives, already priced and dated from the order.
+            </p>
+        </div>
+        <PermissionView Permission="iams:procurement:manage">
+            <Button OnClick="OpenCreateModal">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                New Purchase Order
+            </Button>
+        </PermissionView>
+    </div>
+
+    <Card Class="overflow-hidden">
+        @if (_loading)
+        {
+            <div class="p-4 sm:p-5 space-y-2">
+                @for (int i = 0; i < 4; i++)
+                {
+                    <div class="h-12 rounded-xl skeleton"></div>
+                }
+            </div>
+        }
+        else if (_orders.Count == 0)
+        {
+            <div class="p-4 sm:p-5">
+                <EmptyState Title="No purchase orders yet" Description="Create the first purchase order to start receiving stock against it." />
+            </div>
+        }
+        else
+        {
+            <Table WrapperClass="-mx-4 sm:mx-0">
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Reference</TableHead>
+                        <TableHead>Supplier</TableHead>
+                        <TableHead>Order Date</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead Class="text-right">Total</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    @foreach (var order in _orders)
+                    {
+                        <TableRow @key="order.Id" Class="cursor-pointer" @onclick="() => ViewOrder(order.Id)">
+                            <TableCell>
+                                <span class="font-medium text-foreground text-sm">@order.Reference</span>
+                            </TableCell>
+                            <TableCell>@(order.SupplierName ?? "—")</TableCell>
+                            <TableCell>@order.OrderDate.ToString("MMM dd, yyyy")</TableCell>
+                            <TableCell>
+                                <Badge Variant="@StatusVariant(order.Status)">@order.Status</Badge>
+                            </TableCell>
+                            <TableCell Class="text-right">
+                                @* Always the order's own currency - never a hardcoded peso sign,
+                                   see CurrencyFormat's summary. *@
+                                @CurrencyFormat.Format(order.OrderTotal, order.Currency)
+                            </TableCell>
+                        </TableRow>
+                    }
+                </TableBody>
+            </Table>
+        }
+    </Card>
+</div>
+
+<!-- Create modal -->
+<Modal IsOpen="@_showCreateModal" Title="New Purchase Order" OnClose="CloseCreateModal" Size="lg">
+    <ChildContent>
+        <div class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField LabelText="Supplier" Required="true">
+                    <Select Value="@_supplierId" ValueChanged="v => _supplierId = v ?? string.Empty" Placeholder="Select a supplier">
+                        @foreach (var supplier in _suppliers.Where(s => s.IsActive))
+                        {
+                            <option value="@supplier.Id">@supplier.Name</option>
+                        }
+                    </Select>
+                </FormField>
+                <FormField LabelText="Currency">
+                    <Select @bind-Value="_currency" @bind-Value:after="OnCurrencyChanged">
+                        @foreach (var currencyCode in _currencies)
+                        {
+                            <option value="@currencyCode">@currencyCode</option>
+                        }
+                    </Select>
+                </FormField>
+                <FormField LabelText="Order Date">
+                    <Input Type="date" @bind-Value="_orderDate" />
+                </FormField>
+                <FormField LabelText="Expected Date">
+                    <Input Type="date" @bind-Value="_expectedDate" />
+                </FormField>
+            </div>
+
+            <FormField LabelText="Notes">
+                <Textarea Value="@_notes" ValueChanged="v => _notes = v" Rows="2" Placeholder="Anything worth knowing about this order" Class="resize-none" />
+            </FormField>
+
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="block text-sm font-medium text-foreground">Lines</label>
+                    <Button Variant="ghost" Size="sm" OnClick="AddLine">Add Line</Button>
+                </div>
+
+                <div class="space-y-3">
+                    @for (int i = 0; i < _lines.Count; i++)
+                    {
+                        var index = i;
+                        var line = _lines[index];
+                        <div class="rounded-xl border border-border p-3 space-y-3">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <FormField LabelText="Device Type">
+                                    <Select Value="@line.DeviceType" ValueChanged="v => line.DeviceType = v ?? string.Empty" Placeholder="Select">
+                                        @if (_deviceTypes is not null)
+                                        {
+                                            @foreach (var dt in _deviceTypes)
+                                            {
+                                                <option value="@dt">@dt</option>
+                                            }
+                                        }
+                                    </Select>
+                                </FormField>
+                                <FormField LabelText="Description">
+                                    <Input Value="@line.Description" ValueChanged="v => line.Description = v ?? string.Empty" Placeholder="Optional" />
+                                </FormField>
+                            </div>
+                            <div class="flex items-end gap-3">
+                                <div class="w-24">
+                                    <FormField LabelText="Qty">
+                                        <Input Type="number" Value="@line.Quantity" ValueChanged="v => line.Quantity = v ?? string.Empty" Min="1" />
+                                    </FormField>
+                                </div>
+                                <div class="flex-1">
+                                    <FormField LabelText="@($"Unit Price ({CurrencyFormat.SymbolFor(_currency)})")">
+                                        <Input Type="number" Value="@line.UnitPrice" ValueChanged="v => line.UnitPrice = v ?? string.Empty" Min="0" />
+                                    </FormField>
+                                </div>
+                                <Button Variant="ghost" Size="icon-sm" Class="text-destructive hover:bg-destructive/10" Disabled="@(_lines.Count == 1)" OnClick="() => RemoveLine(index)" Title="Remove line">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </Button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_formError))
+            {
+                <Alert Variant="destructive">@_formError</Alert>
+            }
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <Button Variant="ghost" OnClick="CloseCreateModal">Cancel</Button>
+        <Button OnClick="CreateOrder" Loading="@_saving">Create</Button>
+    </FooterContent>
+</Modal>
+</PermissionView>
+
+@code {
+    private List<PurchaseOrderDto> _orders = [];
+    private List<SupplierDto> _suppliers = [];
+    private string[]? _deviceTypes;
+    private bool _loading = true;
+
+    // Mirrors Assets/Edit.razor's currency list - the Currency lookup is locked, so this only
+    // changes when a migration activates a row.
+    private static readonly string[] _currencies = [CurrencyFormat.Php, CurrencyFormat.Usd];
+
+    private bool _showCreateModal;
+    private bool _saving;
+    private string? _formError;
+
+    private string _supplierId = "";
+    private string _currency = CurrencyFormat.Php;
+    private string _orderDate = DateTime.Today.ToString("yyyy-MM-dd");
+    private string _expectedDate = "";
+    private string _notes = "";
+    private List<LineFormModel> _lines = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Matches the page's PermissionView gate above - see the identical note on
+        // Pages/Procurement/Suppliers.razor.
+        if (!await PermissionChecker.HasPermissionAsync("iams:procurement:view"))
+        {
+            _loading = false;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _orders = await Api.GetPurchaseOrdersAsync();
+        _loading = false;
+    }
+
+    private void ViewOrder(int id) => Navigation.NavigateTo($"/purchase-orders/{id}");
+
+    // Mirrors the five PurchaseOrderStatus values the API defines - not referenced directly
+    // since the Web project only references AssetDesk.Shared, not the Api project's entities.
+    private static string StatusVariant(string status) => status switch
+    {
+        "Draft" => "secondary",
+        "Ordered" => "info",
+        "PartiallyReceived" => "warning",
+        "Received" => "success",
+        "Cancelled" => "destructive",
+        _ => "default"
+    };
+
+    private async Task OpenCreateModal()
+    {
+        _supplierId = "";
+        _currency = CurrencyFormat.Php;
+        _orderDate = DateTime.Today.ToString("yyyy-MM-dd");
+        _expectedDate = "";
+        _notes = "";
+        _lines = [new LineFormModel()];
+        _formError = null;
+
+        _suppliers = await Api.GetSuppliersAsync();
+        _deviceTypes ??= await Api.GetDeviceTypesAsync();
+
+        _showCreateModal = true;
+    }
+
+    private void CloseCreateModal() => _showCreateModal = false;
+
+    private void OnCurrencyChanged()
+    {
+        // No exchange rate on the order itself - see GoodsReceipt's summary - so there is
+        // nothing else to reset here. Kept as its own handler to mirror Assets/Edit.razor's
+        // OnCurrencyChanged, in case a currency-driven default is ever needed here too.
+    }
+
+    private void AddLine() => _lines.Add(new LineFormModel());
+
+    private void RemoveLine(int index)
+    {
+        if (_lines.Count <= 1) return;
+        _lines.RemoveAt(index);
+    }
+
+    private async Task CreateOrder()
+    {
+        _formError = null;
+
+        if (string.IsNullOrWhiteSpace(_supplierId) || !int.TryParse(_supplierId, out var supplierId))
+        {
+            _formError = "Select a supplier.";
+            return;
+        }
+
+        var lines = new List<PurchaseOrderLineInputDto>();
+        foreach (var line in _lines)
+        {
+            if (string.IsNullOrWhiteSpace(line.DeviceType)) continue;
+
+            if (!int.TryParse(line.Quantity, NumberStyles.Integer, CultureInfo.InvariantCulture, out var quantity) || quantity <= 0)
+            {
+                _formError = "Every line needs a quantity of at least 1.";
+                return;
+            }
+
+            var unitPrice = ParseDecimal(line.UnitPrice) ?? 0m;
+            if (unitPrice < 0)
+            {
+                _formError = "A unit price cannot be negative.";
+                return;
+            }
+
+            lines.Add(new PurchaseOrderLineInputDto
+            {
+                DeviceType = line.DeviceType,
+                Description = string.IsNullOrWhiteSpace(line.Description) ? null : line.Description.Trim(),
+                Quantity = quantity,
+                UnitPrice = unitPrice
+            });
+        }
+
+        if (lines.Count == 0)
+        {
+            _formError = "A purchase order needs at least one line.";
+            return;
+        }
+
+        _saving = true;
+
+        var dto = new CreatePurchaseOrderDto
+        {
+            SupplierId = supplierId,
+            Currency = _currency,
+            OrderDate = DateTime.TryParse(_orderDate, out var orderDate) ? orderDate : DateTime.UtcNow,
+            ExpectedDate = DateTime.TryParse(_expectedDate, out var expectedDate) ? expectedDate : null,
+            Notes = string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
+            Lines = lines
+        };
+
+        var (success, error) = await Api.CreatePurchaseOrderAsync(dto);
+        _saving = false;
+
+        if (!success)
+        {
+            _formError = error;
+            return;
+        }
+
+        Snackbar.Success("Purchase order created");
+        CloseCreateModal();
+        await LoadAsync();
+    }
+
+    // Same DOM-value parsing rule as Assets/Edit.razor.ParseDecimal: a number input is always
+    // invariant-formatted, so parsing it under CurrentCulture can silently misread the value.
+    private static decimal? ParseDecimal(string? value) =>
+        decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+
+    private sealed class LineFormModel
+    {
+        public string DeviceType { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Quantity { get; set; } = "1";
+        public string UnitPrice { get; set; } = "0";
+    }
+}
