@@ -41,6 +41,29 @@ public class SupplierApiTests
         }
     }
 
+    /// <summary>
+    /// UpsertSupplierDto.IsActive defaults to true, so the ordinary create is unaffected - but a
+    /// caller that says false means it, and a supplier that comes back active despite having
+    /// asked for the opposite can be ordered from.
+    /// </summary>
+    [Fact]
+    public async Task A_supplier_created_as_inactive_stays_inactive()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantId))
+                .Create(Dto("Acme Computers") with { IsActive = false });
+
+            Assert.IsType<CreatedAtActionResult>(result.Result);
+            Assert.False((await db.Suppliers.SingleAsync()).IsActive);
+        }
+    }
+
     [Fact]
     public async Task A_duplicate_name_within_a_tenant_is_rejected()
     {

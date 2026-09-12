@@ -53,7 +53,8 @@ public class SuppliersController(AppDbContext db, ITenantProvider tenantProvider
             Email = dto.Email,
             Phone = dto.Phone,
             Address = dto.Address,
-            Notes = dto.Notes
+            Notes = dto.Notes,
+            IsActive = dto.IsActive
         };
 
         db.Suppliers.Add(supplier);
