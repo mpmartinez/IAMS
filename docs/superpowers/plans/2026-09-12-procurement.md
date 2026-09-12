@@ -2445,6 +2445,40 @@ Append to `tests/AssetDesk.Api.Tests/GoodsReceiptTests.cs`. These are the crux o
     }
 
     [Fact]
+    public async Task A_super_admin_in_one_tenant_cannot_receive_against_another_tenants_order()
+    {
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        // The context bypasses the global filter for a super admin, so only the controller's
+        // explicit tenant check stands between the caller and tenant B's order.
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(null, isSuperAdmin: true));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantA);
+            await TestDb.SeedTenantAsync(db, tenantB);
+            var (orderB, lineB) = await SeedOrderedAsync(db, tenantB);
+
+            // A super admin whose CURRENT tenant is A - GetCurrentTenantId returns A, so the
+            // no-tenant-selected guard does not fire and only the .Where can refuse this.
+            var controller = new PurchaseOrdersController(
+                db,
+                new FakeTenantProvider(tenantA, isSuperAdmin: true),
+                new PurchaseOrderNumberAllocator(db),
+                new LookupService(db),
+                ServiceFor(db),
+                null!);
+
+            var result = await controller.Receive(orderB.Id, Receive(lineB.Id, 1));
+
+            Assert.IsNotType<OkObjectResult>(result.Result);
+            Assert.Equal(0, await db.Assets.IgnoreQueryFilters().CountAsync());
+            Assert.Equal(0, (await db.PurchaseOrders.IgnoreQueryFilters()
+                .Include(p => p.Lines).SingleAsync()).Lines.First().ReceivedQuantity);
+        }
+    }
+
+    [Fact]
     public async Task A_line_belonging_to_a_different_order_is_refused()
     {
         var tenantId = Guid.NewGuid();
@@ -2718,13 +2752,13 @@ In `src/AssetDesk.Api/Controllers/PurchaseOrdersController.cs`, inject `IGoodsRe
 
 Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj --filter "FullyQualifiedName~GoodsReceiptTests"`
 
-Expected: PASS, 12 test cases (9 facts plus the 3-case theory), plus the one from Task 7.
+Expected: PASS, 13 test cases (10 facts plus the 3-case theory), plus the one from Task 7.
 
 - [ ] **Step 7: Run the whole suite**
 
 Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 
-Expected: 391 passing, 0 failing.
+Expected: 392 passing, 0 failing.
 
 - [ ] **Step 8: Commit**
 
@@ -2886,7 +2920,7 @@ In `PurchaseOrdersController`, inject `IPdfReportService pdf` and add:
 
 Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 
-Expected: 392 passing, 0 failing.
+Expected: 393 passing, 0 failing.
 
 - [ ] **Step 6: Commit**
 
@@ -2953,7 +2987,7 @@ Expected: build succeeded with 0 errors; the grep returns only `CurrencyFormat.c
 
 Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 
-Expected: still 392 passing, 0 failing. A change here should not move it.
+Expected: still 393 passing, 0 failing. A change here should not move it.
 
 - [ ] **Step 6: Commit**
 
@@ -3026,7 +3060,7 @@ Expected: build succeeded with 0 errors; the grep returns only `CurrencyFormat.c
 
 Run: `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj`
 
-Expected: still 392 passing, 0 failing, unless Step 4 changed `AssetDto` in a way an existing test asserts — if so, update that test to the new intended shape and say what you changed.
+Expected: still 393 passing, 0 failing, unless Step 4 changed `AssetDto` in a way an existing test asserts — if so, update that test to the new intended shape and say what you changed.
 
 - [ ] **Step 8: Commit**
 
@@ -3048,7 +3082,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ## Done When
 
-- `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj` reports **392 passing, 0 failing**.
+- `dotnet test tests/AssetDesk.Api.Tests/AssetDesk.Api.Tests.csproj` reports **393 passing, 0 failing**.
 - `dotnet build` succeeds with 0 errors.
 - `grep -rn "u20B1\|u20b1\|₱" --include=*.cs --include=*.razor src` returns only `CurrencyFormat.cs` and `EstateDashboard.razor`.
 - `grep -rn "GenerateAssetTagAsync" src` returns nothing — the two private copies are gone.
