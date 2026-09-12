@@ -1,0 +1,255 @@
+@page "/suppliers"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject SnackbarService Snackbar
+@inject PermissionChecker PermissionChecker
+
+<PageTitle>Suppliers - AssetDesk</PageTitle>
+
+<PermissionView Permission="iams:procurement:view" ShowDeniedMessage="true">
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold text-foreground">Suppliers</h1>
+            <p class="text-muted-foreground mt-1">
+                Companies purchase orders are placed with. A deactivated supplier stays listed
+                here rather than disappearing - its name is still reserved, so reactivate it by
+                editing it instead of adding it again.
+            </p>
+        </div>
+        <PermissionView Permission="iams:procurement:manage">
+            <Button OnClick="OpenAddModal">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Supplier
+            </Button>
+        </PermissionView>
+    </div>
+
+    <Card Class="overflow-hidden">
+        @if (_loading)
+        {
+            <div class="p-4 sm:p-5 space-y-2">
+                @for (int i = 0; i < 4; i++)
+                {
+                    <div class="h-12 rounded-xl skeleton"></div>
+                }
+            </div>
+        }
+        else if (_suppliers.Count == 0)
+        {
+            <div class="p-4 sm:p-5">
+                <EmptyState Title="No suppliers yet" Description="Add the first supplier to start raising purchase orders." />
+            </div>
+        }
+        else
+        {
+            <Table WrapperClass="-mx-4 sm:mx-0">
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Contact</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead Class="text-right">&nbsp;</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    @foreach (var supplier in _suppliers)
+                    {
+                        <TableRow @key="supplier.Id" Class="@(supplier.IsActive ? "" : "opacity-50")">
+                            <TableCell>
+                                <span class="font-medium text-foreground text-sm">@supplier.Name</span>
+                            </TableCell>
+                            <TableCell>@(supplier.ContactName ?? "—")</TableCell>
+                            <TableCell>@(supplier.Email ?? "—")</TableCell>
+                            <TableCell>@(supplier.Phone ?? "—")</TableCell>
+                            <TableCell>
+                                <Badge Variant="@(supplier.IsActive ? "success" : "secondary")">@(supplier.IsActive ? "Active" : "Inactive")</Badge>
+                            </TableCell>
+                            <TableCell Class="text-right">
+                                <PermissionView Permission="iams:procurement:manage">
+                                    <div class="flex items-center justify-end gap-1">
+                                        <Button Variant="ghost" Size="sm" OnClick="() => OpenEditModal(supplier)">Edit</Button>
+                                        @if (supplier.IsActive)
+                                        {
+                                            <Button Variant="ghost" Size="sm" OnClick="() => Deactivate(supplier)">Deactivate</Button>
+                                        }
+                                    </div>
+                                </PermissionView>
+                            </TableCell>
+                        </TableRow>
+                    }
+                </TableBody>
+            </Table>
+        }
+    </Card>
+</div>
+
+<!-- Add/Edit modal -->
+<Modal IsOpen="@_showModal" Title="@(_editingId is null ? "Add Supplier" : "Edit Supplier")" OnClose="CloseModal">
+    <ChildContent>
+        <div class="space-y-4">
+            <FormField LabelText="Name" Required="true">
+                <Input Value="@_formName" ValueChanged="v => _formName = v" Placeholder="e.g. Acme Supplies" MaxLength="200" />
+            </FormField>
+
+            <FormField LabelText="Contact name">
+                <Input Value="@_formContactName" ValueChanged="v => _formContactName = v" Placeholder="e.g. Jane Cruz" MaxLength="200" />
+            </FormField>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField LabelText="Email">
+                    <Input Type="email" Value="@_formEmail" ValueChanged="v => _formEmail = v" Placeholder="e.g. sales@acme.com" MaxLength="256" />
+                </FormField>
+                <FormField LabelText="Phone">
+                    <Input Value="@_formPhone" ValueChanged="v => _formPhone = v" Placeholder="e.g. +63 2 8123 4567" MaxLength="50" />
+                </FormField>
+            </div>
+
+            <FormField LabelText="Address">
+                <Input Value="@_formAddress" ValueChanged="v => _formAddress = v" Placeholder="e.g. 123 Ayala Ave, Makati City" MaxLength="500" />
+            </FormField>
+
+            <FormField LabelText="Notes">
+                <Textarea Value="@_formNotes" ValueChanged="v => _formNotes = v" Placeholder="Anything else worth knowing about this supplier" />
+            </FormField>
+
+            @if (_editingId is not null)
+            {
+                <Checkbox Value="@_formIsActive" ValueChanged="v => _formIsActive = v">Active</Checkbox>
+            }
+
+            @if (!string.IsNullOrEmpty(_formError))
+            {
+                <Alert Variant="destructive">@_formError</Alert>
+            }
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <Button Variant="ghost" OnClick="CloseModal">Cancel</Button>
+        <Button OnClick="SaveSupplier" Loading="@_saving" Disabled="@string.IsNullOrWhiteSpace(_formName)">
+            @(_editingId is null ? "Add" : "Save")
+        </Button>
+    </FooterContent>
+</Modal>
+</PermissionView>
+
+@code {
+    private List<SupplierDto> _suppliers = [];
+    private bool _loading = true;
+
+    private bool _showModal;
+    private int? _editingId;
+    private string _formName = "";
+    private string _formContactName = "";
+    private string _formEmail = "";
+    private string _formPhone = "";
+    private string _formAddress = "";
+    private string _formNotes = "";
+    private bool _formIsActive = true;
+    private string? _formError;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Matches the page's PermissionView gate above. OnInitializedAsync runs regardless of
+        // what PermissionView renders, so without this check a denied user's browser would still
+        // fire GetSuppliersAsync (which throws on the resulting 403) behind a blank/denied page -
+        // see the identical note on Pages/Assets/Index.razor.
+        if (!await PermissionChecker.HasPermissionAsync("iams:procurement:view"))
+        {
+            _loading = false;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _suppliers = await Api.GetSuppliersAsync();
+        _loading = false;
+    }
+
+    private void OpenAddModal()
+    {
+        _editingId = null;
+        _formName = "";
+        _formContactName = "";
+        _formEmail = "";
+        _formPhone = "";
+        _formAddress = "";
+        _formNotes = "";
+        _formIsActive = true;
+        _formError = null;
+        _showModal = true;
+    }
+
+    private void OpenEditModal(SupplierDto supplier)
+    {
+        _editingId = supplier.Id;
+        _formName = supplier.Name;
+        _formContactName = supplier.ContactName ?? "";
+        _formEmail = supplier.Email ?? "";
+        _formPhone = supplier.Phone ?? "";
+        _formAddress = supplier.Address ?? "";
+        _formNotes = supplier.Notes ?? "";
+        _formIsActive = supplier.IsActive;
+        _formError = null;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editingId = null;
+        _formError = null;
+    }
+
+    private async Task SaveSupplier()
+    {
+        _formError = null;
+        _saving = true;
+
+        var dto = new UpsertSupplierDto
+        {
+            Name = _formName.Trim(),
+            ContactName = string.IsNullOrWhiteSpace(_formContactName) ? null : _formContactName.Trim(),
+            Email = string.IsNullOrWhiteSpace(_formEmail) ? null : _formEmail.Trim(),
+            Phone = string.IsNullOrWhiteSpace(_formPhone) ? null : _formPhone.Trim(),
+            Address = string.IsNullOrWhiteSpace(_formAddress) ? null : _formAddress.Trim(),
+            Notes = string.IsNullOrWhiteSpace(_formNotes) ? null : _formNotes.Trim(),
+            IsActive = _formIsActive
+        };
+
+        var (success, error) = await Api.SaveSupplierAsync(_editingId, dto);
+        _saving = false;
+
+        // Surface the API's message rather than inventing one, same as Admin/Depreciation.razor -
+        // it is the authority on duplicate-name and validation rules.
+        if (!success) { _formError = error; return; }
+
+        Snackbar.Success(_editingId is null ? "Supplier added" : "Supplier updated");
+        CloseModal();
+        await LoadAsync();
+    }
+
+    private async Task Deactivate(SupplierDto supplier)
+    {
+        var (success, error) = await Api.DeactivateSupplierAsync(supplier.Id);
+        if (success)
+        {
+            Snackbar.Success("Supplier deactivated");
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Error(error ?? "Could not deactivate the supplier.");
+        }
+    }
+}

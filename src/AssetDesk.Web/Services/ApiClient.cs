@@ -1208,6 +1208,50 @@ public class ApiClient(HttpClient http, AuthService authService)
         return (true, null);
     }
 
+    // Suppliers - gated on iams:procurement:view; create, update and delete additionally need
+    // iams:procurement:manage. Delete deactivates rather than removes the row (purchase orders
+    // reference suppliers), and UpsertSupplierDto carries IsActive so re-editing a deactivated
+    // supplier with it set back to true is how it comes back - see /suppliers.
+    public async Task<List<SupplierDto>> GetSuppliersAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<SupplierDto>>>("api/suppliers");
+        return response?.Data ?? [];
+    }
+
+    public async Task<(bool Success, string? Error)> SaveSupplierAsync(int? id, UpsertSupplierDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = id is null
+            ? await client.PostAsJsonAsync("api/suppliers", dto)
+            : await client.PutAsJsonAsync($"api/suppliers/{id}", dto);
+
+        // Same ValidationProblemDetails-vs-ApiResponse split as SaveDepreciationPolicyAsync: the
+        // DTO's [Required]/[StringLength]/[EmailAddress] attributes can reject before the
+        // controller's own duplicate-name check ever runs.
+        if (!response.IsSuccessStatusCode)
+            return (false, await ReadErrorMessageAsync(response) ?? "Failed to save supplier.");
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> DeactivateSupplierAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.DeleteAsync($"api/suppliers/{id}");
+
+        // No ValidationProblemDetails fallback here, same reasoning as
+        // DeleteDepreciationPolicyAsync: this binds only a route id, so every failure is already
+        // an ApiResponse from the controller.
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+            return (false, error?.Message ?? "Failed to deactivate supplier.");
+        }
+
+        return (true, null);
+    }
+
     // Platform SMTP settings (SuperAdmin only) - what makes forgot-password mail actually
     // send. The stored password is never returned by the API; HasPassword is the only signal
     // the UI gets, and an empty Password on save means "keep the current one".

@@ -118,6 +118,14 @@
                         <NavItem Href="/reports" Icon="chart" Label="Asset Reports" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                     </div>
                 </PermissionView>
+
+                <PermissionView Permission="iams:procurement:view">
+                    <div class="mt-2 space-y-1">
+                        <div class="mx-2 my-2 h-px bg-sidebar-border"></div>
+                        <p class="@SectionLabelClasses">Procurement</p>
+                        <NavItem Href="/suppliers" Icon="building" Label="Suppliers" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
+                    </div>
+                </PermissionView>
             </nav>
 
             @* Logout lives in the top bar's user menu now - this is the profile shortcut only. *@
