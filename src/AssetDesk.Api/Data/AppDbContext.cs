@@ -36,6 +36,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<DepreciationPolicy> DepreciationPolicies => Set<DepreciationPolicy>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -542,6 +543,28 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
                 .OnDelete(DeleteBehavior.Restrict);
 
             // Global query filter for tenant isolation - same shape as every other tenant entity.
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        modelBuilder.Entity<Supplier>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.TenantId, e.Name }).IsUnique();
+
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.ContactName).HasMaxLength(200);
+            entity.Property(e => e.Email).HasMaxLength(256);
+            entity.Property(e => e.Phone).HasMaxLength(50);
+            entity.Property(e => e.Address).HasMaxLength(500);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasQueryFilter(e =>
                 _tenantProvider == null ||
                 _tenantProvider.IsSuperAdmin() ||
