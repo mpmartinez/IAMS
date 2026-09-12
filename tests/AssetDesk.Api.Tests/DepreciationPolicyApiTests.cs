@@ -1,4 +1,8 @@
+using AssetDesk.Api.Controllers;
 using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
+using AssetDesk.Shared.DTOs;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace AssetDesk.Api.Tests;
@@ -82,5 +86,101 @@ public class DepreciationPolicyApiTests
         Assert.Contains(
             AssetDesk.Api.Authorization.Permissions.DepreciationManage,
             AssetDesk.Api.Authorization.Permissions.DefaultsFor(Roles.SuperAdmin));
+    }
+
+    private static DepreciationPoliciesController ControllerFor(AssetDesk.Api.Data.AppDbContext db) =>
+        new(db, new LookupService(db));
+
+    [Fact]
+    public async Task Upsert_creates_a_policy_then_updates_it_in_place()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var controller = ControllerFor(db);
+
+            await controller.Upsert(new UpsertDepreciationPolicyDto
+            {
+                DeviceType = DeviceTypes.Laptop, UsefulLifeMonths = 36, ResidualPercent = 10m
+            });
+            await controller.Upsert(new UpsertDepreciationPolicyDto
+            {
+                DeviceType = DeviceTypes.Laptop, UsefulLifeMonths = 48, ResidualPercent = 5m
+            });
+
+            var saved = Assert.Single(await db.DepreciationPolicies.ToListAsync());
+            Assert.Equal(48, saved.UsefulLifeMonths);
+            Assert.Equal(5m, saved.ResidualPercent);
+            Assert.NotNull(saved.UpdatedAt);
+        }
+    }
+
+    [Theory]
+    [InlineData(0, 10)]
+    [InlineData(-1, 10)]
+    [InlineData(36, -1)]
+    [InlineData(36, 101)]
+    public async Task Invalid_life_or_residual_is_rejected(int months, decimal residual)
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var controller = ControllerFor(db);
+
+            var result = await controller.Upsert(new UpsertDepreciationPolicyDto
+            {
+                DeviceType = DeviceTypes.Laptop, UsefulLifeMonths = months, ResidualPercent = residual
+            });
+
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+            Assert.Empty(await db.DepreciationPolicies.ToListAsync());
+        }
+    }
+
+    [Fact]
+    public async Task An_unknown_device_type_is_rejected()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var controller = ControllerFor(db);
+
+            var result = await controller.Upsert(new UpsertDepreciationPolicyDto
+            {
+                DeviceType = "Submarine", UsefulLifeMonths = 36, ResidualPercent = 0m
+            });
+
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+        }
+    }
+
+    [Fact]
+    public async Task Delete_removes_the_policy_for_that_device_type()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var controller = ControllerFor(db);
+            await controller.Upsert(new UpsertDepreciationPolicyDto
+            {
+                DeviceType = DeviceTypes.Laptop, UsefulLifeMonths = 36, ResidualPercent = 0m
+            });
+
+            await controller.Delete(DeviceTypes.Laptop);
+
+            Assert.Empty(await db.DepreciationPolicies.ToListAsync());
+        }
     }
 }
