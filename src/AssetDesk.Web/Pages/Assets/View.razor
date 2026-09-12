@@ -237,7 +237,11 @@ else
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                             <DetailItem Label="Purchase Price" Value="@FormatPrice(_asset.PurchasePrice, _asset.Currency)" />
                             <DetailItem Label="Purchase Date" Value="@(_asset.PurchaseDate?.ToString("MMM dd, yyyy") ?? "—")" />
-                            @if (_depreciation is not null)
+                            @* Shown as soon as the report has answered, row or no row: an asset the
+                               report excludes still deserves to be told why, rather than having the
+                               line silently vanish. Omitted only while loading, or for a user
+                               without the reports permission, where no call is made at all. *@
+                            @if (_depreciationLoaded)
                             {
                                 <DetailItem Label="Book Value" Value="@BookValueDisplay()" />
                             }
@@ -758,6 +762,7 @@ else
     private bool _showDeleteModal;
     private AssetDto? _asset;
     private DepreciationReportRow? _depreciation;
+    private bool _depreciationLoaded;
 
     // Assignment state
     private List<AssetAssignmentDto>? _assignmentHistory;
@@ -812,19 +817,36 @@ else
         // Load assignment history, attachments, and depreciation in background
         _ = LoadAssignmentHistory();
         _ = LoadAttachments();
-        _ = LoadDepreciationAsync();
+
+        // Unlike its two neighbours, the depreciation report is gated on iams:reports:view -
+        // a key Staff's default bundle does not carry. Checking first means a Staff user opening
+        // an asset makes no request at all, rather than a guaranteed 403.
+        if (await PermissionChecker.HasPermissionAsync("iams:reports:view"))
+            _ = LoadDepreciationAsync();
     }
 
     private async Task LoadDepreciationAsync()
     {
         if (_asset is null) return;
 
-        // The report returns every asset; we want one row. Wasteful for a large estate, and
-        // deliberately accepted rather than adding a second calculation path that could drift
-        // from DepreciationCalculator. If it becomes a problem, the fix is an assetTag filter
-        // on the existing endpoint, not a client-side formula.
-        var summary = await Api.GetDepreciationReportAsync();
-        _depreciation = summary?.Rows.FirstOrDefault(r => r.AssetTag == _asset.AssetTag);
+        try
+        {
+            // The report returns every asset; we want one row. Wasteful for a large estate, and
+            // deliberately accepted rather than adding a second calculation path that could drift
+            // from DepreciationCalculator. If it becomes a problem, the fix is an assetTag filter
+            // on the existing endpoint, not a client-side formula.
+            var summary = await Api.GetDepreciationReportAsync();
+            _depreciation = summary?.Rows.FirstOrDefault(r => r.AssetTag == _asset.AssetTag);
+            _depreciationLoaded = summary is not null;
+        }
+        catch (HttpRequestException)
+        {
+            // Fired and forgotten with `_ =`, so an escaping exception would be an unobserved
+            // task exception on the app's busiest page. Book value is supplementary: drop the
+            // line rather than take the rest of the asset down with it.
+            _depreciationLoaded = false;
+        }
+
         StateHasChanged();
     }
 
@@ -980,7 +1002,14 @@ else
     // pesos regardless of the currency it was purchased in.
     private string BookValueDisplay()
     {
-        if (_depreciation is null) return "—";
+        // Still reachable, and no longer a placeholder: the report excludes Retired and Lost
+        // assets outright, so those come back with no row of their own. Name the reason, the
+        // same contract every undepreciable row on the report honours.
+        if (_depreciation is null)
+            return _asset?.Status is "Retired" or "Lost"
+                ? $"Not depreciated — {_asset.Status.ToLowerInvariant()} assets are excluded"
+                : "—";
+
         if (!_depreciation.IsDepreciable) return _depreciation.NotDepreciableReason ?? "—";
 
         var formatted = CurrencyFormat.Format(_depreciation.NetBookValue, CurrencyFormat.Php);
