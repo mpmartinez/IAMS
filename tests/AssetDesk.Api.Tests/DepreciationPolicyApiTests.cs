@@ -88,8 +88,9 @@ public class DepreciationPolicyApiTests
             AssetDesk.Api.Authorization.Permissions.DefaultsFor(Roles.SuperAdmin));
     }
 
-    private static DepreciationPoliciesController ControllerFor(AssetDesk.Api.Data.AppDbContext db) =>
-        new(db, new LookupService(db));
+    private static DepreciationPoliciesController ControllerFor(
+        AssetDesk.Api.Data.AppDbContext db, ITenantProvider tenantProvider) =>
+        new(db, new LookupService(db), tenantProvider);
 
     [Fact]
     public async Task Upsert_creates_a_policy_then_updates_it_in_place()
@@ -100,7 +101,7 @@ public class DepreciationPolicyApiTests
         using (conn)
         {
             await TestDb.SeedTenantAsync(db, tenantId);
-            var controller = ControllerFor(db);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
 
             await controller.Upsert(new UpsertDepreciationPolicyDto
             {
@@ -131,7 +132,7 @@ public class DepreciationPolicyApiTests
         using (conn)
         {
             await TestDb.SeedTenantAsync(db, tenantId);
-            var controller = ControllerFor(db);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
 
             var result = await controller.Upsert(new UpsertDepreciationPolicyDto
             {
@@ -152,7 +153,7 @@ public class DepreciationPolicyApiTests
         using (conn)
         {
             await TestDb.SeedTenantAsync(db, tenantId);
-            var controller = ControllerFor(db);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
 
             var result = await controller.Upsert(new UpsertDepreciationPolicyDto
             {
@@ -172,7 +173,7 @@ public class DepreciationPolicyApiTests
         using (conn)
         {
             await TestDb.SeedTenantAsync(db, tenantId);
-            var controller = ControllerFor(db);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
 
             // Upsert and verify it succeeded
             var upsertResult = await controller.Upsert(new UpsertDepreciationPolicyDto
@@ -191,6 +192,142 @@ public class DepreciationPolicyApiTests
 
             // Verify the policy is gone
             Assert.Empty(await db.DepreciationPolicies.ToListAsync());
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Cross-tenant isolation. The entity's global query filter is bypassed outright for a
+    // super-admin (AppDbContext: `_tenantProvider.IsSuperAdmin() || ...`), and DeviceType is
+    // only unique *within* a tenant - so a controller that leans on the filter alone reads,
+    // rewrites and deletes other organisations' rows. Same hazard ReportsController already
+    // keys around; these pin the controller side of it.
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>Seeds two tenants, only the second of which owns a Laptop policy.</summary>
+    private static async Task<(Guid Caller, Guid Other)> SeedTwoTenantsAsync(
+        AssetDesk.Api.Data.AppDbContext db, int otherUsefulLife = 48, decimal otherResidual = 0m)
+    {
+        var caller = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        await TestDb.SeedTenantAsync(db, caller);
+        await TestDb.SeedTenantAsync(db, other);
+
+        db.DepreciationPolicies.Add(new DepreciationPolicy
+        {
+            TenantId = other,
+            DeviceType = DeviceTypes.Laptop,
+            UsefulLifeMonths = otherUsefulLife,
+            ResidualPercent = otherResidual
+        });
+        await db.SaveChangesAsync();
+
+        return (caller, other);
+    }
+
+    [Fact]
+    public async Task Upsert_creates_a_policy_for_the_caller_rather_than_rewriting_another_tenants()
+    {
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(null, isSuperAdmin: true));
+        using (db)
+        using (conn)
+        {
+            var (caller, other) = await SeedTwoTenantsAsync(db);
+            var tenants = new FakeTenantProvider(caller, isSuperAdmin: true);
+
+            var result = await ControllerFor(db, tenants).Upsert(new UpsertDepreciationPolicyDto
+            {
+                DeviceType = DeviceTypes.Laptop, UsefulLifeMonths = 36, ResidualPercent = 10m
+            });
+
+            Assert.IsType<OkObjectResult>(result.Result);
+
+            var all = await db.DepreciationPolicies.IgnoreQueryFilters().ToListAsync();
+            Assert.Equal(2, all.Count);
+
+            // The other organisation's accounting policy is exactly as it was.
+            var untouched = Assert.Single(all, p => p.TenantId == other);
+            Assert.Equal(48, untouched.UsefulLifeMonths);
+            Assert.Equal(0m, untouched.ResidualPercent);
+
+            // And the caller now actually has one of its own.
+            var mine = Assert.Single(all, p => p.TenantId == caller);
+            Assert.Equal(36, mine.UsefulLifeMonths);
+            Assert.Equal(10m, mine.ResidualPercent);
+        }
+    }
+
+    [Fact]
+    public async Task Delete_does_not_remove_another_tenants_policy()
+    {
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(null, isSuperAdmin: true));
+        using (db)
+        using (conn)
+        {
+            var (caller, other) = await SeedTwoTenantsAsync(db);
+            var tenants = new FakeTenantProvider(caller, isSuperAdmin: true);
+
+            var result = await ControllerFor(db, tenants).Delete(DeviceTypes.Laptop);
+
+            Assert.IsType<NotFoundObjectResult>(result.Result);
+
+            var survivor = Assert.Single(await db.DepreciationPolicies.IgnoreQueryFilters().ToListAsync());
+            Assert.Equal(other, survivor.TenantId);
+        }
+    }
+
+    [Fact]
+    public async Task GetAll_returns_only_the_callers_own_policies()
+    {
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(null, isSuperAdmin: true));
+        using (db)
+        using (conn)
+        {
+            var (caller, _) = await SeedTwoTenantsAsync(db);
+            db.DepreciationPolicies.Add(new DepreciationPolicy
+            {
+                TenantId = caller, DeviceType = DeviceTypes.Laptop, UsefulLifeMonths = 36, ResidualPercent = 10m
+            });
+            await db.SaveChangesAsync();
+
+            var tenants = new FakeTenantProvider(caller, isSuperAdmin: true);
+            var result = await ControllerFor(db, tenants).GetAll();
+
+            var payload = Assert.IsType<ApiResponse<List<DepreciationPolicyDto>>>(
+                Assert.IsType<OkObjectResult>(result.Result).Value);
+
+            // One row, not two - which is also what keeps Admin/Depreciation.razor's
+            // ToDictionary(p => p.DeviceType) from throwing on a duplicate key.
+            var only = Assert.Single(payload.Data!);
+            Assert.Equal(DeviceTypes.Laptop, only.DeviceType);
+            Assert.Equal(36, only.UsefulLifeMonths);
+            Assert.Single(payload.Data!.GroupBy(p => p.DeviceType));
+        }
+    }
+
+    [Fact]
+    public async Task A_super_admin_with_no_organisation_selected_is_refused_rather_than_served_someone_elses()
+    {
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(null, isSuperAdmin: true));
+        using (db)
+        using (conn)
+        {
+            var (_, other) = await SeedTwoTenantsAsync(db);
+            var noTenant = new FakeTenantProvider(null, isSuperAdmin: true);
+            var controller = ControllerFor(db, noTenant);
+
+            Assert.IsType<BadRequestObjectResult>((await controller.GetAll()).Result);
+
+            Assert.IsType<BadRequestObjectResult>((await controller.Upsert(new UpsertDepreciationPolicyDto
+            {
+                DeviceType = DeviceTypes.Laptop, UsefulLifeMonths = 36, ResidualPercent = 10m
+            })).Result);
+
+            Assert.IsType<BadRequestObjectResult>((await controller.Delete(DeviceTypes.Laptop)).Result);
+
+            // Nothing was created, rewritten or removed on the way to those refusals.
+            var untouched = Assert.Single(await db.DepreciationPolicies.IgnoreQueryFilters().ToListAsync());
+            Assert.Equal(other, untouched.TenantId);
+            Assert.Equal(48, untouched.UsefulLifeMonths);
         }
     }
 }
