@@ -1,4 +1,5 @@
 @page "/reports"
+@using AssetDesk.Shared
 @using AssetDesk.Web.Components.UI
 @attribute [Authorize]
 @inject ApiClient Api
@@ -324,7 +325,7 @@
                 string.IsNullOrEmpty(_inventoryStatus) ? null : _inventoryStatus);
 
             _previewContent = BuildTablePreview(data ?? new(), new[] { "Asset Tag", "Type", "Manufacturer", "Model", "Status", "Assigned To", "Value" },
-                row => new object[] { row.AssetTag, row.DeviceType, row.Manufacturer ?? "—", row.Model ?? "—", row.Status, row.AssignedTo ?? "—", FormatCurrency(row.PurchasePrice) });
+                row => new object[] { row.AssetTag, row.DeviceType, row.Manufacturer ?? "—", row.Model ?? "—", row.Status, row.AssignedTo ?? "—", FormatCurrency(row.PurchasePrice, row.Currency) });
         }
         catch (Exception ex)
         {
@@ -362,7 +363,7 @@
         {
             var data = await Api.GetAssignedByUserReportAsync(string.IsNullOrEmpty(_assignedUserId) ? null : _assignedUserId);
             _previewContent = BuildTablePreview(data ?? new(), new[] { "User", "Department", "Asset Tag", "Type", "Device", "Value" },
-                row => new object[] { row.UserName, row.Department ?? "—", row.AssetTag, row.DeviceType, $"{row.Manufacturer ?? ""} {row.Model ?? ""}".Trim(), FormatCurrency(row.PurchasePrice) });
+                row => new object[] { row.UserName, row.Department ?? "—", row.AssetTag, row.DeviceType, $"{row.Manufacturer ?? ""} {row.Model ?? ""}".Trim(), FormatCurrency(row.PurchasePrice, row.Currency) });
         }
         catch (Exception ex)
         {
@@ -542,7 +543,8 @@
         await JS.InvokeVoidAsync("downloadWithAuth", $"{baseUrl}/{url}", token);
     }
 
-    // Peso-only app - the stored currency code is not consulted.
-    private static string FormatCurrency(decimal? value) =>
-        value.HasValue ? $"₱{value.Value:N2}" : "—";
+    // Totals are pesos; a row renders in whatever it was booked in. Callers passing a row
+    // amount supply that row's currency, callers passing a total supply PrimaryCurrency.
+    private static string FormatCurrency(decimal? value, string? currency = CurrencyFormat.Php) =>
+        CurrencyFormat.Format(value, currency);
 }

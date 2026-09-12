@@ -1,5 +1,6 @@
 @page "/assets/new"
 @page "/assets/{Id:int}/edit"
+@using AssetDesk.Shared
 @using AssetDesk.Web.Components.UI
 @attribute [Authorize]
 @implements IDisposable
@@ -173,9 +174,23 @@
                 </CardHeader>
                 <CardContent>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                    <FormField LabelText="Purchase Price (₱)">
+                    <FormField LabelText="@($"Purchase Price ({CurrencyFormat.SymbolFor(_model.Currency)})")">
                         <Input Type="number" @bind-Value="_model.PurchasePrice" Placeholder="129900.00" />
                     </FormField>
+                    <FormField LabelText="Currency">
+                        <Select @bind-Value="_model.Currency" @bind-Value:after="OnCurrencyChanged">
+                            @foreach (var currencyCode in _currencies)
+                            {
+                                <option value="@currencyCode">@currencyCode</option>
+                            }
+                        </Select>
+                    </FormField>
+                    @if (_model.Currency != CurrencyFormat.Php)
+                    {
+                        <FormField LabelText="@($"Exchange Rate ({CurrencyFormat.SymbolFor(CurrencyFormat.Php)} per 1 {_model.Currency})")">
+                            <Input Type="number" @bind-Value="_model.ExchangeRate" Placeholder="58.20" />
+                        </FormField>
+                    }
                     <FormField LabelText="Purchase Date">
                         <Input Type="date" @bind-Value="_model.PurchaseDate" />
                     </FormField>
@@ -407,6 +422,10 @@
     private string[]? _statuses;
     private List<UserListItem>? _users;
 
+    // Mirrors the active Currency lookup rows. Hardcoded rather than fetched because the
+    // Currency lookup is locked - the set only changes when a migration activates a row.
+    private static readonly string[] _currencies = [CurrencyFormat.Php, CurrencyFormat.Usd];
+
     // Apple auto-fill state
     private AppleDeviceInfo? _appleDeviceInfo;
     private bool _showAutoFillSuggestion;
@@ -467,9 +486,8 @@
                     Status = asset.Status,
                     AssignedToUserId = asset.AssignedToUserId ?? "",
                     PurchasePrice = asset.PurchasePrice?.ToString() ?? "",
-                    // Currency is deliberately not copied off the loaded asset. The model
-                    // default (PHP) is the only value this form can submit, so a stale
-                    // non-peso row cannot be round-tripped back into a rejected save.
+                    Currency = asset.Currency,
+                    ExchangeRate = asset.ExchangeRate.ToString(),
                     PurchaseDate = asset.PurchaseDate?.ToString("yyyy-MM-dd") ?? "",
                     WarrantyProvider = asset.WarrantyProvider ?? "",
                     WarrantyStartDate = asset.WarrantyStartDate?.ToString("yyyy-MM-dd") ?? "",
@@ -657,6 +675,7 @@
                 AssignedToUserId = NullIfEmpty(_model.AssignedToUserId),
                 PurchasePrice = decimal.TryParse(_model.PurchasePrice, out var price) ? price : null,
                 Currency = _model.Currency,
+                ExchangeRate = decimal.TryParse(_model.ExchangeRate, out var rate) ? rate : 1m,
                 PurchaseDate = DateTime.TryParse(_model.PurchaseDate, out var pdate) ? pdate : null,
                 WarrantyProvider = NullIfEmpty(_model.WarrantyProvider),
                 WarrantyStartDate = DateTime.TryParse(_model.WarrantyStartDate, out var wsdate) ? wsdate : null,
@@ -680,6 +699,7 @@
                 AssignedToUserId = _model.AssignedToUserId ?? "",
                 PurchasePrice = decimal.TryParse(_model.PurchasePrice, out var price) ? price : null,
                 Currency = _model.Currency,
+                ExchangeRate = decimal.TryParse(_model.ExchangeRate, out var rate) ? rate : null,
                 PurchaseDate = DateTime.TryParse(_model.PurchaseDate, out var pdate) ? pdate : null,
                 WarrantyProvider = NullIfEmpty(_model.WarrantyProvider),
                 WarrantyStartDate = DateTime.TryParse(_model.WarrantyStartDate, out var wsdate) ? wsdate : null,
@@ -704,6 +724,12 @@
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private void OnCurrencyChanged()
+    {
+        if (_model.Currency == CurrencyFormat.Php)
+            _model.ExchangeRate = "1";
+    }
 
     private async Task OnSerialNumberChangedAsync()
     {
@@ -806,6 +832,7 @@
         public string AssignedToUserId { get; set; } = "";
         public string PurchasePrice { get; set; } = "";
         public string Currency { get; set; } = "PHP";
+        public string ExchangeRate { get; set; } = "1";
         public string PurchaseDate { get; set; } = "";
         public string WarrantyProvider { get; set; } = "";
         public string WarrantyStartDate { get; set; } = "";
