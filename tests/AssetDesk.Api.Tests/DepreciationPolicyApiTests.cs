@@ -173,13 +173,23 @@ public class DepreciationPolicyApiTests
         {
             await TestDb.SeedTenantAsync(db, tenantId);
             var controller = ControllerFor(db);
-            await controller.Upsert(new UpsertDepreciationPolicyDto
+
+            // Upsert and verify it succeeded
+            var upsertResult = await controller.Upsert(new UpsertDepreciationPolicyDto
             {
                 DeviceType = DeviceTypes.Laptop, UsefulLifeMonths = 36, ResidualPercent = 0m
             });
+            Assert.IsType<OkObjectResult>(upsertResult.Result);
 
-            await controller.Delete(DeviceTypes.Laptop);
+            // Verify the policy exists before deletion
+            var policiesBeforeDelete = await db.DepreciationPolicies.ToListAsync();
+            Assert.Single(policiesBeforeDelete);
 
+            // Delete and verify it succeeded
+            var deleteResult = await controller.Delete(DeviceTypes.Laptop);
+            Assert.IsType<OkObjectResult>(deleteResult.Result);
+
+            // Verify the policy is gone
             Assert.Empty(await db.DepreciationPolicies.ToListAsync());
         }
     }
