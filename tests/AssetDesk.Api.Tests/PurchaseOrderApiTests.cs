@@ -301,6 +301,119 @@ public class PurchaseOrderApiTests
         }
     }
 
+    /// <summary>
+    /// The rate lives on the receipt, not the order, so that two deliveries against one USD
+    /// order can carry the rates they were actually booked at. Until the detail read returned
+    /// the receipts, nothing outside the individual asset records ever showed either rate and
+    /// there was no way to reconcile a delivery against its invoice.
+    /// </summary>
+    [Fact]
+    public async Task The_detail_read_returns_every_delivery_newest_first_with_its_own_rate()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            await TestDb.SeedUserAsync(db, tenantId, "user-1", "Maria Santos");
+            var supplier = await SeedSupplierAsync(db, tenantId);
+
+            var order = new PurchaseOrder
+            {
+                TenantId = tenantId, PoNumber = 1, SupplierId = supplier.Id,
+                Currency = Currencies.USD, Status = PurchaseOrderStatus.Ordered,
+                OrderDate = new DateTime(2026, 9, 1), CreatedByUserId = "user-1"
+            };
+            order.Lines.Add(new PurchaseOrderLine
+            {
+                DeviceType = DeviceTypes.Laptop, Description = "Dell Latitude 5540",
+                Quantity = 10, UnitPrice = 1200m
+            });
+            db.PurchaseOrders.Add(order);
+            await db.SaveChangesAsync();
+            var lineId = order.Lines.First().Id;
+
+            var service = new GoodsReceiptService(
+                db, new AssetTagGenerator(db), NullLogger<GoodsReceiptService>.Instance);
+
+            await service.ReceiveAsync(tenantId, order.Id, new ReceiveGoodsDto
+            {
+                ReceiptDate = new DateTime(2026, 9, 10),
+                ExchangeRate = 58.20m,
+                Notes = "Invoice 4471",
+                Lines = [new ReceiveLineDto { PurchaseOrderLineId = lineId, QuantityReceived = 8 }]
+            }, "user-1");
+
+            await service.ReceiveAsync(tenantId, order.Id, new ReceiveGoodsDto
+            {
+                ReceiptDate = new DateTime(2026, 9, 12),
+                ExchangeRate = 56.90m,
+                Lines = [new ReceiveLineDto { PurchaseOrderLineId = lineId, QuantityReceived = 2 }]
+            }, "user-1");
+
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantId)).GetById(order.Id);
+
+            var ok = Assert.IsType<OkObjectResult>(result.Result);
+            var dto = Assert.IsType<ApiResponse<PurchaseOrderDto>>(ok.Value).Data!;
+
+            Assert.Equal(2, dto.Receipts.Count);
+
+            var latest = dto.Receipts[0];
+            Assert.Equal(new DateTime(2026, 9, 12), latest.ReceiptDate);
+            Assert.Equal(56.90m, latest.ExchangeRate);
+            Assert.Equal(2, latest.TotalUnits);
+
+            var first = dto.Receipts[1];
+            Assert.Equal(new DateTime(2026, 9, 10), first.ReceiptDate);
+            Assert.Equal(58.20m, first.ExchangeRate);
+            Assert.Equal(8, first.TotalUnits);
+            Assert.Equal("Invoice 4471", first.Notes);
+            Assert.Equal("Maria Santos", first.ReceivedByName);
+            Assert.Equal(DeviceTypes.Laptop, Assert.Single(first.Lines).DeviceType);
+        }
+    }
+
+    /// <summary>
+    /// The list is the other half of that decision: the receipts are a per-row join for data the
+    /// list renders nothing from, so only the detail read pays for them.
+    /// </summary>
+    [Fact]
+    public async Task The_list_read_does_not_carry_the_deliveries()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var supplier = await SeedSupplierAsync(db, tenantId);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
+            await controller.Create(NewOrder(supplier.Id));
+            var order = await db.PurchaseOrders.SingleAsync();
+            await controller.Send(order.Id);
+            await controller.Receive(order.Id, new ReceiveGoodsDto
+            {
+                ReceiptDate = new DateTime(2026, 9, 12),
+                ExchangeRate = 1m,
+                Lines =
+                [
+                    new ReceiveLineDto
+                    {
+                        PurchaseOrderLineId = (await db.PurchaseOrderLines.SingleAsync()).Id,
+                        QuantityReceived = 4
+                    }
+                ]
+            });
+
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantId)).GetAll();
+
+            var ok = Assert.IsType<OkObjectResult>(result.Result);
+            var orders = Assert.IsType<ApiResponse<List<PurchaseOrderDto>>>(ok.Value).Data!;
+            Assert.Empty(Assert.Single(orders).Receipts);
+        }
+    }
+
     [Fact]
     public async Task The_pdf_renders_and_is_a_real_pdf()
     {

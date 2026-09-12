@@ -68,6 +68,32 @@ public record PurchaseOrderLineDto
     public decimal LineTotal { get; init; }
 }
 
+public record GoodsReceiptLineDto
+{
+    public int Id { get; init; }
+    public int PurchaseOrderLineId { get; init; }
+    public required string DeviceType { get; init; }
+    public string? Description { get; init; }
+    public int QuantityReceived { get; init; }
+}
+
+/// <summary>
+/// One delivery against an order. The exchange rate lives here rather than on the order
+/// because each delivery is booked at the rate its own invoice states, so two deliveries
+/// against one USD order can carry different rates - and without this, nothing outside the
+/// individual asset records ever shows them.
+/// </summary>
+public record GoodsReceiptDto
+{
+    public int Id { get; init; }
+    public DateTime ReceiptDate { get; init; }
+    public decimal ExchangeRate { get; init; }
+    public string? ReceivedByName { get; init; }
+    public string? Notes { get; init; }
+    public int TotalUnits { get; init; }
+    public List<GoodsReceiptLineDto> Lines { get; init; } = [];
+}
+
 public record PurchaseOrderDto
 {
     public int Id { get; init; }
@@ -85,6 +111,12 @@ public record PurchaseOrderDto
     public string? Notes { get; init; }
     public decimal OrderTotal { get; init; }
     public List<PurchaseOrderLineDto> Lines { get; init; } = [];
+
+    /// <summary>
+    /// Newest first, and populated by the detail read only - the list screen renders nothing
+    /// from it and loading it there would be a per-row join for data nobody looks at.
+    /// </summary>
+    public List<GoodsReceiptDto> Receipts { get; init; } = [];
 }
 
 public record ReceiveLineDto

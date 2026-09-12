@@ -44,15 +44,20 @@ public class PurchaseOrdersController(
         if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
             return BadRequest(ApiResponse<PurchaseOrderDto>.Fail("Select an organisation first."));
 
+        // The receipts are reached through an order already filtered by tenant, which is what
+        // makes them safe to include: GoodsReceiptLine carries no filter of its own, so a
+        // receipt line is only ever as well isolated as the order it hangs off.
         var order = await db.PurchaseOrders
             .Where(p => p.TenantId == tenantId && p.Id == id)
             .Include(p => p.Supplier)
             .Include(p => p.Lines)
+            .Include(p => p.Receipts)
+                .ThenInclude(r => r.Lines)
             .FirstOrDefaultAsync();
 
         return order is null
             ? NotFound(ApiResponse<PurchaseOrderDto>.Fail("Purchase order not found."))
-            : Ok(ApiResponse<PurchaseOrderDto>.Ok(Map(order)));
+            : Ok(ApiResponse<PurchaseOrderDto>.Ok(await MapDetailAsync(order)));
     }
 
     [HttpGet("{id:int}/pdf")]
@@ -219,6 +224,71 @@ public class PurchaseOrdersController(
         return Ok(ApiResponse<PurchaseOrderDto>.Ok(Map(order)));
     }
 
+    /// <summary>
+    /// The detail read, and only the detail read. Map is deliberately left without the receipts:
+    /// the list screen renders nothing from them, so including them there would be a join per
+    /// row for data nobody looks at. A caller that needs the delivery history asks for one order.
+    ///
+    /// Expects Receipts and their Lines to be loaded already - see GetById.
+    /// </summary>
+    private async Task<PurchaseOrderDto> MapDetailAsync(PurchaseOrder p)
+    {
+        var receiverNames = await ResolveUserNamesAsync(p.Receipts.Select(r => r.ReceivedByUserId));
+
+        return Map(p) with
+        {
+            // Newest first: the question a delivery history answers is almost always "what
+            // arrived last, and at what rate".
+            Receipts = [.. p.Receipts
+                .OrderByDescending(r => r.ReceiptDate)
+                .ThenByDescending(r => r.Id)
+                .Select(r => new GoodsReceiptDto
+                {
+                    Id = r.Id,
+                    ReceiptDate = r.ReceiptDate,
+                    ExchangeRate = r.ExchangeRate,
+                    ReceivedByName = receiverNames.GetValueOrDefault(r.ReceivedByUserId),
+                    Notes = r.Notes,
+                    TotalUnits = r.Lines.Sum(l => l.QuantityReceived),
+                    Lines = [.. r.Lines.Select(l => new GoodsReceiptLineDto
+                    {
+                        Id = l.Id,
+                        PurchaseOrderLineId = l.PurchaseOrderLineId,
+                        DeviceType = p.Lines.First(o => o.Id == l.PurchaseOrderLineId).DeviceType,
+                        Description = p.Lines.First(o => o.Id == l.PurchaseOrderLineId).Description,
+                        QuantityReceived = l.QuantityReceived
+                    })]
+                })]
+        };
+    }
+
+    /// <summary>
+    /// GoodsReceipt names its receiver by Identity id and has no navigation to the user - the
+    /// receipt has to outlive the account that recorded it - so the display names are a separate
+    /// lookup, and an id that no longer resolves is simply absent, leaving the name null rather
+    /// than showing a raw guid. Same shape as AuditController.ResolveUserNamesAsync.
+    ///
+    /// Read past the query filter on purpose: a receiver whose account sits in another tenant (a
+    /// super admin standing in, say) would otherwise read as a blank name. It leaks nothing a
+    /// caller can steer - the only ids reaching here are the ones its own order's receipts carry.
+    /// </summary>
+    private async Task<Dictionary<string, string>> ResolveUserNamesAsync(IEnumerable<string> userIds)
+    {
+        var ids = userIds.Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+        if (ids.Count == 0) return [];
+
+        return await db.Users
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(u => ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.FullName })
+            .ToDictionaryAsync(u => u.Id, u => u.FullName);
+    }
+
+    /// <summary>
+    /// The shared mapper, used by the list, the PDF and (through MapDetailAsync) the detail read.
+    /// It leaves Receipts empty on purpose; only MapDetailAsync fills them.
+    /// </summary>
     private static PurchaseOrderDto Map(PurchaseOrder p) => new()
     {
         Id = p.Id,

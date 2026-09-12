@@ -156,11 +156,6 @@ else
                         <CardTitle>Delivery Progress</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        @* The order carries only running received/outstanding quantities per
-                           line, not a receipt-by-receipt history (date, rate, notes per
-                           delivery) - PurchaseOrderDto has no such list and there is no endpoint
-                           for it, so this is the progress the API can actually support today
-                           rather than an invented one. See the task report for the same note. *@
                         <div class="space-y-3 text-sm">
                             <div class="flex justify-between">
                                 <span class="text-muted-foreground">Units ordered</span>
@@ -175,6 +170,49 @@ else
                                 <span class="text-foreground font-medium">@_order.Lines.Sum(l => l.OutstandingQuantity)</span>
                             </div>
                         </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Deliveries</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        @if (_order.Receipts.Count == 0)
+                        {
+                            <p class="text-sm text-muted-foreground">No deliveries recorded yet.</p>
+                        }
+                        else
+                        {
+                            <div class="space-y-2">
+                                @foreach (var receipt in _order.Receipts)
+                                {
+                                    <div class="rounded-xl border border-border p-3" @key="receipt.Id">
+                                        <div class="flex justify-between gap-3">
+                                            <span class="text-sm font-medium text-foreground">@receipt.ReceiptDate.ToString("MMM dd, yyyy")</span>
+                                            <span class="text-sm font-medium text-foreground">@receipt.TotalUnits units</span>
+                                        </div>
+                                        @if (_order.Currency != CurrencyFormat.Php)
+                                        {
+                                            @* Only for a foreign-currency order: a peso order is always booked at 1,
+                                               so showing it would be noise. Same wording as the receive modal's
+                                               label - this is the rate that batch was actually booked at, and it is
+                                               what reconciles the delivery against its invoice. *@
+                                            <p class="text-xs text-muted-foreground mt-1">
+                                                @CurrencyFormat.Format(receipt.ExchangeRate, CurrencyFormat.Php) per 1 @_order.Currency
+                                            </p>
+                                        }
+                                        <p class="text-xs text-muted-foreground mt-1">
+                                            @string.Join(", ", receipt.Lines.Select(l => $"{l.QuantityReceived} × {l.DeviceType}"))
+                                        </p>
+                                        @if (!string.IsNullOrEmpty(receipt.Notes))
+                                        {
+                                            <p class="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">@receipt.Notes</p>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
                     </CardContent>
                 </Card>
             </div>
