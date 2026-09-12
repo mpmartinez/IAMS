@@ -167,6 +167,7 @@ builder.Services.AddScoped<ISystemSettingService, SystemSettingService>();
 builder.Services.AddScoped<IEmailSettingsResolver, EmailSettingsResolver>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<ITicketNumberAllocator, TicketNumberAllocator>();
+builder.Services.AddScoped<IPurchaseOrderNumberAllocator, PurchaseOrderNumberAllocator>();
 builder.Services.AddScoped<ITicketService, TicketService>();
 builder.Services.AddScoped<ILookupService, LookupService>();
 builder.Services.AddScoped<IPermissionResolver, PermissionResolver>();

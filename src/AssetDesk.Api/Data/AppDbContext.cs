@@ -37,6 +37,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
     public DbSet<DepreciationPolicy> DepreciationPolicies => Set<DepreciationPolicy>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+    public DbSet<PurchaseOrderLine> PurchaseOrderLines => Set<PurchaseOrderLine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -569,6 +571,45 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
                 _tenantProvider == null ||
                 _tenantProvider.IsSuperAdmin() ||
                 e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        modelBuilder.Entity<PurchaseOrder>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.TenantId, e.PoNumber }).IsUnique();
+
+            entity.Property(e => e.Currency).HasMaxLength(3).HasDefaultValue(Currencies.PHP);
+            entity.Property(e => e.Status).HasMaxLength(30).IsRequired();
+
+            entity.HasOne(e => e.Supplier)
+                .WithMany()
+                .HasForeignKey(e => e.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        modelBuilder.Entity<PurchaseOrderLine>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.DeviceType).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.UnitPrice).HasPrecision(18, 2);
+
+            entity.Ignore(e => e.OutstandingQuantity);
+
+            entity.HasOne(e => e.PurchaseOrder)
+                .WithMany(p => p.Lines)
+                .HasForeignKey(e => e.PurchaseOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Normalise every DateTime to UTC on the way to the database.
