@@ -53,6 +53,8 @@ public static class Permissions
 
     public const string AuditView = "iams:audit:view";
 
+    public const string DepreciationManage = "iams:depreciation:manage";
+
     public static readonly PermissionDescriptor[] All =
     [
         new(AssetsView, "Assets", "View assets", "See the asset list and individual asset records."),
@@ -87,6 +89,9 @@ public static class Permissions
         new(NotificationsTest, "Notifications", "Send test notification", "Push a test notification, for diagnosing delivery."),
 
         new(AuditView, "Audit", "View the audit trail", "Read the record of who changed what, and when."),
+
+        new(DepreciationManage, "Depreciation", "Manage depreciation policy",
+            "Set the useful life and residual value used to calculate book value, per device type."),
     ];
 
     public static readonly string[] Keys = All.Select(p => p.Key).ToArray();

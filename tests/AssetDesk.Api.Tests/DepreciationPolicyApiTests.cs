@@ -61,4 +61,26 @@ public class DepreciationPolicyApiTests
             Assert.Equal(2, await db.DepreciationPolicies.CountAsync());
         }
     }
+
+    [Fact]
+    public void The_depreciation_key_is_in_the_catalog_under_its_own_group()
+    {
+        var descriptor = Assert.Single(
+            AssetDesk.Api.Authorization.Permissions.All,
+            p => p.Key == AssetDesk.Api.Authorization.Permissions.DepreciationManage);
+
+        Assert.Equal("iams:depreciation:manage", descriptor.Key);
+        Assert.Equal("Depreciation", descriptor.Group);
+    }
+
+    [Fact]
+    public void Admin_and_SuperAdmin_get_the_depreciation_key_by_default()
+    {
+        Assert.Contains(
+            AssetDesk.Api.Authorization.Permissions.DepreciationManage,
+            AssetDesk.Api.Authorization.Permissions.DefaultsFor(Roles.Admin));
+        Assert.Contains(
+            AssetDesk.Api.Authorization.Permissions.DepreciationManage,
+            AssetDesk.Api.Authorization.Permissions.DefaultsFor(Roles.SuperAdmin));
+    }
 }
