@@ -34,6 +34,21 @@
                 <p class="text-sm text-muted-foreground mt-1 mb-3">
                     Use the template to format your data correctly. Required columns are highlighted in red.
                 </p>
+                <div class="text-sm text-muted-foreground mb-3 space-y-1">
+                    <p>
+                        <span class="font-medium text-foreground">Currency</span> &mdash; PHP or USD.
+                        Defaults to PHP when left blank.
+                    </p>
+                    <p>
+                        <span class="font-medium text-foreground">ExchangeRate</span> &mdash; pesos per
+                        1 unit of that currency, for example 58.20 for USD. Required for any currency
+                        other than PHP; leave it blank for PHP.
+                    </p>
+                    <p>
+                        Each asset keeps the price and currency you enter. Totals across the register
+                        are reported in pesos, converted at the rate on each row.
+                    </p>
+                </div>
                 <a href="templates/Asset_Upload_Template.xlsx"
                    download
                    class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-foreground hover:bg-muted text-sm font-medium transition-all duration-200">
