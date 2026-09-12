@@ -624,6 +624,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
             entity.HasKey(e => e.Id);
             entity.Property(e => e.ExchangeRate).HasPrecision(18, 6);
 
+            // The idempotency marker for one ReceiveAsync call - see GoodsReceipt.RequestId.
+            // Unique because that is the guarantee: a replayed delegate cannot record the same
+            // physical delivery twice, whatever it believes about what it already committed.
+            entity.HasIndex(e => e.RequestId).IsUnique();
+
             entity.HasOne(e => e.PurchaseOrder)
                 .WithMany(p => p.Receipts)
                 .HasForeignKey(e => e.PurchaseOrderId)

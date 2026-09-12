@@ -3,6 +3,7 @@ using AssetDesk.Api.Data;
 using AssetDesk.Api.Entities;
 using AssetDesk.Shared.DTOs;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace AssetDesk.Api.Services;
@@ -31,6 +32,13 @@ public class GoodsReceiptService(
     /// retrying strategy. That means the delegate can run more than once, so it clears the
     /// change tracker on entry and re-reads everything: a retry must not see the failed
     /// attempt's mutations.
+    ///
+    /// Clearing the tracker is not enough on its own. It makes a replay independent of the
+    /// previous attempt's tracked state, not of what that attempt committed - and a commit whose
+    /// acknowledgement is lost looks, from here, exactly like a commit that never happened. So
+    /// each call also carries an idempotency marker (<see cref="GoodsReceipt.RequestId"/>),
+    /// minted once before the strategy is entered, and the strategy is given a verifySucceeded
+    /// that looks that marker up before replaying anything.
     /// </summary>
     public async Task<ServiceResult<int>> ReceiveAsync(
         int purchaseOrderId, ReceiveGoodsDto dto, string actingUserId, CancellationToken ct = default)
@@ -54,7 +62,24 @@ public class GoodsReceiptService(
         // retryable, and a notification inside it would fire again on every replay.
         var receiptId = 0;
 
-        var result = await strategy.ExecuteAsync(async () =>
+        // Generated HERE, once, and deliberately not inside the delegate below: this is what
+        // makes a replay recognisable as a replay. ChangeTracker.Clear() makes an attempt
+        // independent of the previous attempt's *tracked* state, but it cannot make it
+        // independent of what that attempt *committed* - and a commit whose acknowledgement is
+        // lost to a dropped connection is indistinguishable from a commit that never happened.
+        // The delegate stamps this on the receipt it creates; verifySucceeded below looks it up.
+        // A value invented inside the delegate would be a fresh one on every pass and would
+        // match nothing, which is the same as having no marker at all.
+        var requestId = Guid.NewGuid();
+
+        // The verifySucceeded overload, not the bare one. Without it the strategy's only move on
+        // a transient failure is to run the delegate again; with it, it first asks whether the
+        // attempt that appeared to fail actually landed, and stops if it did.
+        var result = await strategy.ExecuteAsync(
+            requestId,
+            // The delegate's own DbContext and cancellation token are the ones already closed
+            // over, so they are discarded here rather than shadowing them under new names.
+            async (_, _, _) =>
         {
             // A retry re-runs this delegate on the same DbContext, which still tracks the failed
             // attempt's mutations. Starting from a cleared tracker is what makes each attempt
@@ -75,10 +100,36 @@ public class GoodsReceiptService(
                     return ServiceResult<int>.Fail(
                         $"A {order.Status} purchase order cannot receive goods.");
 
+                // Take the ORDER's row lock before claiming any line. The lock is the point; the
+                // assignment is only how you get it - an UPDATE takes the row's write lock and
+                // holds it until this transaction ends.
+                //
+                // Without it, two receipts against *different* lines of one order never contend:
+                // each line claim locks only its own line. Both then read the order's line
+                // totals seeing only their own line advanced, both compute PartiallyReceived,
+                // and both commit. An order that is fully delivered reads PartiallyReceived for
+                // ever, and no later receipt can put it right, because the claim now refuses
+                // every remaining quantity. Serialising receipts per order means the second one
+                // reads totals that already include the first.
+                //
+                // First write in the transaction, deliberately: a single lock order (the order
+                // row, then its lines) is what keeps two receipts from deadlocking against each
+                // other by grabbing lines in different sequences.
+                var locked = await db.PurchaseOrders
+                    .Where(p => p.Id == order.Id)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(p => p.UpdatedAt, DateTime.UtcNow), ct);
+
+                if (locked != 1)
+                    return ServiceResult<int>.Fail("Purchase order not found.");
+
                 var receipt = new GoodsReceipt
                 {
                     TenantId = order.TenantId,
                     PurchaseOrderId = order.Id,
+                    // Stamped from the value generated once outside the strategy, so a replay of
+                    // this delegate writes the same marker - and verifySucceeded can find it.
+                    RequestId = requestId,
                     ReceiptDate = dto.ReceiptDate,
                     ExchangeRate = dto.ExchangeRate,
                     ReceivedByUserId = actingUserId,
@@ -215,6 +266,17 @@ public class GoodsReceiptService(
             // the caller gets, not about data integrity.
             catch (DbUpdateException ex) when (!IsTransient(ex))
             {
+                // The transaction is rolled back by the `await using` above, but the change
+                // tracker knows nothing about that: it still holds every Asset as Added and the
+                // GoodsReceipt as Unchanged carrying the id of a row that no longer exists. This
+                // is a scoped DbContext, so a later SaveChangesAsync on the same request would
+                // insert those assets pointing at a receipt line that was rolled away - and
+                // Asset IS in AuditSaveChangesInterceptor.AuditedTypes, so it would mint audit
+                // rows swearing to it. No current caller saves again in this scope; clearing
+                // here is what keeps that true of future ones. FulfilAsync clears in exactly
+                // this branch for exactly this reason.
+                db.ChangeTracker.Clear();
+
                 // The exception text names constraints, columns and tables; it belongs in the
                 // log, not in a message handed back to a caller.
                 logger.LogError(ex,
@@ -223,7 +285,42 @@ public class GoodsReceiptService(
 
                 return ServiceResult<int>.Fail("Could not record the delivery. Please try again.");
             }
-        });
+        },
+            // Asked by the strategy after a failure it would otherwise retry, to establish
+            // whether the attempt actually landed. A receipt carrying this call's marker can
+            // only have been written by this call, so finding one means the delivery is already
+            // recorded and replaying would record it twice.
+            //
+            // Untracked and unfiltered on purpose: tracked state would be whatever the failed
+            // attempt left behind rather than what the database holds, and the tenant filter
+            // could hide the row (a super admin with no tenant selected, say) and turn "already
+            // committed" into "retry" - the exact double-receipt this exists to prevent. The
+            // marker is a Guid this method minted moments ago, so reading past the filter can
+            // reach nothing but its own work.
+            async (_, marker, verifyCt) =>
+            {
+                db.ChangeTracker.Clear();
+
+                var committed = await db.GoodsReceipts
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .Where(r => r.RequestId == marker)
+                    .Select(r => (int?)r.Id)
+                    .FirstOrDefaultAsync(verifyCt);
+
+                if (committed is not { } id)
+                    return new ExecutionResult<ServiceResult<int>>(false, default!);
+
+                logger.LogWarning(
+                    "Receiving against purchase order {PurchaseOrderId} was replayed, but receipt " +
+                    "{ReceiptId} for request {RequestId} had already committed; the delivery was " +
+                    "not recorded a second time.",
+                    purchaseOrderId, id, marker);
+
+                receiptId = id;
+                return new ExecutionResult<ServiceResult<int>>(true, ServiceResult<int>.Ok(id));
+            },
+            ct);
 
         return result;
     }

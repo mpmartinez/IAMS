@@ -1,9 +1,11 @@
+using System.Data.Common;
 using AssetDesk.Api.Controllers;
 using AssetDesk.Api.Entities;
 using AssetDesk.Api.Services;
 using AssetDesk.Shared.DTOs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AssetDesk.Api.Tests;
@@ -451,6 +453,245 @@ public class GoodsReceiptTests
 
             Assert.False(result.Success);
             Assert.Equal(0, await db.Assets.CountAsync());
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Multi-line deliveries. Every test above receives exactly one line, because the DTO helper
+    // they share only builds one - which left the loop, the duplicate-line guard and the
+    // partial-failure rollback (the whole point of doing this in one transaction) unexercised.
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>Seeds one order with two lines: 10 Laptops and 5 Monitors.</summary>
+    private static async Task<(PurchaseOrder Order, PurchaseOrderLine Laptops, PurchaseOrderLine Monitors)>
+        SeedTwoLineOrderAsync(AssetDesk.Api.Data.AppDbContext db, Guid tenantId)
+    {
+        var supplier = new Supplier { TenantId = tenantId, Name = "Acme Computers" };
+        db.Suppliers.Add(supplier);
+        await db.SaveChangesAsync();
+
+        var order = new PurchaseOrder
+        {
+            TenantId = tenantId, PoNumber = 1, SupplierId = supplier.Id,
+            Currency = Currencies.PHP, Status = PurchaseOrderStatus.Ordered,
+            OrderDate = new DateTime(2026, 9, 1), CreatedByUserId = "user-1"
+        };
+        order.Lines.Add(new PurchaseOrderLine
+        {
+            DeviceType = DeviceTypes.Laptop, Description = "Dell Latitude 5540",
+            Quantity = 10, UnitPrice = 50000m
+        });
+        order.Lines.Add(new PurchaseOrderLine
+        {
+            DeviceType = DeviceTypes.Monitor, Description = "Dell P2422H",
+            Quantity = 5, UnitPrice = 9000m
+        });
+        db.PurchaseOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        return (order,
+            order.Lines.First(l => l.DeviceType == DeviceTypes.Laptop),
+            order.Lines.First(l => l.DeviceType == DeviceTypes.Monitor));
+    }
+
+    private static ReceiveGoodsDto ReceiveMany(params (int LineId, int Quantity)[] lines) => new()
+    {
+        ReceiptDate = new DateTime(2026, 9, 12),
+        ExchangeRate = 1m,
+        Lines = [.. lines.Select(l => new ReceiveLineDto
+        {
+            PurchaseOrderLineId = l.LineId, QuantityReceived = l.Quantity
+        })]
+    };
+
+    [Fact]
+    public async Task One_delivery_can_advance_two_lines_and_creates_assets_of_both_device_types()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, laptops, monitors) = await SeedTwoLineOrderAsync(db, tenantId);
+
+            var result = await ServiceFor(db).ReceiveAsync(
+                order.Id, ReceiveMany((laptops.Id, 4), (monitors.Id, 5)), "user-1");
+
+            Assert.True(result.Success);
+
+            // Read the database, not the graph the service left behind: the claims write round
+            // the change tracker.
+            db.ChangeTracker.Clear();
+
+            var reloaded = await db.PurchaseOrders.Include(p => p.Lines).SingleAsync();
+            Assert.Equal(4, reloaded.Lines.Single(l => l.DeviceType == DeviceTypes.Laptop).ReceivedQuantity);
+            Assert.Equal(5, reloaded.Lines.Single(l => l.DeviceType == DeviceTypes.Monitor).ReceivedQuantity);
+
+            // 9 of the 15 ordered units have arrived, so the order is not finished yet.
+            Assert.Equal(PurchaseOrderStatus.PartiallyReceived, reloaded.Status);
+
+            var assets = await db.Assets.ToListAsync();
+            Assert.Equal(9, assets.Count);
+            Assert.Equal(4, assets.Count(a => a.DeviceType == DeviceTypes.Laptop));
+            Assert.Equal(5, assets.Count(a => a.DeviceType == DeviceTypes.Monitor));
+            Assert.Equal(9, assets.Select(a => a.AssetTag).Distinct().Count());
+
+            // One delivery, one receipt - with a line per purchase-order line it touched.
+            var receipt = await db.GoodsReceipts.Include(r => r.Lines).SingleAsync();
+            Assert.Equal(2, receipt.Lines.Count);
+        }
+    }
+
+    /// <summary>
+    /// The core partial-failure promise: a delivery is all or nothing. Line 1 claims
+    /// successfully - the row really is updated inside the transaction - and then line 2 is
+    /// refused, and line 1's claim has to go away with it. Nothing else in the suite exercises
+    /// a refusal that arrives *after* a successful claim in the same receipt.
+    /// </summary>
+    [Fact]
+    public async Task A_line_refused_after_another_was_claimed_rolls_the_whole_delivery_back()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, laptops, monitors) = await SeedTwoLineOrderAsync(db, tenantId);
+
+            // 4 of 10 Laptops is fine and is claimed; 6 of 5 Monitors is not.
+            var result = await ServiceFor(db).ReceiveAsync(
+                order.Id, ReceiveMany((laptops.Id, 4), (monitors.Id, 6)), "user-1");
+
+            Assert.False(result.Success);
+            Assert.Equal("Monitor: 5 of 5 outstanding, cannot receive 6.", result.Message);
+
+            db.ChangeTracker.Clear();
+
+            var reloaded = await db.PurchaseOrders.Include(p => p.Lines).SingleAsync();
+            Assert.All(reloaded.Lines, l => Assert.Equal(0, l.ReceivedQuantity));
+            Assert.Equal(PurchaseOrderStatus.Ordered, reloaded.Status);
+            Assert.Equal(0, await db.Assets.CountAsync());
+            Assert.Equal(0, await db.GoodsReceipts.CountAsync());
+            Assert.Equal(0, await db.GoodsReceiptLines.CountAsync());
+        }
+    }
+
+    [Fact]
+    public async Task The_same_line_twice_in_one_delivery_is_refused()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, laptops, _) = await SeedTwoLineOrderAsync(db, tenantId);
+
+            // 6 + 6 is 12 against a line of 10. Claimed one at a time each would pass its own
+            // predicate on a stale read; the guard is what stops the DTO getting that far.
+            var result = await ServiceFor(db).ReceiveAsync(
+                order.Id, ReceiveMany((laptops.Id, 6), (laptops.Id, 6)), "user-1");
+
+            Assert.False(result.Success);
+            Assert.Equal("The same line appears more than once.", result.Message);
+
+            db.ChangeTracker.Clear();
+
+            var reloaded = await db.PurchaseOrders.Include(p => p.Lines).SingleAsync();
+            Assert.All(reloaded.Lines, l => Assert.Equal(0, l.ReceivedQuantity));
+            Assert.Equal(0, await db.Assets.CountAsync());
+            Assert.Equal(0, await db.GoodsReceipts.CountAsync());
+        }
+    }
+
+    /// <summary>
+    /// Records the SQL the context issues, so a test can assert the *order* of two statements.
+    /// EF routes ExecuteUpdateAsync through the non-query path and SaveChanges/SELECT through
+    /// the reader path, so both are captured into one list to keep the sequence intact.
+    /// </summary>
+    private sealed class SqlRecorder : DbCommandInterceptor
+    {
+        public List<string> Commands { get; } = [];
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        {
+            Commands.Add(command.CommandText);
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            Commands.Add(command.CommandText);
+            return ValueTask.FromResult(result);
+        }
+
+        public override InterceptionResult<int> NonQueryExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+        {
+            Commands.Add(command.CommandText);
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            Commands.Add(command.CommandText);
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    /// <summary>
+    /// Two receipts against *different* lines of one order do not contend: the per-line claim
+    /// locks only the line it claims, so nothing serialises them. Each then reads the order's
+    /// line totals seeing only its own line advanced, each computes PartiallyReceived, and both
+    /// commit - leaving a fully delivered order stranded at PartiallyReceived with no way back,
+    /// because the claim now refuses every further quantity.
+    ///
+    /// What fixes that is taking the order's own row lock before any line is claimed, so
+    /// receipts against one order queue behind each other and the second reads totals that
+    /// include the first. A lock is not observable from a single-threaded test; the statement
+    /// that acquires it is. This asserts that statement is issued against PurchaseOrders
+    /// *before* the first claim against PurchaseOrderLines - which is the whole of the fix, since
+    /// PostgreSQL holds a row's write lock until the transaction ends.
+    /// </summary>
+    [Fact]
+    public async Task The_orders_row_is_locked_before_any_line_is_claimed()
+    {
+        var tenantId = Guid.NewGuid();
+        var recorder = new SqlRecorder();
+        var (db, conn) = TestDb.Create(
+            new FakeTenantProvider(tenantId), builder => builder.AddInterceptors(recorder));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, laptops, monitors) = await SeedTwoLineOrderAsync(db, tenantId);
+
+            recorder.Commands.Clear();
+
+            var result = await ServiceFor(db).ReceiveAsync(
+                order.Id, ReceiveMany((laptops.Id, 4), (monitors.Id, 5)), "user-1");
+
+            Assert.True(result.Success);
+
+            var lockedOrder = recorder.Commands.FindIndex(
+                c => c.Contains("UPDATE \"PurchaseOrders\"", StringComparison.Ordinal));
+            var claimedLine = recorder.Commands.FindIndex(
+                c => c.Contains("UPDATE \"PurchaseOrderLines\"", StringComparison.Ordinal));
+
+            Assert.True(claimedLine >= 0, "No claim against PurchaseOrderLines was issued at all.");
+            Assert.True(lockedOrder >= 0,
+                "The order's row was never written before the lines were claimed, so nothing " +
+                "serialises two receipts against different lines of the same order.");
+            Assert.True(lockedOrder < claimedLine,
+                $"The order's row was written at statement {lockedOrder} but the first line was " +
+                $"claimed at {claimedLine}; the order lock has to come first.");
         }
     }
 }

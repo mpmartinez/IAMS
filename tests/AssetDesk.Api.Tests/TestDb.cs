@@ -8,15 +8,22 @@ namespace AssetDesk.Api.Tests;
 
 public static class TestDb
 {
+    /// <summary>
+    /// <paramref name="configure"/> runs against the options builder before it is built, for the
+    /// rare test that needs something on the context itself rather than in its data - an
+    /// interceptor that records the SQL, say. It is deliberately the last word, so a test can
+    /// add to what is set up here but nothing here quietly overrides a test's own choice.
+    /// </summary>
     public static (AppDbContext Db, SqliteConnection Connection) Create(
-        ITenantProvider? tenantProvider = null)
+        ITenantProvider? tenantProvider = null,
+        Action<DbContextOptionsBuilder>? configure = null)
     {
         var connection = new SqliteConnection("DataSource=:memory:");
         connection.Open();
 
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(connection)
-            .Options;
+        var builder = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection);
+        configure?.Invoke(builder);
+        var options = builder.Options;
 
         // Never use the tenant-provider-less constructor here. EF Core extracts
         // _tenantProvider.GetCurrentTenantId() into a query parameter and evaluates it
