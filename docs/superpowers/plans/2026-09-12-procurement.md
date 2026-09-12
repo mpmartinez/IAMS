@@ -907,7 +907,6 @@ public class PurchaseOrder : ITenantEntity
     public DateTime? UpdatedAt { get; set; }
 
     public ICollection<PurchaseOrderLine> Lines { get; set; } = [];
-    public ICollection<GoodsReceipt> Receipts { get; set; } = [];
 }
 
 public class PurchaseOrderLine
@@ -947,7 +946,7 @@ public static class PurchaseOrderStatus
 }
 ```
 
-`GoodsReceipt` does not exist until Task 7. Until then, **comment out the `Receipts` collection** and restore it in Task 7 — do not create a stub entity.
+`GoodsReceipt` does not exist until Task 7, so **omit the `Receipts` collection entirely here** — Task 7 adds it. Do not write it and comment it out, and do not create a stub entity: commented-out code in a commit is a defect a reviewer will rightly flag, and an omitted navigation property costs nothing to add later.
 
 - [ ] **Step 4: Create the number allocator**
 
@@ -1384,28 +1383,46 @@ Replace the generated empty bodies. This copies `20260912050134_GrantDepreciatio
             // only a built-in from PostgreSQL 13, and the database here is supplied externally
             // with no version pinned. Being deterministic also makes the insert idempotent - the
             // NOT EXISTS guard and the id agree with each other on a re-run.
-            Grant(migrationBuilder, "iams:procurement:view", "'Admin', 'SuperAdmin', 'Staff', 'Auditor'");
-            Grant(migrationBuilder, "iams:procurement:manage", "'Admin', 'SuperAdmin', 'Staff'");
-        }
-
-        private static void Grant(MigrationBuilder migrationBuilder, string key, string roleList)
-        {
-            migrationBuilder.Sql($@"
+            //
+            // Two literal blocks rather than one interpolated helper. They differ only in the key
+            // and the role list, but a migration that builds SQL by string interpolation reads
+            // like an injection site to everyone who meets it later, and the two migrations this
+            // copies both spell their SQL out.
+            migrationBuilder.Sql(@"
                 INSERT INTO ""RolePermissions"" (""Id"", ""RoleId"", ""TenantId"", ""Permission"")
                 SELECT
-                    md5(t.""Id""::text || r.""Id"" || '{key}')::uuid,
+                    md5(t.""Id""::text || r.""Id"" || 'iams:procurement:view')::uuid,
                     r.""Id"",
                     t.""Id"",
-                    '{key}'
+                    'iams:procurement:view'
                 FROM ""Tenants"" t
                 CROSS JOIN ""AspNetRoles"" r
                 WHERE r.""IsBuiltIn""
-                  AND r.""Name"" IN ({roleList})
+                  AND r.""Name"" IN ('Admin', 'SuperAdmin', 'Staff', 'Auditor')
                   AND NOT EXISTS (
                       SELECT 1 FROM ""RolePermissions"" x
                       WHERE x.""RoleId"" = r.""Id""
                         AND x.""TenantId"" = t.""Id""
-                        AND x.""Permission"" = '{key}'
+                        AND x.""Permission"" = 'iams:procurement:view'
+                  );
+            ");
+
+            migrationBuilder.Sql(@"
+                INSERT INTO ""RolePermissions"" (""Id"", ""RoleId"", ""TenantId"", ""Permission"")
+                SELECT
+                    md5(t.""Id""::text || r.""Id"" || 'iams:procurement:manage')::uuid,
+                    r.""Id"",
+                    t.""Id"",
+                    'iams:procurement:manage'
+                FROM ""Tenants"" t
+                CROSS JOIN ""AspNetRoles"" r
+                WHERE r.""IsBuiltIn""
+                  AND r.""Name"" IN ('Admin', 'SuperAdmin', 'Staff')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ""RolePermissions"" x
+                      WHERE x.""RoleId"" = r.""Id""
+                        AND x.""TenantId"" = t.""Id""
+                        AND x.""Permission"" = 'iams:procurement:manage'
                   );
             ");
         }
@@ -1423,7 +1440,7 @@ Replace the generated empty bodies. This copies `20260912050134_GrantDepreciatio
         }
 ```
 
-The role lists are interpolated into SQL. They are compile-time literals in this file and never user input, so there is no injection surface — but do not change that by making them a parameter.
+Note the role lists differ: `Auditor` receives **view only**, so it appears in the first block and not the second.
 
 Add the class-level `<summary>` the precedent carries, explaining that backfilling unconditionally is safe **only** because both keys are brand new, so no tenant can have deliberately revoked them.
 
