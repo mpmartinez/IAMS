@@ -127,10 +127,18 @@ public class DepreciationReportTests
             Assert.Null(noPolicy.AccumulatedDepreciation);
             Assert.Null(noPolicy.ElapsedMonths);
 
+            // UsefulLifeMonths reports the *policy*, not the calculation, so its nullity differs
+            // from the three figures above: no policy row means no useful life to state.
+            Assert.Null(noPolicy.UsefulLifeMonths);
+
             var noPurchaseDate = Assert.Single(summary.Rows, r => r.AssetTag == "LAP-0003");
             Assert.Null(noPurchaseDate.NetBookValue);
             Assert.Null(noPurchaseDate.AccumulatedDepreciation);
             Assert.Null(noPurchaseDate.ElapsedMonths);
+
+            // ...whereas this asset has a Laptop policy; it simply cannot be applied without a
+            // purchase date. The life is known and must still be reported.
+            Assert.Equal(36, noPurchaseDate.UsefulLifeMonths);
         }
     }
 
@@ -259,9 +267,33 @@ public class DepreciationReportTests
 
             var csv = System.Text.Encoding.UTF8.GetString(file.FileContents);
 
-            Assert.Contains("LAP-0001", csv);
-            Assert.Contains("MON-0001", csv);
-            Assert.Contains(NotDepreciableReasons.NoPolicy, csv);
+            // AppendLine writes Environment.NewLine, so split on both line endings rather than
+            // baking this assertion into the machine that happens to run it.
+            var lines = csv.Split(
+                [Environment.NewLine, "\n"], StringSplitOptions.RemoveEmptyEntries);
+
+            // Whole lines, not substrings: containment alone would still pass with every value
+            // shifted a column left, and a 12-column CSV nobody has opened in a spreadsheet is
+            // exactly where that goes unnoticed. Blank Name is the third field either way.
+            //
+            // LAP-0001: 60,000 over 36 months at 10% residual, month 38 of 36 - fully
+            // depreciated at its 6,000 residual.
+            Assert.Equal(
+                "LAP-0001,Laptop,,2023-01-15,60000.00,PHP,60000.00,36,38,54000.00,6000.00,Fully depreciated",
+                Assert.Single(lines, l => l.StartsWith("LAP-0001,", StringComparison.Ordinal)));
+
+            // MON-0001: no Monitor policy, so the four computed columns are empty - never "0.00".
+            // That is the null-not-zero rule as it reaches a spreadsheet, where a 0 would sum.
+            Assert.Equal(
+                $"MON-0001,Monitor,,2025-06-01,15000.00,PHP,15000.00,,,,,{NotDepreciableReasons.NoPolicy}",
+                Assert.Single(lines, l => l.StartsWith("MON-0001,", StringComparison.Ordinal)));
+
+            Assert.Equal(
+                "Asset Tag,Device Type,Name,Purchase Date,Purchase Price,Currency,Cost Basis (PHP),"
+                + "Useful Life (months),Elapsed Months,Accumulated Depreciation (PHP),"
+                + "Net Book Value (PHP),Status",
+                lines[0]);
+
             Assert.DoesNotContain("LAP-0099", csv);   // Retired, excluded
             Assert.Equal("text/csv", file.ContentType);
         }
