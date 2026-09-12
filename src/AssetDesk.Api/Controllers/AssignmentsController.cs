@@ -191,6 +191,7 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
                 DeviceType = a.DeviceType,
                 PurchasePrice = a.PurchasePrice,
                 Currency = a.Currency,
+                ExchangeRate = a.ExchangeRate,
                 WarrantyProvider = a.WarrantyProvider,
                 WarrantyStartDate = a.WarrantyStartDate,
                 WarrantyEndDate = a.WarrantyEndDate,

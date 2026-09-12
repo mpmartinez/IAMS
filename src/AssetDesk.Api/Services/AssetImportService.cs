@@ -280,6 +280,7 @@ public class AssetImportService(AppDbContext db, ILogger<AssetImportService> log
         DeviceType = asset.DeviceType,
         PurchasePrice = asset.PurchasePrice,
         Currency = asset.Currency,
+        ExchangeRate = asset.ExchangeRate,
         WarrantyProvider = asset.WarrantyProvider,
         WarrantyStartDate = asset.WarrantyStartDate,
         WarrantyEndDate = asset.WarrantyEndDate,
