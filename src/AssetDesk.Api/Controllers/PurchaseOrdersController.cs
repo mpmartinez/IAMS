@@ -163,16 +163,18 @@ public class PurchaseOrdersController(
         if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
             return BadRequest(ApiResponse<PurchaseOrderDto>.Fail("Select an organisation first."));
 
-        // Resolve through an explicit tenant filter before handing the id to the service, so a
-        // caller cannot receive against another organisation's order. The global query filter is
-        // not enough on its own - it admits every tenant's orders for a super admin.
+        // Resolve through an explicit tenant filter so a caller naming another organisation's
+        // order gets a 404 with a message rather than a bare refusal from the service. The
+        // global query filter is not enough on its own - it admits every tenant's orders for a
+        // super admin - and this is friendliness, not the invariant: ReceiveAsync takes the
+        // tenant itself and filters on it, so the guarantee does not rest on this check.
         var exists = await db.PurchaseOrders
             .AnyAsync(p => p.Id == id && p.TenantId == tenantId);
         if (!exists)
             return NotFound(ApiResponse<PurchaseOrderDto>.Fail("Purchase order not found."));
 
         var actingUserId = User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
-        var result = await receipts.ReceiveAsync(id, dto, actingUserId);
+        var result = await receipts.ReceiveAsync(tenantId, id, dto, actingUserId);
 
         if (!result.Success)
         {

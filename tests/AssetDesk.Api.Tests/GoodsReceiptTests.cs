@@ -125,7 +125,7 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, line) = await SeedOrderedAsync(db, tenantId);
 
-            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 8), "user-1");
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(line.Id, 8), "user-1");
 
             Assert.True(result.Success);
             var reloaded = await db.PurchaseOrders.Include(p => p.Lines).SingleAsync();
@@ -147,8 +147,8 @@ public class GoodsReceiptTests
             var (order, line) = await SeedOrderedAsync(db, tenantId);
             var service = ServiceFor(db);
 
-            await service.ReceiveAsync(order.Id, Receive(line.Id, 8), "user-1");
-            var result = await service.ReceiveAsync(order.Id, Receive(line.Id, 2), "user-1");
+            await service.ReceiveAsync(tenantId, order.Id, Receive(line.Id, 8), "user-1");
+            var result = await service.ReceiveAsync(tenantId, order.Id, Receive(line.Id, 2), "user-1");
 
             Assert.True(result.Success);
             var reloaded = await db.PurchaseOrders.Include(p => p.Lines).SingleAsync();
@@ -170,7 +170,7 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, line) = await SeedOrderedAsync(db, tenantId);
 
-            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 11), "user-1");
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(line.Id, 11), "user-1");
 
             Assert.False(result.Success);
             Assert.Contains("10", result.Message);
@@ -191,9 +191,9 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, line) = await SeedOrderedAsync(db, tenantId);
             var service = ServiceFor(db);
-            await service.ReceiveAsync(order.Id, Receive(line.Id, 8), "user-1");
+            await service.ReceiveAsync(tenantId, order.Id, Receive(line.Id, 8), "user-1");
 
-            var result = await service.ReceiveAsync(order.Id, Receive(line.Id, 3), "user-1");
+            var result = await service.ReceiveAsync(tenantId, order.Id, Receive(line.Id, 3), "user-1");
 
             Assert.False(result.Success);
             Assert.Equal(8, await db.Assets.CountAsync());
@@ -224,9 +224,9 @@ public class GoodsReceiptTests
             var (order, line) = await SeedOrderedAsync(db, tenantId);
             var service = ServiceFor(db);
 
-            Assert.True((await service.ReceiveAsync(order.Id, Receive(line.Id, 8), "user-1")).Success);
+            Assert.True((await service.ReceiveAsync(tenantId, order.Id, Receive(line.Id, 8), "user-1")).Success);
 
-            var result = await service.ReceiveAsync(order.Id, Receive(line.Id, 3), "user-1");
+            var result = await service.ReceiveAsync(tenantId, order.Id, Receive(line.Id, 3), "user-1");
 
             Assert.False(result.Success);
             Assert.Equal("Laptop: 2 of 10 outstanding, cannot receive 3.", result.Message);
@@ -261,7 +261,7 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, line) = await SeedOrderedAsync(db, tenantId);
 
-            await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 8), "user-1");
+            await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(line.Id, 8), "user-1");
 
             var reloaded = await db.PurchaseOrders
                 .Where(p => p.Id == order.Id)
@@ -289,7 +289,7 @@ public class GoodsReceiptTests
             order.Status = status;
             await db.SaveChangesAsync();
 
-            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 1), "user-1");
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(line.Id, 1), "user-1");
 
             Assert.False(result.Success);
             Assert.Equal(0, await db.Assets.CountAsync());
@@ -307,7 +307,7 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, line) = await SeedOrderedAsync(db, tenantId);
 
-            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 0), "user-1");
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(line.Id, 0), "user-1");
 
             Assert.False(result.Success);
             Assert.Equal(0, await db.Assets.CountAsync());
@@ -326,7 +326,7 @@ public class GoodsReceiptTests
             var (order, line) = await SeedOrderedAsync(db, tenantId, Currencies.USD, 10, 1200m);
 
             await ServiceFor(db).ReceiveAsync(
-                order.Id, Receive(line.Id, 2, rate: 58.20m, date: new DateTime(2026, 9, 12)), "user-1");
+                tenantId, order.Id, Receive(line.Id, 2, rate: 58.20m, date: new DateTime(2026, 9, 12)), "user-1");
 
             var assets = await db.Assets.ToListAsync();
             Assert.Equal(2, assets.Count);
@@ -364,7 +364,7 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, line) = await SeedOrderedAsync(db, tenantId, Currencies.USD, 10, 1200m);
 
-            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 2, rate: 1m), "user-1");
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(line.Id, 2, rate: 1m), "user-1");
 
             Assert.False(result.Success);
             Assert.Equal(
@@ -392,7 +392,7 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, line) = await SeedOrderedAsync(db, tenantId, Currencies.PHP, 10, 50000m);
 
-            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 2, rate: 58.20m), "user-1");
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(line.Id, 2, rate: 58.20m), "user-1");
 
             Assert.False(result.Success);
             Assert.Equal(
@@ -416,7 +416,7 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, line) = await SeedOrderedAsync(db, tenantId, Currencies.PHP, 10, 50000m);
 
-            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 2, rate: 1m), "user-1");
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(line.Id, 2, rate: 1m), "user-1");
 
             Assert.True(result.Success);
             Assert.Equal(2, await db.Assets.CountAsync());
@@ -435,7 +435,7 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, line) = await SeedOrderedAsync(db, tenantId, Currencies.USD, 10, 1200m);
 
-            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 2, rate: 58.20m), "user-1");
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(line.Id, 2, rate: 58.20m), "user-1");
 
             Assert.True(result.Success);
             Assert.Equal(2, await db.Assets.CountAsync());
@@ -454,8 +454,8 @@ public class GoodsReceiptTests
             var (order, line) = await SeedOrderedAsync(db, tenantId, Currencies.USD, 10, 1200m);
             var service = ServiceFor(db);
 
-            await service.ReceiveAsync(order.Id, Receive(line.Id, 8, rate: 58.20m), "user-1");
-            await service.ReceiveAsync(order.Id, Receive(line.Id, 2, rate: 52.00m), "user-1");
+            await service.ReceiveAsync(tenantId, order.Id, Receive(line.Id, 8, rate: 58.20m), "user-1");
+            await service.ReceiveAsync(tenantId, order.Id, Receive(line.Id, 2, rate: 52.00m), "user-1");
 
             var rates = await db.Assets.GroupBy(a => a.ExchangeRate)
                 .Select(g => new { Rate = g.Key, Count = g.Count() })
@@ -477,7 +477,7 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, _) = await SeedOrderedAsync(db, tenantId);
 
-            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(99999, 1), "user-1");
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(99999, 1), "user-1");
 
             Assert.False(result.Success);
             Assert.Equal(0, await db.Assets.CountAsync());
@@ -489,8 +489,9 @@ public class GoodsReceiptTests
     {
         var tenantA = Guid.NewGuid();
         var tenantB = Guid.NewGuid();
-        // The context bypasses the global filter for a super admin, so only the controller's
-        // explicit tenant check stands between the caller and tenant B's order.
+        // The context bypasses the global filter for a super admin, so the explicit tenant
+        // checks - the controller's, and the service's behind it - are all that stand between
+        // the caller and tenant B's order.
         var (db, conn) = TestDb.Create(new FakeTenantProvider(null, isSuperAdmin: true));
         using (db)
         using (conn)
@@ -514,6 +515,41 @@ public class GoodsReceiptTests
 
             Assert.IsNotType<OkObjectResult>(result.Result);
             Assert.Equal(0, await db.Assets.IgnoreQueryFilters().CountAsync());
+            Assert.Equal(0, (await db.PurchaseOrders.IgnoreQueryFilters()
+                .Include(p => p.Lines).SingleAsync()).Lines.First().ReceivedQuantity);
+        }
+    }
+
+    /// <summary>
+    /// The same isolation, one layer down. The test above goes through the controller, which
+    /// pre-checks the order's tenant before it calls the service at all, so it proves nothing
+    /// about the service on its own - and the service is public, DI-registered, and takes a bare
+    /// order id. This calls it directly with tenant A's id against tenant B's order, under a
+    /// super-admin provider so the global query filter admits the row and only the explicit
+    /// predicate in ReceiveAsync can refuse it.
+    /// </summary>
+    [Fact]
+    public async Task The_service_refuses_an_order_belonging_to_another_tenant()
+    {
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(null, isSuperAdmin: true));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantA);
+            await TestDb.SeedTenantAsync(db, tenantB);
+            var (orderB, lineB) = await SeedOrderedAsync(db, tenantB);
+
+            var result = await ServiceFor(db)
+                .ReceiveAsync(tenantA, orderB.Id, Receive(lineB.Id, 1), "user-1");
+
+            Assert.False(result.Success);
+
+            db.ChangeTracker.Clear();
+
+            Assert.Equal(0, await db.Assets.IgnoreQueryFilters().CountAsync());
+            Assert.Equal(0, await db.GoodsReceipts.IgnoreQueryFilters().CountAsync());
             Assert.Equal(0, (await db.PurchaseOrders.IgnoreQueryFilters()
                 .Include(p => p.Lines).SingleAsync()).Lines.First().ReceivedQuantity);
         }
@@ -548,7 +584,7 @@ public class GoodsReceiptTests
 
             // Receiving order A but naming a line that belongs to order B.
             var result = await ServiceFor(db)
-                .ReceiveAsync(orderA.Id, Receive(orderB.Lines.First().Id, 1), "user-1");
+                .ReceiveAsync(tenantId, orderA.Id, Receive(orderB.Lines.First().Id, 1), "user-1");
 
             Assert.False(result.Success);
             Assert.Equal(0, await db.Assets.CountAsync());
@@ -615,7 +651,7 @@ public class GoodsReceiptTests
             var (order, laptops, monitors) = await SeedTwoLineOrderAsync(db, tenantId);
 
             var result = await ServiceFor(db).ReceiveAsync(
-                order.Id, ReceiveMany((laptops.Id, 4), (monitors.Id, 5)), "user-1");
+                tenantId, order.Id, ReceiveMany((laptops.Id, 4), (monitors.Id, 5)), "user-1");
 
             Assert.True(result.Success);
 
@@ -661,7 +697,7 @@ public class GoodsReceiptTests
 
             // 4 of 10 Laptops is fine and is claimed; 6 of 5 Monitors is not.
             var result = await ServiceFor(db).ReceiveAsync(
-                order.Id, ReceiveMany((laptops.Id, 4), (monitors.Id, 6)), "user-1");
+                tenantId, order.Id, ReceiveMany((laptops.Id, 4), (monitors.Id, 6)), "user-1");
 
             Assert.False(result.Success);
             Assert.Equal("Monitor: 5 of 5 outstanding, cannot receive 6.", result.Message);
@@ -691,7 +727,7 @@ public class GoodsReceiptTests
             // 6 + 6 is 12 against a line of 10. Claimed one at a time each would pass its own
             // predicate on a stale read; the guard is what stops the DTO getting that far.
             var result = await ServiceFor(db).ReceiveAsync(
-                order.Id, ReceiveMany((laptops.Id, 6), (laptops.Id, 6)), "user-1");
+                tenantId, order.Id, ReceiveMany((laptops.Id, 6), (laptops.Id, 6)), "user-1");
 
             Assert.False(result.Success);
             Assert.Equal("The same line appears more than once.", result.Message);
@@ -775,7 +811,7 @@ public class GoodsReceiptTests
             recorder.Commands.Clear();
 
             var result = await ServiceFor(db).ReceiveAsync(
-                order.Id, ReceiveMany((laptops.Id, 4), (monitors.Id, 5)), "user-1");
+                tenantId, order.Id, ReceiveMany((laptops.Id, 4), (monitors.Id, 5)), "user-1");
 
             Assert.True(result.Success);
 
@@ -873,7 +909,7 @@ public class GoodsReceiptTests
             await TestDb.SeedTenantAsync(db, tenantId);
             var (order, line) = await SeedOrderedAsync(db, tenantId);
 
-            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 5), "user-1");
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(line.Id, 5), "user-1");
 
             Assert.True(result.Success);
 

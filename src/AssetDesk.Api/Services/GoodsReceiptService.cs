@@ -10,8 +10,14 @@ namespace AssetDesk.Api.Services;
 
 public interface IGoodsReceiptService
 {
+    /// <summary>
+    /// The tenant is a parameter rather than an ambient value from ITenantProvider so the
+    /// contract is unambiguous at every call site and cannot be defeated by a provider that has
+    /// no tenant selected.
+    /// </summary>
     Task<ServiceResult<int>> ReceiveAsync(
-        int purchaseOrderId, ReceiveGoodsDto dto, string actingUserId, CancellationToken ct = default);
+        Guid tenantId, int purchaseOrderId, ReceiveGoodsDto dto, string actingUserId,
+        CancellationToken ct = default);
 }
 
 public class GoodsReceiptService(
@@ -41,7 +47,8 @@ public class GoodsReceiptService(
     /// that looks that marker up before replaying anything.
     /// </summary>
     public async Task<ServiceResult<int>> ReceiveAsync(
-        int purchaseOrderId, ReceiveGoodsDto dto, string actingUserId, CancellationToken ct = default)
+        Guid tenantId, int purchaseOrderId, ReceiveGoodsDto dto, string actingUserId,
+        CancellationToken ct = default)
     {
         if (dto.Lines.Count == 0)
             return ServiceResult<int>.Fail("Nothing was received.");
@@ -89,9 +96,14 @@ public class GoodsReceiptService(
             await using var tx = await db.Database.BeginTransactionAsync(ct);
             try
             {
+                // The tenant predicate is explicit rather than left to the global query filter,
+                // which has an IsSuperAdmin() bypass and would admit every organisation's orders
+                // to a super-admin caller. It comes from the caller's parameter, so the
+                // guarantee holds wherever this is called from rather than only where a
+                // controller happened to check first.
                 var order = await db.PurchaseOrders
                     .Include(p => p.Lines)
-                    .FirstOrDefaultAsync(p => p.Id == purchaseOrderId, ct);
+                    .FirstOrDefaultAsync(p => p.Id == purchaseOrderId && p.TenantId == tenantId, ct);
 
                 if (order is null)
                     return ServiceResult<int>.Fail("Purchase order not found.");
