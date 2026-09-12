@@ -213,4 +213,39 @@ public class DepreciationCalculatorTests
         Assert.Equal(10000m, r.AccumulatedDepreciation);
         Assert.Equal(0m, r.NetBookValue);
     }
+
+    [Theory]
+    // A negative purchase price, and a negative exchange rate, each give a negative cost basis.
+    [InlineData(-60000, 1)]
+    [InlineData(60000, -1)]
+    public void A_negative_cost_basis_is_not_depreciable(decimal price, decimal rate)
+    {
+        // Unreachable through the app today - the DTO's [Range], CurrencyRules.Validate and the
+        // importer all refuse it - but the calculator's other guards exist on exactly the same
+        // reasoning: a pure function can be called by anything. Without this guard `depreciable`
+        // goes negative and Math.Min picks the *more* negative operand, so accumulated
+        // depreciation exceeds cost and book value reads negative from month one.
+        var r = DepreciationCalculator.Calculate(
+            price, rate, new DateTime(2026, 1, 10), Policy(36, 10m), new DateTime(2026, 2, 1));
+
+        Assert.False(r.IsDepreciable);
+        Assert.Equal(NotDepreciableReasons.NegativeCostBasis, r.NotDepreciableReason);
+
+        // The not-depreciable contract: the report maps these to null, never to a figure.
+        Assert.Equal(0m, r.AccumulatedDepreciation);
+        Assert.Equal(0m, r.NetBookValue);
+        Assert.Equal(0, r.ElapsedMonths);
+    }
+
+    [Fact]
+    public void A_zero_cost_basis_is_still_depreciable()
+    {
+        // The guard is on negative, not on "not positive". A free asset is a real thing to
+        // record and depreciates correctly to zero.
+        var r = DepreciationCalculator.Calculate(
+            0m, 1m, new DateTime(2026, 1, 10), Policy(36, 10m), new DateTime(2026, 2, 1));
+
+        Assert.True(r.IsDepreciable);
+        Assert.Equal(0m, r.NetBookValue);
+    }
 }

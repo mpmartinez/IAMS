@@ -8,6 +8,7 @@ public static class NotDepreciableReasons
     public const string NoPurchasePrice = "No purchase price";
     public const string NoPurchaseDate = "No purchase date";
     public const string NoPolicy = "No depreciation policy for this device type";
+    public const string NegativeCostBasis = "Purchase price or exchange rate is negative";
     public const string InvalidUsefulLife = "Depreciation policy has a useful life of zero or less";
     public const string InvalidResidual = "Depreciation policy has a residual outside 0 to 100 percent";
 }
@@ -44,6 +45,14 @@ public static class DepreciationCalculator
 
         if (purchasePrice is null)
             return NotDepreciable(NotDepreciableReasons.NoPurchasePrice, costBasis);
+
+        // Same second-line-of-defence reasoning as the policy guards below. A negative price or
+        // exchange rate makes `depreciable` negative, at which point Math.Min picks the *more*
+        // negative operand and accumulated depreciation exceeds cost - book value reads negative
+        // from month one, the exact shape the residual floor exists to prevent. Zero is
+        // deliberately still depreciable: a free asset is a real thing to record.
+        if (costBasis < 0m)
+            return NotDepreciable(NotDepreciableReasons.NegativeCostBasis, costBasis);
 
         if (purchaseDate is null)
             return NotDepreciable(NotDepreciableReasons.NoPurchaseDate, costBasis);
