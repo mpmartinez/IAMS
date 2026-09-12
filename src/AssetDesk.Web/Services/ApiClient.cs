@@ -1118,12 +1118,77 @@ public class ApiClient(HttpClient http, AuthService authService)
         var response = await client.PutAsJsonAsync("api/depreciationpolicies", dto);
 
         if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
-            return (false, error?.Message ?? "Failed to save policy.");
-        }
+            return (false, await ReadErrorMessageAsync(response) ?? "Failed to save policy.");
 
         return (true, null);
+    }
+
+    /// <summary>
+    /// A rejected policy comes back in one of two shapes and the screen is meant to surface the
+    /// API's own wording either way, not reimplement its rules.
+    ///
+    /// [ApiController] model validation is not suppressed, so UpsertDepreciationPolicyDto's
+    /// [Range] attributes fire *before* the controller's manual checks and answer with
+    /// ValidationProblemDetails - an "errors" dictionary, no "message" anywhere. Reading only
+    /// ApiResponse.Message turned "Useful life must be between 1 and 1200 months" into a generic
+    /// "Failed to save policy."
+    ///
+    /// The body is buffered into a string first: HttpContent's stream is read once, so trying
+    /// the second shape after the first would fail on an already-consumed stream.
+    /// </summary>
+    private static async Task<string?> ReadErrorMessageAsync(HttpResponseMessage response)
+    {
+        string body;
+        try
+        {
+            body = await response.Content.ReadAsStringAsync();
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(body)) return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+
+            // ApiResponse<T>.Message - the controller's own manual checks.
+            if (doc.RootElement.TryGetProperty("message", out var message) &&
+                message.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(message.GetString()))
+            {
+                return message.GetString();
+            }
+
+            // ValidationProblemDetails - the DTO's data annotations. First message wins; the
+            // screen edits one field at a time, so there is rarely more than one.
+            if (doc.RootElement.TryGetProperty("errors", out var errors) &&
+                errors.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var field in errors.EnumerateObject())
+                {
+                    if (field.Value.ValueKind != JsonValueKind.Array) continue;
+
+                    foreach (var entry in field.Value.EnumerateArray())
+                    {
+                        if (entry.ValueKind == JsonValueKind.String &&
+                            !string.IsNullOrWhiteSpace(entry.GetString()))
+                        {
+                            return entry.GetString();
+                        }
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // A non-JSON body (a proxy's HTML error page, say) - let the caller's default stand.
+        }
+
+        return null;
     }
 
     public async Task<(bool Success, string? Error)> DeleteDepreciationPolicyAsync(string deviceType)
@@ -1131,6 +1196,9 @@ public class ApiClient(HttpClient http, AuthService authService)
         var client = await GetAuthenticatedClient();
         var response = await client.DeleteAsync($"api/depreciationpolicies/{Uri.EscapeDataString(deviceType)}");
 
+        // No ValidationProblemDetails fallback here: Delete binds a single route string with no
+        // data annotations on it, so [ApiController] model validation has nothing to reject and
+        // every failure this can see is already an ApiResponse from the controller.
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
