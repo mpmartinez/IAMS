@@ -6,6 +6,8 @@ using AssetDesk.Shared.DTOs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AssetDesk.Api.Tests;
@@ -692,6 +694,98 @@ public class GoodsReceiptTests
             Assert.True(lockedOrder < claimedLine,
                 $"The order's row was written at statement {lockedOrder} but the first line was " +
                 $"claimed at {claimedLine}; the order lock has to come first.");
+        }
+    }
+
+    /// <summary>
+    /// Stands in for Npgsql's EnableRetryOnFailure strategy - SQLite has no retrying strategy of
+    /// its own, so this is the only way to exercise a replay outside a real Postgres failover.
+    /// It runs the delegate, discards that attempt's result exactly as a caller would if its
+    /// acknowledgement never arrived, and then does what a real retrying strategy does before
+    /// ever replaying anything: asks verifySucceeded whether the "lost" attempt actually landed.
+    /// Only if it did not does it run the delegate a second time.
+    /// </summary>
+    private sealed class ReplayingExecutionStrategy : IExecutionStrategy, IExecutionStrategyFactory
+    {
+        private readonly ExecutionStrategyDependencies _dependencies;
+
+        public ReplayingExecutionStrategy(ExecutionStrategyDependencies dependencies) =>
+            _dependencies = dependencies;
+
+        public bool RetriesOnFailure => true;
+
+        public IExecutionStrategy Create() => this;
+
+        // EnsureCreated (schema setup, not ReceiveAsync) goes through this overload. It needs no
+        // replay behaviour of its own, so it is a plain pass-through.
+        public TResult Execute<TState, TResult>(
+            TState state,
+            Func<DbContext, TState, TResult> operation,
+            Func<DbContext, TState, ExecutionResult<TResult>>? verifySucceeded) =>
+            operation(_dependencies.CurrentContext.Context, state);
+
+        public async Task<TResult> ExecuteAsync<TState, TResult>(
+            TState state,
+            Func<DbContext, TState, CancellationToken, Task<TResult>> operation,
+            Func<DbContext, TState, CancellationToken, Task<ExecutionResult<TResult>>>? verifySucceeded,
+            CancellationToken cancellationToken)
+        {
+            var context = _dependencies.CurrentContext.Context;
+
+            // ExecuteUpdateAsync and SaveChanges route through the context's execution strategy
+            // too, with no verifySucceeded of their own - a plain pass-through for those, or the
+            // conditional claim inside ReceiveAsync's delegate would fire twice on every replay
+            // regardless of the marker, which is not the scenario this fake exists to model.
+            if (verifySucceeded is null)
+                return await operation(context, state, cancellationToken);
+
+            // The one call that matters: discard this attempt's result exactly as a caller would
+            // if a commit's acknowledgement never arrived, then ask - as a real retrying
+            // strategy would before ever replaying - whether it actually landed.
+            await operation(context, state, cancellationToken);
+
+            var verified = await verifySucceeded(context, state, cancellationToken);
+            if (verified.IsSuccessful)
+                return verified.Result;
+
+            return await operation(context, state, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// ReceiveAsync has run through the execution strategy since it was first written, so a
+    /// replay has always been possible; what changed is the fix that made a replay safe - the
+    /// request id minted once outside the strategy and checked by verifySucceeded - added after
+    /// exactly this failure was found: one delivery of 5 replaying into 10 received, 10 assets
+    /// and two receipts. Nothing else in the suite drives an actual replay, so nothing else would
+    /// notice that fix quietly regressing. ReplayingExecutionStrategy above models the failure
+    /// that makes a replay happen at all - a commit whose acknowledgement never reached the
+    /// caller - closely enough to prove the fix still holds rather than just the absence of
+    /// symptoms on a provider (SQLite) that never replays anything.
+    /// </summary>
+    [Fact]
+    public async Task A_replayed_delivery_is_not_recorded_twice()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(
+            new FakeTenantProvider(tenantId),
+            builder => builder.ReplaceService<IExecutionStrategyFactory, ReplayingExecutionStrategy>());
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, line) = await SeedOrderedAsync(db, tenantId);
+
+            var result = await ServiceFor(db).ReceiveAsync(order.Id, Receive(line.Id, 5), "user-1");
+
+            Assert.True(result.Success);
+
+            db.ChangeTracker.Clear();
+
+            Assert.Equal(1, await db.GoodsReceipts.CountAsync());
+            Assert.Equal(5, await db.Assets.CountAsync());
+            var reloaded = await db.PurchaseOrders.Include(p => p.Lines).SingleAsync();
+            Assert.Equal(5, reloaded.Lines.First().ReceivedQuantity);
         }
     }
 }
