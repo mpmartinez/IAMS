@@ -861,6 +861,7 @@ else
         _asset = null;
         _depreciation = null;
         _depreciationLoaded = false;
+        _deviceLicences = [];
         _assignmentHistory = null;
         _showAllHistory = false;
         _attachments = null;
@@ -916,7 +917,7 @@ else
 
         // Gated for the same reason as the depreciation load above: Auditor-shaped roles can open an
         // asset without licence access, and should make no request rather than a guaranteed 403.
-        if (await PermissionChecker.HasPermissionAsync("iams:licences:view"))
+        if (await PermissionChecker.HasPermissionAsync("iams:licences:view") && IsCurrent(id))
             _ = LoadDeviceLicencesAsync();
     }
 
@@ -957,7 +958,11 @@ else
 
     private async Task LoadDeviceLicencesAsync()
     {
-        _deviceLicences = await Api.GetDeviceLicencesAsync(Id);
+        var id = Id;
+        var deviceLicences = await Api.GetDeviceLicencesAsync(id);
+        if (!IsCurrent(id)) return;
+
+        _deviceLicences = deviceLicences;
         StateHasChanged();
     }
 

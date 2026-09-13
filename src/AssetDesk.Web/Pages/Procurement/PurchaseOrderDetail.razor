@@ -516,6 +516,8 @@ else
     {
         if (_order is null) return;
 
+        var id = Id;
+
         _receiptDate = DateTime.Today.ToString("yyyy-MM-dd");
         // A peso order always books at 1 - the field for it is hidden entirely, see the markup.
         // A foreign-currency order starts EMPTY rather than at "1": pre-filling 1 hid the
@@ -549,6 +551,11 @@ else
                 ? (await Api.GetLicencesAsync()).Where(l => l.IsActive).ToList()
                 : [];
         }
+
+        // The lines above were built from the order on screen when the button was pressed. If the
+        // user has moved to another order during the licence lookups, opening the dialog now would
+        // book those lines against that order.
+        if (!IsCurrent(id)) return;
 
         _showReceiveModal = true;
     }
