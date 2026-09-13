@@ -103,6 +103,13 @@ public record UpsertSoftwareLicenceDto
 
     public bool ClearKey { get; init; }
     public DateTime? ExpiresAt { get; init; }
+
+    /// <summary>
+    /// The expiry the form was opened with, used to tell an untouched field from a deliberate
+    /// change. Ignored when creating a licence.
+    /// </summary>
+    public DateTime? OriginalExpiresAt { get; init; }
+
     public string? Notes { get; init; }
     public bool IsActive { get; init; } = true;
 }

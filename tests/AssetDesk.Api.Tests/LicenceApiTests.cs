@@ -1,5 +1,6 @@
 using System.Reflection;
 using AssetDesk.Api.Controllers;
+using AssetDesk.Api.Data;
 using AssetDesk.Api.Entities;
 using AssetDesk.Shared;
 using AssetDesk.Shared.DTOs;
@@ -145,6 +146,102 @@ public class LicenceApiTests
 
             await controller.Update(licence.Id, Upsert() with { ClearKey = true }, default);
             Assert.Null((await db.SoftwareLicences.AsNoTracking().SingleAsync()).LicenceKey);
+        }
+    }
+
+    private static readonly DateTime OpenedWith = new(2026, 10, 1);
+    private static readonly DateTime RenewedTo = new(2027, 10, 1);
+
+    /// <summary>
+    /// A licence whose form was opened at <see cref="OpenedWith"/>, and which a renewal has since
+    /// moved to <see cref="RenewedTo"/> behind the form's back. The tracker is cleared so the
+    /// controller reads the row as a fresh request would.
+    /// </summary>
+    private static async Task<SoftwareLicence> SeedRenewedSinceOpeningAsync(AppDbContext db, Guid tenantId)
+    {
+        var licence = await SeedLicenceAsync(db, tenantId, expiresAt: OpenedWith);
+        await db.SoftwareLicences
+            .Where(l => l.Id == licence.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(l => l.ExpiresAt, RenewedTo));
+        db.ChangeTracker.Clear();
+        return licence;
+    }
+
+    [Fact]
+    public async Task Saving_an_untouched_expiry_does_not_undo_a_renewal()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var licence = await SeedRenewedSinceOpeningAsync(db, tenantId);
+
+            var result = await Controller(db, new FakeTenantProvider(tenantId)).Update(licence.Id, Upsert() with
+            {
+                ExpiresAt = OpenedWith,
+                OriginalExpiresAt = OpenedWith,
+                Notes = "Reseller contact changed"
+            }, default);
+
+            Assert.IsType<OkObjectResult>(result.Result);
+            var saved = await db.SoftwareLicences.AsNoTracking().SingleAsync();
+            Assert.Equal(RenewedTo, saved.ExpiresAt);
+            Assert.Equal("Reseller contact changed", saved.Notes);
+        }
+    }
+
+    [Fact]
+    public async Task A_deliberate_expiry_change_on_a_stale_form_is_refused()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var licence = await SeedRenewedSinceOpeningAsync(db, tenantId);
+
+            var result = await Controller(db, new FakeTenantProvider(tenantId)).Update(licence.Id, Upsert() with
+            {
+                ExpiresAt = new DateTime(2026, 12, 1),
+                OriginalExpiresAt = OpenedWith,
+                Notes = "Corrected the term"
+            }, default);
+
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+            Assert.Equal(
+                "This licence's expiry changed to Oct 01, 2027 after you opened it. Reload and try again.",
+                Message(result));
+            var unchanged = await db.SoftwareLicences.AsNoTracking().SingleAsync();
+            Assert.Equal(RenewedTo, unchanged.ExpiresAt);
+            Assert.Null(unchanged.Notes);
+        }
+    }
+
+    [Fact]
+    public async Task A_deliberate_expiry_change_on_a_current_form_is_saved()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var licence = await SeedRenewedSinceOpeningAsync(db, tenantId);
+            var corrected = new DateTime(2027, 9, 30);
+
+            // Opened after the renewal, so the form holds the current expiry. The comparison is by
+            // day, and JSON can hand the date back as UTC.
+            var result = await Controller(db, new FakeTenantProvider(tenantId)).Update(licence.Id, Upsert() with
+            {
+                ExpiresAt = corrected,
+                OriginalExpiresAt = DateTime.SpecifyKind(RenewedTo, DateTimeKind.Utc)
+            }, default);
+
+            Assert.IsType<OkObjectResult>(result.Result);
+            Assert.Equal(corrected, (await db.SoftwareLicences.AsNoTracking().SingleAsync()).ExpiresAt);
         }
     }
 

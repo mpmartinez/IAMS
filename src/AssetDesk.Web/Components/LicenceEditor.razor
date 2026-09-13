@@ -95,6 +95,7 @@
     private string _key = "";
     private bool _clearKey;
     private string _expiresAt = "";
+    private DateTime? _originalExpiresAt;
     private string _notes = "";
     private bool _isActive = true;
     private string? _error;
@@ -116,6 +117,10 @@
             _key = "";
             _clearKey = false;
             _expiresAt = Licence?.ExpiresAt?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "";
+            // Taken with the field rather than read off Licence at save time: if the parent hands
+            // in a fresher copy while the dialog is open, the form still shows the date it opened
+            // with, and that is the date the API has to compare against.
+            _originalExpiresAt = Licence?.ExpiresAt;
             _notes = Licence?.Notes ?? "";
             _isActive = Licence?.IsActive ?? true;
             _error = null;
@@ -149,6 +154,9 @@
             ExpiresAt = DateTime.TryParse(_expiresAt, CultureInfo.InvariantCulture, DateTimeStyles.None, out var expires)
                 ? expires
                 : null,
+            // What the field held when the dialog opened. The API leaves the stored expiry alone
+            // when the two match, so saving other fields cannot undo a renewal that arrived since.
+            OriginalExpiresAt = _originalExpiresAt,
             Notes = BlankToNull(_notes),
             IsActive = _isActive
         };

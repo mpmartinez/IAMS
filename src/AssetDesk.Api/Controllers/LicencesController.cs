@@ -109,11 +109,30 @@ public class LicencesController(
         if (await ValidateAsync(tenantId, dto, licence, ct) is { } error)
             return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(error));
 
+        // The edit form sends back the expiry it was opened with, so a save from a page loaded
+        // before a renewal arrived would otherwise pull the term back to the old date - with no
+        // entitlement recording that anything changed. Compared by day: an expiry is a date, and
+        // the round trip through JSON can change its DateTimeKind without changing the day.
+        if (dto.ExpiresAt?.Date != dto.OriginalExpiresAt?.Date)
+        {
+            // A deliberate change is still allowed - it is how a wrong date gets corrected - but
+            // only against the expiry the person was looking at when they made it.
+            if (licence.ExpiresAt?.Date != dto.OriginalExpiresAt?.Date)
+            {
+                var current = licence.ExpiresAt is { } expiry ? $"{expiry:MMM dd, yyyy}" : "no expiry";
+                return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(
+                    $"This licence's expiry changed to {current} after you opened it. Reload and try again."));
+            }
+
+            licence.ExpiresAt = dto.ExpiresAt;
+        }
+        // Untouched: not assigned at all, so the column stays out of the UPDATE and a renewal that
+        // landed after the form was opened survives this save.
+
         licence.Name = dto.Name.Trim();
         licence.Publisher = TrimToNull(dto.Publisher);
         licence.SupplierId = dto.SupplierId;
         licence.LicenceModel = dto.LicenceModel;
-        licence.ExpiresAt = dto.ExpiresAt;
         licence.Notes = TrimToNull(dto.Notes);
         licence.IsActive = dto.IsActive;
         licence.UpdatedAt = DateTime.UtcNow;
