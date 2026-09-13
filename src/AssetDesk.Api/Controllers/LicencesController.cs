@@ -22,7 +22,8 @@ namespace AssetDesk.Api.Controllers;
 public class LicencesController(
     AppDbContext db,
     ITenantProvider tenantProvider,
-    ILicenceUsageReader usage) : ControllerBase
+    ILicenceUsageReader usage,
+    ILookupService lookups) : ControllerBase
 {
     private string CurrentUserId =>
         User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -143,6 +144,83 @@ public class LicencesController(
 
         licence.IsActive = false;
         licence.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(ApiResponse<SoftwareLicenceDetailDto>.Ok((await DetailAsync(tenantId, id, ct))!));
+    }
+
+    [HttpPost("{id:int}/entitlements")]
+    [Authorize(Policy = "CanManageLicences")]
+    public async Task<ActionResult<ApiResponse<SoftwareLicenceDetailDto>>> AddEntitlement(
+        int id, AddLicenceEntitlementDto dto, CancellationToken ct)
+    {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail("Select an organisation first."));
+
+        var licence = await db.SoftwareLicences
+            .FirstOrDefaultAsync(l => l.TenantId == tenantId && l.Id == id, ct);
+        if (licence is null)
+            return NotFound(ApiResponse<SoftwareLicenceDetailDto>.Fail("Licence not found."));
+
+        if (!licence.IsActive)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(
+                $"Licence '{licence.Name}' is deactivated. Reactivate it before recording seats against it."));
+
+        if (dto.SeatsAdded == 0 && dto.ExpiresAt is null)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(
+                "Record seats added or removed, or a new expiry date."));
+
+        if (dto.Cost < 0)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail("A cost cannot be negative."));
+
+        if (!await lookups.IsActiveValueAsync(LookupTypes.Currency, dto.Currency, ct))
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail($"'{dto.Currency}' is not a valid currency."));
+
+        if (CurrencyRules.Validate(dto.Currency, dto.ExchangeRate) is { } currencyError)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(currencyError));
+
+        if (dto.ExpiresAt is { } expiry && expiry.Date <= dto.EntitlementDate.Date)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(
+                "The new expiry must be after the entry's date."));
+
+        if (dto.SeatsAdded < 0)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Notes))
+                return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail("Say why seats are being removed."));
+
+            // Read then write, deliberately without a lock. This floor is a guard against a typo,
+            // not a money invariant: two administrators reducing the same licence at the same
+            // moment could take it below zero, and both reductions would sit in the ledger with
+            // their authors and reasons, where the next person to open the licence sees them.
+            var owned = await db.LicenceEntitlements
+                .Where(e => e.TenantId == tenantId && e.SoftwareLicenceId == id)
+                .SumAsync(e => e.SeatsAdded, ct);
+
+            if (owned + dto.SeatsAdded < 0)
+                return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(
+                    $"Only {owned} seats are owned, so {-dto.SeatsAdded} cannot be removed."));
+        }
+
+        db.LicenceEntitlements.Add(new LicenceEntitlement
+        {
+            TenantId = tenantId,
+            SoftwareLicenceId = id,
+            SeatsAdded = dto.SeatsAdded,
+            Cost = dto.Cost,
+            Currency = dto.Currency,
+            ExchangeRate = dto.ExchangeRate,
+            EntitlementDate = dto.EntitlementDate,
+            ExpiresAtAfter = dto.ExpiresAt,
+            CreatedByUserId = CurrentUserId,
+            Notes = TrimToNull(dto.Notes)
+        });
+
+        if (dto.ExpiresAt is { } newExpiry)
+        {
+            licence.ExpiresAt = newExpiry;
+            licence.UpdatedAt = DateTime.UtcNow;
+        }
+
         await db.SaveChangesAsync(ct);
 
         return Ok(ApiResponse<SoftwareLicenceDetailDto>.Ok((await DetailAsync(tenantId, id, ct))!));

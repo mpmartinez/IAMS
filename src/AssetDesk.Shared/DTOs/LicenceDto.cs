@@ -111,3 +111,26 @@ public record RevealedLicenceKeyDto
 {
     public required string LicenceKey { get; init; }
 }
+
+public record AddLicenceEntitlementDto
+{
+    /// <summary>Positive adds seats, zero renews, negative records a reduction.</summary>
+    [Range(-100000, 100000)]
+    public int SeatsAdded { get; init; }
+
+    [Range(0, 1000000000, ErrorMessage = "A cost cannot be negative")]
+    public decimal Cost { get; init; }
+
+    [StringLength(3, MinimumLength = 3)]
+    public string Currency { get; init; } = "PHP";
+
+    [Range(0.000001, 1000000, ErrorMessage = "Exchange rate must be greater than zero")]
+    public decimal ExchangeRate { get; init; } = 1m;
+
+    public DateTime EntitlementDate { get; init; } = DateTime.UtcNow;
+
+    /// <summary>The licence's new expiry, when this entry renews it or dates it for the first time.</summary>
+    public DateTime? ExpiresAt { get; init; }
+
+    public string? Notes { get; init; }
+}

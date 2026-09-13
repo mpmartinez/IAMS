@@ -17,7 +17,7 @@ internal static class LicenceTestKit
 
     public static LicencesController Controller(
         AppDbContext db, ITenantProvider tenants, string userId = ActingUserId) =>
-        new(db, tenants, new LicenceUsageReader(db))
+        new(db, tenants, new LicenceUsageReader(db), new LookupService(db))
         {
             ControllerContext = new ControllerContext
             {
@@ -84,7 +84,7 @@ internal static class LicenceTestKit
     }
 
     /// <summary>The ApiResponse payload of a successful action.</summary>
-    public static T Data<T>(ActionResult<ApiResponse<T>> result) =>
+    public static T Payload<T>(ActionResult<ApiResponse<T>> result) =>
         Assert.IsType<ApiResponse<T>>(Assert.IsAssignableFrom<ObjectResult>(result.Result).Value).Data!;
 
     /// <summary>The refusal message of a failed action.</summary>

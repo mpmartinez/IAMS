@@ -39,7 +39,7 @@ public class LicenceApiTests
             var saved = await db.SoftwareLicences.SingleAsync();
             Assert.Equal(tenantId, saved.TenantId);
             Assert.Equal(Key, saved.LicenceKey);
-            Assert.Equal("****-X7Q2", LicenceTestKit.Data(result).Licence.MaskedKey);
+            Assert.Equal("****-X7Q2", LicenceTestKit.Payload(result).Licence.MaskedKey);
         }
     }
 
@@ -201,7 +201,7 @@ public class LicenceApiTests
             departed.IsActive = false;
             await db.SaveChangesAsync();
 
-            var row = LicenceTestKit.Data(await Controller(db, new FakeTenantProvider(tenantId)).GetAll(default)).Single();
+            var row = LicenceTestKit.Payload(await Controller(db, new FakeTenantProvider(tenantId)).GetAll(default)).Single();
 
             Assert.Equal(2, row.SeatsOwned);
             Assert.Equal(3, row.SeatsAssigned);
@@ -225,7 +225,7 @@ public class LicenceApiTests
             var result = await Controller(db, new FakeTenantProvider(tenantId), userId: "staff-7")
                 .RevealKey(licence.Id, default);
 
-            Assert.Equal(Key, LicenceTestKit.Data(result).LicenceKey);
+            Assert.Equal(Key, LicenceTestKit.Payload(result).LicenceKey);
             var entry = await db.AuditLogs.SingleAsync();
             Assert.Equal(AuditActions.LicenceKeyRevealed, entry.Action);
             Assert.Equal(nameof(SoftwareLicence), entry.EntityType);
@@ -343,6 +343,7 @@ public class LicenceApiTests
     [InlineData(nameof(LicencesController.Update), "CanManageLicences")]
     [InlineData(nameof(LicencesController.Deactivate), "CanManageLicences")]
     [InlineData(nameof(LicencesController.RevealKey), "CanRevealLicenceKeys")]
+    [InlineData(nameof(LicencesController.AddEntitlement), "CanManageLicences")]
     public void Each_write_is_gated_on_its_own_policy(string action, string policy)
     {
         var method = typeof(LicencesController).GetMethod(action)!;
