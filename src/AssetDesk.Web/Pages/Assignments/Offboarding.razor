@@ -258,36 +258,69 @@
     private string _returnCondition = "Good";
     private string _returnNotes = "";
 
-    protected override async Task OnInitializedAsync()
+    private string? _loadedUserId;
+
+    protected override async Task OnParametersSetAsync()
     {
-        // Matches the page's PermissionView gate above. OnInitializedAsync runs regardless of
-        // what PermissionView renders, so without this check a denied user's browser would still
+        // Blazor reuses this page when only the user id in the address changes - the Back button
+        // between two users' offboarding pages - and does not run OnInitializedAsync again.
+        // Loading per id here is what stops one user's unreturned assets being listed, and
+        // selected for a bulk return, under another user's address.
+        if (_loadedUserId == UserId)
+            return;
+
+        _loadedUserId = UserId;
+        var userId = UserId;
+
+        _offboarding = null;
+        _processing = false;
+        _showReturnModal = false;
+        _selectAll = false;
+        _selectedAssets = [];
+        _returnCondition = "Good";
+        _returnNotes = "";
+        _loading = true;
+
+        // Matches the page's PermissionView gate above. This runs regardless of what
+        // PermissionView renders, so without this check a denied user's browser would still
         // fire GetOffboardingSummaryAsync (which throws on the resulting 403) behind a
         // blank/denied page.
         if (!await PermissionChecker.HasPermissionAsync("iams:assignments:return"))
         {
-            _loading = false;
+            if (IsCurrent(userId)) _loading = false;
             return;
         }
 
-        await LoadData();
+        if (IsCurrent(userId))
+            await LoadData();
     }
+
+    // The id can change while a request is in flight (see OnParametersSetAsync); a response for
+    // the user the page has left must not land on the one it is now showing.
+    private bool IsCurrent(string userId) => userId == UserId;
 
     private async Task LoadData()
     {
+        var userId = UserId;
         _loading = true;
+
+        OffboardingDto? offboarding;
         try
         {
             // GetOffboardingSummaryAsync hits an endpoint gated on iams:assignments:view, which
             // is a different permission from this page's iams:assignments:return gate. A role
             // holding return-but-not-view would otherwise 403 here; fail soft into the existing
             // "user not found"-style empty state below rather than throwing an unhandled error.
-            _offboarding = await Api.GetOffboardingSummaryAsync(UserId);
+            offboarding = await Api.GetOffboardingSummaryAsync(userId);
         }
         catch
         {
-            _offboarding = null;
+            offboarding = null;
         }
+
+        if (!IsCurrent(userId)) return;
+
+        _offboarding = offboarding;
         _loading = false;
     }
 
@@ -332,27 +365,31 @@
 
     private async Task ConfirmBulkReturn()
     {
+        var userId = UserId;
         _processing = true;
 
         var (success, returned, error) = await Api.BulkReturnAssetsAsync(
-            UserId,
+            userId,
             _selectedAssets.ToList(),
             string.IsNullOrWhiteSpace(_returnNotes) ? null : _returnNotes,
             _returnCondition);
+
+        if (success)
+            Snackbar.Success($"Successfully returned {returned} asset{(returned != 1 ? "s" : "")}");
+        else
+            Snackbar.Error(error ?? "Failed to return assets");
+
+        // The selection now on the page belongs to whichever user the page has moved on to.
+        if (!IsCurrent(userId)) return;
 
         _processing = false;
         _showReturnModal = false;
 
         if (success)
         {
-            Snackbar.Success($"Successfully returned {returned} asset{(returned != 1 ? "s" : "")}");
             _selectedAssets.Clear();
             _selectAll = false;
             await LoadData();
-        }
-        else
-        {
-            Snackbar.Error(error ?? "Failed to return assets");
         }
     }
 

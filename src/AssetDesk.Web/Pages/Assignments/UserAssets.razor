@@ -175,9 +175,29 @@
     private bool _loading = true;
     private UserAssetsDto? _userAssets;
 
-    protected override async Task OnInitializedAsync()
+    private string? _loadedUserId;
+
+    protected override async Task OnParametersSetAsync()
     {
-        _userAssets = await Api.GetUserAssetsAsync(UserId);
+        // Blazor reuses this page when only the user id in the address changes - the Back button
+        // between two users' asset lists - and does not run OnInitializedAsync again. Loading per
+        // id here is what stops one user's assets being listed under another user's address.
+        if (_loadedUserId == UserId)
+            return;
+
+        _loadedUserId = UserId;
+        var userId = UserId;
+
+        _userAssets = null;
+        _loading = true;
+
+        var userAssets = await Api.GetUserAssetsAsync(userId);
+
+        // The id can change while the request is in flight; a response for the user the page has
+        // left must not land on the one it is now showing.
+        if (userId != UserId) return;
+
+        _userAssets = userAssets;
         _loading = false;
     }
 

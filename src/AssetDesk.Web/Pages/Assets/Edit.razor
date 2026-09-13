@@ -469,10 +469,57 @@
         {
             _users = null;
         }
+    }
 
-        if (!IsNew)
+    private bool _hasLoaded;
+    private int? _loadedId;
+
+    // Runs after OnInitializedAsync has finished, so the lookups above are already in place.
+    protected override async Task OnParametersSetAsync()
+    {
+        // Blazor reuses this page when only the address changes between its routes - Back from
+        // one asset's edit form to another's, or an "Add Asset" link followed from an edit form -
+        // and does not run OnInitializedAsync again. Rebuilding the form per id here is what
+        // stops one asset's values being saved over another, or submitted as a new asset.
+        if (_hasLoaded && _loadedId == Id)
+            return;
+
+        _hasLoaded = true;
+        _loadedId = Id;
+        var id = Id;
+
+        _model = new AssetModel();
+        _error = null;
+        _saving = false;
+
+        // A lookup still debouncing was for the previous form's serial number.
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+        _debounceTimer = null;
+        _appleDeviceInfo = null;
+        _showAutoFillSuggestion = false;
+        _lastCheckedSerial = null;
+
+        _attachments = null;
+        _attachmentsLoading = false;
+        _attachmentThumbnails = new();
+        _showUploadModal = false;
+        _uploading = false;
+        _uploadFile = null;
+        _uploadCategory = "";
+        _uploadDescription = "";
+        _uploadError = "";
+        _uploadFileError = "";
+        _showDeleteAttachmentModal = false;
+        _deletingAttachment = false;
+        _attachmentToDelete = null;
+        _loading = true;
+
+        if (id is not null)
         {
-            var asset = await Api.GetAssetAsync(Id!.Value);
+            var asset = await Api.GetAssetAsync(id.Value);
+            if (!IsCurrent(id)) return;
+
             if (asset is not null)
             {
                 _model = new AssetModel
@@ -508,17 +555,24 @@
         _loading = false;
 
         // Load attachments for edit mode
-        if (!IsNew)
+        if (id is not null)
         {
-            _ = LoadAttachments();
+            _ = LoadAttachments(id.Value);
         }
     }
 
-    private async Task LoadAttachments()
+    // The id can change while a request is in flight (see OnParametersSetAsync); a response for
+    // the asset the user has left must not land on the form they are now looking at.
+    private bool IsCurrent(int? id) => id == Id;
+
+    private async Task LoadAttachments(int id)
     {
         _attachmentsLoading = true;
         _categories ??= await Api.GetAttachmentCategoriesAsync();
-        _attachments = await Api.GetAttachmentsAsync(Id!.Value);
+        var attachments = await Api.GetAttachmentsAsync(id);
+        if (!IsCurrent(id)) return;
+
+        _attachments = attachments;
         _attachmentsLoading = false;
         StateHasChanged();
 
@@ -527,15 +581,15 @@
         {
             foreach (var attachment in _attachments.Where(a => a.IsImage))
             {
-                _ = LoadAttachmentThumbnail(attachment);
+                _ = LoadAttachmentThumbnail(id, attachment);
             }
         }
     }
 
-    private async Task LoadAttachmentThumbnail(AttachmentDto attachment)
+    private async Task LoadAttachmentThumbnail(int id, AttachmentDto attachment)
     {
-        var dataUrl = await Api.GetAttachmentBase64Async(Id!.Value, attachment.Id, attachment.ContentType);
-        if (dataUrl is not null)
+        var dataUrl = await Api.GetAttachmentBase64Async(id, attachment.Id, attachment.ContentType);
+        if (dataUrl is not null && IsCurrent(id))
         {
             _attachmentThumbnails[attachment.Id] = dataUrl;
             StateHasChanged();
@@ -585,6 +639,7 @@
         if (_uploadFile is null || string.IsNullOrEmpty(_uploadCategory))
             return;
 
+        var id = Id!.Value;
         _uploading = true;
         _uploadError = "";
 
@@ -592,7 +647,7 @@
         {
             await using var stream = _uploadFile.OpenReadStream(5 * 1024 * 1024);
             var (success, _, error) = await Api.UploadAttachmentAsync(
-                Id!.Value,
+                id,
                 stream,
                 _uploadFile.Name,
                 _uploadFile.ContentType,
@@ -603,7 +658,7 @@
             {
                 _showUploadModal = false;
                 Snackbar.Success("File uploaded successfully");
-                await LoadAttachments();
+                if (IsCurrent(id)) await LoadAttachments(id);
             }
             else
             {
@@ -631,15 +686,16 @@
         if (_attachmentToDelete is null)
             return;
 
+        var id = Id!.Value;
         _deletingAttachment = true;
 
-        var success = await Api.DeleteAttachmentAsync(Id!.Value, _attachmentToDelete.Id);
+        var success = await Api.DeleteAttachmentAsync(id, _attachmentToDelete.Id);
 
         if (success)
         {
             _showDeleteAttachmentModal = false;
             Snackbar.Success("Attachment deleted");
-            await LoadAttachments();
+            if (IsCurrent(id)) await LoadAttachments(id);
         }
         else
         {
@@ -651,6 +707,7 @@
 
     private async Task HandleSubmit()
     {
+        var id = Id;
         _error = null;
         _saving = true;
 
@@ -664,7 +721,7 @@
         bool success;
         string? error;
 
-        if (IsNew)
+        if (id is null)
         {
             var dto = new CreateAssetDto
             {
@@ -710,14 +767,22 @@
                 WarrantyEndDate = DateTime.TryParse(_model.WarrantyEndDate, out var wedate) ? wedate : null,
                 Notes = NullIfEmpty(_model.Notes)
             };
-            (success, error) = await Api.UpdateAssetAsync(Id!.Value, dto);
+            (success, error) = await Api.UpdateAssetAsync(id.Value, dto);
+        }
+
+        // Once the user has moved to another form, report the outcome but leave that form be.
+        if (!IsCurrent(id))
+        {
+            if (success) Snackbar.Success(id is null ? "Asset created successfully" : "Asset updated successfully");
+            else Snackbar.Error(error ?? "Failed to save asset");
+            return;
         }
 
         _saving = false;
 
         if (success)
         {
-            Snackbar.Success(IsNew ? "Asset created successfully" : "Asset updated successfully");
+            Snackbar.Success(id is null ? "Asset created successfully" : "Asset updated successfully");
             Navigation.NavigateTo("/assets");
         }
         else

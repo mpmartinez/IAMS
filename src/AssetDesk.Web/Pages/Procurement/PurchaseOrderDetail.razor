@@ -315,23 +315,55 @@ else
     private string _receiveNotes = "";
     private List<ReceiveLineFormModel> _receiveLines = [];
 
-    protected override async Task OnInitializedAsync()
+    private int? _loadedId;
+
+    protected override async Task OnParametersSetAsync()
     {
+        // Blazor reuses this page when only the order id in the address changes - the Back
+        // button between two purchase orders - and does not run OnInitializedAsync again.
+        // Loading per id here is what stops one order's lines and receipts being shown, and a
+        // delivery being booked against them, under another order's address.
+        if (_loadedId == Id)
+            return;
+
+        _loadedId = Id;
+        var id = Id;
+
+        _order = null;
+        _transitioning = false;
+        _showCancelModal = false;
+        _showReceiveModal = false;
+        _receiving = false;
+        _receiveError = null;
+        _receiveNotes = "";
+        _receiveLines = [];
+        _loading = true;
+
         // Matches the page's PermissionView gate above - see the identical note on
         // Pages/Procurement/Suppliers.razor.
         if (!await PermissionChecker.HasPermissionAsync("iams:procurement:view"))
         {
-            _loading = false;
+            if (IsCurrent(id)) _loading = false;
             return;
         }
 
-        await LoadAsync();
+        if (IsCurrent(id))
+            await LoadAsync();
     }
+
+    // The id can change while a request is in flight (see OnParametersSetAsync); a response for
+    // the order the user has left must not land on the one they are now looking at.
+    private bool IsCurrent(int id) => id == Id;
 
     private async Task LoadAsync()
     {
+        var id = Id;
         _loading = true;
-        _order = await Api.GetPurchaseOrderAsync(Id);
+
+        var order = await Api.GetPurchaseOrderAsync(id);
+        if (!IsCurrent(id)) return;
+
+        _order = order;
         _loading = false;
     }
 
@@ -353,14 +385,15 @@ else
 
     private async Task SendOrder()
     {
+        var id = Id;
         _transitioning = true;
-        var (success, error) = await Api.SendPurchaseOrderAsync(Id);
+        var (success, error) = await Api.SendPurchaseOrderAsync(id);
         _transitioning = false;
 
         if (success)
         {
             Snackbar.Success("Purchase order sent to supplier");
-            await LoadAsync();
+            if (IsCurrent(id)) await LoadAsync();
         }
         else
         {
@@ -370,15 +403,16 @@ else
 
     private async Task CancelOrder()
     {
+        var id = Id;
         _transitioning = true;
-        var (success, error) = await Api.CancelPurchaseOrderAsync(Id);
+        var (success, error) = await Api.CancelPurchaseOrderAsync(id);
         _transitioning = false;
         _showCancelModal = false;
 
         if (success)
         {
             Snackbar.Success("Purchase order cancelled");
-            await LoadAsync();
+            if (IsCurrent(id)) await LoadAsync();
         }
         else
         {
@@ -464,7 +498,18 @@ else
         // Reuses ApiClient's ReadErrorMessageAsync under the hood - a rejected receipt names
         // which line is over-received and by how much, and that message needs to reach the user
         // verbatim rather than collapse into a generic failure.
-        var (success, error) = await Api.ReceiveGoodsAsync(Id, dto);
+        var id = Id;
+        var (success, error) = await Api.ReceiveGoodsAsync(id, dto);
+
+        // The user moved to another order while this was in flight: report the outcome, but
+        // leave that order's form and data alone.
+        if (!IsCurrent(id))
+        {
+            if (success) Snackbar.Success("Goods received");
+            else Snackbar.Error(error ?? "Failed to receive goods");
+            return;
+        }
+
         _receiving = false;
 
         if (!success)

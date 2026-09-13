@@ -823,23 +823,64 @@ else
     private AttachmentDto? _viewingAttachment;
     private string? _viewingAttachmentUrl;
 
-    protected override async Task OnInitializedAsync()
+    private int? _loadedId;
+
+    protected override async Task OnParametersSetAsync()
     {
-        // Matches the page's PermissionView gate above. OnInitializedAsync runs regardless of
-        // what PermissionView renders, so without this check a denied user's browser would still
+        // Blazor reuses this page when only the asset id in the address changes - following a
+        // link from one asset to another, or the Back button - and does not run
+        // OnInitializedAsync again. Loading per id here is what stops one asset's details,
+        // history and attachments being shown under another asset's address.
+        if (_loadedId == Id)
+            return;
+
+        _loadedId = Id;
+        var id = Id;
+
+        _asset = null;
+        _depreciation = null;
+        _depreciationLoaded = false;
+        _assignmentHistory = null;
+        _showAllHistory = false;
+        _attachments = null;
+        _attachmentsLoading = false;
+        _attachmentThumbnails = new();
+        _deleting = false;
+        _assigning = false;
+        _returning = false;
+        _transferring = false;
+        _showDeleteModal = false;
+        _showAssignModal = false;
+        _showReturnModal = false;
+        _showTransferModal = false;
+        _showReportModal = false;
+        _showLabelModal = false;
+        _showAttachmentModal = false;
+        _qrCodeDataUrl = null;
+        _loadingQrCode = false;
+        _viewingAttachment = null;
+        _viewingAttachmentUrl = null;
+        _loading = true;
+
+        // Matches the page's PermissionView gate above. This runs regardless of what
+        // PermissionView renders, so without this check a denied user's browser would still
         // fire GetAssetAsync (which throws on the resulting 403) behind a blank/denied page.
         if (!await PermissionChecker.HasPermissionAsync("iams:assets:view"))
         {
-            _loading = false;
+            if (IsCurrent(id)) _loading = false;
             return;
         }
 
         // Assignment history is gated on iams:assignments:view, which a role is free to hold apart
         // from iams:assets:view. Checked before the first render, so a user without it never sees
         // the card appear and never makes a request guaranteed to 403.
-        _canViewAssignmentHistory = await PermissionChecker.HasPermissionAsync("iams:assignments:view");
+        var canViewAssignmentHistory = await PermissionChecker.HasPermissionAsync("iams:assignments:view");
+        if (!IsCurrent(id)) return;
+        _canViewAssignmentHistory = canViewAssignmentHistory;
 
-        _asset = await Api.GetAssetAsync(Id);
+        var asset = await Api.GetAssetAsync(id);
+        if (!IsCurrent(id)) return;
+        _asset = asset;
         _loading = false;
 
         // Load assignment history, attachments, and depreciation in background
@@ -849,13 +890,21 @@ else
         // Unlike its two neighbours, the depreciation report is gated on iams:reports:view -
         // a key Staff's default bundle does not carry. Checking first means a Staff user opening
         // an asset makes no request at all, rather than a guaranteed 403.
-        if (await PermissionChecker.HasPermissionAsync("iams:reports:view"))
+        if (await PermissionChecker.HasPermissionAsync("iams:reports:view") && IsCurrent(id))
             _ = LoadDepreciationAsync();
     }
+
+    // Every await on this page that ends in a write to its state checks this first. The id can
+    // change while a request is in flight (see OnParametersSetAsync), and a response for the
+    // asset the user has left must not land on the one they are now looking at.
+    private bool IsCurrent(int id) => id == Id;
 
     private async Task LoadDepreciationAsync()
     {
         if (_asset is null) return;
+
+        var id = Id;
+        var assetTag = _asset.AssetTag;
 
         try
         {
@@ -864,7 +913,8 @@ else
             // from DepreciationCalculator. If it becomes a problem, the fix is an assetTag filter
             // on the existing endpoint, not a client-side formula.
             var summary = await Api.GetDepreciationReportAsync();
-            _depreciation = summary?.Rows.FirstOrDefault(r => r.AssetTag == _asset.AssetTag);
+            if (!IsCurrent(id)) return;
+            _depreciation = summary?.Rows.FirstOrDefault(r => r.AssetTag == assetTag);
             _depreciationLoaded = summary is not null;
         }
         catch (HttpRequestException)
@@ -872,6 +922,7 @@ else
             // Fired and forgotten with `_ =`, so an escaping exception would be an unobserved
             // task exception on the app's busiest page. Book value is supplementary: drop the
             // line rather than take the rest of the asset down with it.
+            if (!IsCurrent(id)) return;
             _depreciationLoaded = false;
         }
 
@@ -883,16 +934,24 @@ else
         // Also reached after assign, return and transfer, which are gated on keys of their own.
         if (!_canViewAssignmentHistory) return;
 
-        _assignmentHistory = await Api.GetAssetHistoryAsync(Id);
+        var id = Id;
+        var history = await Api.GetAssetHistoryAsync(id);
+        if (!IsCurrent(id)) return;
+
+        _assignmentHistory = history;
         StateHasChanged();
     }
 
     private async Task LoadAttachments()
     {
+        var id = Id;
         _attachmentsLoading = true;
         StateHasChanged();
 
-        _attachments = await Api.GetAttachmentsAsync(Id);
+        var attachments = await Api.GetAttachmentsAsync(id);
+        if (!IsCurrent(id)) return;
+
+        _attachments = attachments;
         _attachmentsLoading = false;
         StateHasChanged();
 
@@ -901,15 +960,15 @@ else
         {
             foreach (var attachment in _attachments.Where(a => a.IsImage))
             {
-                _ = LoadAttachmentThumbnail(attachment);
+                _ = LoadAttachmentThumbnail(id, attachment);
             }
         }
     }
 
-    private async Task LoadAttachmentThumbnail(AttachmentDto attachment)
+    private async Task LoadAttachmentThumbnail(int id, AttachmentDto attachment)
     {
-        var dataUrl = await Api.GetAttachmentBase64Async(Id, attachment.Id, attachment.ContentType);
-        if (dataUrl is not null)
+        var dataUrl = await Api.GetAttachmentBase64Async(id, attachment.Id, attachment.ContentType);
+        if (dataUrl is not null && IsCurrent(id))
         {
             _attachmentThumbnails[attachment.Id] = dataUrl;
             StateHasChanged();
@@ -918,6 +977,7 @@ else
 
     private async Task ViewAttachment(AttachmentDto attachment)
     {
+        var id = Id;
         _viewingAttachment = attachment;
         _viewingAttachmentUrl = null;
         _showAttachmentModal = true;
@@ -929,7 +989,9 @@ else
         }
         else
         {
-            _viewingAttachmentUrl = await Api.GetAttachmentBase64Async(Id, attachment.Id, attachment.ContentType);
+            var url = await Api.GetAttachmentBase64Async(id, attachment.Id, attachment.ContentType);
+            if (!IsCurrent(id)) return;
+            _viewingAttachmentUrl = url;
         }
         StateHasChanged();
     }
@@ -961,26 +1023,26 @@ else
         _assignUserId = "";
         _assignNotes = "";
         _assignError = "";
+        var id = Id;
         _users ??= await Api.GetUserListAsync();
-        _showAssignModal = true;
+        if (IsCurrent(id)) _showAssignModal = true;
     }
 
     private void HideAssignModal() => _showAssignModal = false;
 
     private async Task AssignAsset()
     {
+        var id = Id;
         _assigning = true;
         _assignError = "";
 
-        var (success, error) = await Api.AssignAssetAsync(Id, _assignUserId, string.IsNullOrWhiteSpace(_assignNotes) ? null : _assignNotes);
+        var (success, error) = await Api.AssignAssetAsync(id, _assignUserId, string.IsNullOrWhiteSpace(_assignNotes) ? null : _assignNotes);
 
         if (success)
         {
             _showAssignModal = false;
             Snackbar.Success("Asset assigned successfully");
-            // Reload asset and history
-            _asset = await Api.GetAssetAsync(Id);
-            await LoadAssignmentHistory();
+            await ReloadAfterChangeAsync(id);
         }
         else
         {
@@ -1001,20 +1063,32 @@ else
 
     private void HideReturnModal() => _showReturnModal = false;
 
+    // Reloads after an assign, return or transfer. Skipped once the user has moved to another
+    // asset: the change still happened, but the fresh copy belongs to a page no longer shown.
+    private async Task ReloadAfterChangeAsync(int id)
+    {
+        if (!IsCurrent(id)) return;
+
+        var asset = await Api.GetAssetAsync(id);
+        if (!IsCurrent(id)) return;
+
+        _asset = asset;
+        await LoadAssignmentHistory();
+    }
+
     private async Task ReturnAsset()
     {
+        var id = Id;
         _returning = true;
         _returnError = "";
 
-        var (success, error) = await Api.ReturnAssetAsync(Id, string.IsNullOrWhiteSpace(_returnNotes) ? null : _returnNotes, _returnCondition);
+        var (success, error) = await Api.ReturnAssetAsync(id, string.IsNullOrWhiteSpace(_returnNotes) ? null : _returnNotes, _returnCondition);
 
         if (success)
         {
             _showReturnModal = false;
             Snackbar.Success("Asset returned successfully");
-            // Reload asset and history
-            _asset = await Api.GetAssetAsync(Id);
-            await LoadAssignmentHistory();
+            await ReloadAfterChangeAsync(id);
         }
         else
         {
@@ -1091,21 +1165,25 @@ else
         _transferUserId = "";
         _transferNotes = "";
         _transferError = "";
+        var id = Id;
         _users ??= await Api.GetUserListAsync();
-        _showTransferModal = true;
+        if (IsCurrent(id)) _showTransferModal = true;
     }
 
     private void HideTransferModal() => _showTransferModal = false;
 
     private async Task TransferAsset()
     {
+        // Captured once: the return and the assign below must both act on the asset the user
+        // confirmed the transfer for, even if they navigate to another one in between.
+        var id = Id;
         _transferring = true;
         _transferError = "";
 
         // If asset is currently assigned, return it first
         if (!string.IsNullOrEmpty(_asset!.AssignedToUserId))
         {
-            var (returnSuccess, returnError) = await Api.ReturnAssetAsync(Id, $"Transferred to another user. {_transferNotes}".Trim(), "Good");
+            var (returnSuccess, returnError) = await Api.ReturnAssetAsync(id, $"Transferred to another user. {_transferNotes}".Trim(), "Good");
             if (!returnSuccess)
             {
                 _transferError = returnError ?? "Failed to return asset before transfer";
@@ -1116,15 +1194,13 @@ else
         }
 
         // Assign to new user
-        var (success, error) = await Api.AssignAssetAsync(Id, _transferUserId, string.IsNullOrWhiteSpace(_transferNotes) ? "Asset transferred" : _transferNotes);
+        var (success, error) = await Api.AssignAssetAsync(id, _transferUserId, string.IsNullOrWhiteSpace(_transferNotes) ? "Asset transferred" : _transferNotes);
 
         if (success)
         {
             _showTransferModal = false;
             Snackbar.Success("Asset transferred successfully");
-            // Reload asset and history
-            _asset = await Api.GetAssetAsync(Id);
-            await LoadAssignmentHistory();
+            await ReloadAfterChangeAsync(id);
         }
         else
         {
@@ -1151,7 +1227,11 @@ else
         _qrCodeDataUrl = null;
         StateHasChanged();
 
-        _qrCodeDataUrl = await Api.GetAssetQrCodeBase64Async(Id);
+        var id = Id;
+        var qrCodeDataUrl = await Api.GetAssetQrCodeBase64Async(id);
+        if (!IsCurrent(id)) return;
+
+        _qrCodeDataUrl = qrCodeDataUrl;
         _loadingQrCode = false;
         StateHasChanged();
     }
