@@ -115,6 +115,11 @@ public class AssetsController(
                 .Select(e => e.ErrorMessage)
                 .ToList()));
 
+        // Without a current tenant the TenantId stamping in SaveChanges skips, and the asset
+        // would be written belonging to no organisation.
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AssetDto>.Fail("Select an organisation first."));
+
         // Validate device type - editable lookup data, not the DeviceTypes constant.
         if (!await lookups.IsActiveValueAsync(LookupTypes.DeviceType, dto.DeviceType))
             return BadRequest(ApiResponse<AssetDto>.Fail($"'{dto.DeviceType}' is not a valid device type."));
@@ -140,10 +145,12 @@ public class AssetsController(
         if (dto.WarrantyStartDate.HasValue && dto.WarrantyEndDate.HasValue && dto.WarrantyStartDate > dto.WarrantyEndDate)
             return BadRequest(ApiResponse<AssetDto>.Fail("Warranty start date cannot be after warranty end date"));
 
-        // Validate assigned user exists
+        // Validate assigned user exists in this tenant. ApplicationUser has no tenant query
+        // filter at all, so without the TenantId predicate this finds users in every tenant,
+        // for every caller - not only a super admin.
         if (!string.IsNullOrEmpty(dto.AssignedToUserId))
         {
-            var userExists = await db.Users.AnyAsync(u => u.Id == dto.AssignedToUserId);
+            var userExists = await db.Users.AnyAsync(u => u.Id == dto.AssignedToUserId && u.TenantId == tenantId);
             if (!userExists)
                 return BadRequest(ApiResponse<AssetDto>.Fail("Assigned user not found"));
         }
@@ -227,10 +234,10 @@ public class AssetsController(
         if (startDate.HasValue && endDate.HasValue && startDate > endDate)
             return BadRequest(ApiResponse<AssetDto>.Fail("Warranty start date cannot be after warranty end date"));
 
-        // Validate assigned user if provided
+        // Validate assigned user if provided - in this tenant, see the same check in CreateAsset.
         if (dto.AssignedToUserId is not null && !string.IsNullOrEmpty(dto.AssignedToUserId))
         {
-            var userExists = await db.Users.AnyAsync(u => u.Id == dto.AssignedToUserId);
+            var userExists = await db.Users.AnyAsync(u => u.Id == dto.AssignedToUserId && u.TenantId == tenantId);
             if (!userExists)
                 return BadRequest(ApiResponse<AssetDto>.Fail("Assigned user not found"));
         }

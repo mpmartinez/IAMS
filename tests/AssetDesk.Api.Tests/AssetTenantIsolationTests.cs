@@ -332,4 +332,106 @@ public class AssetTenantIsolationTests
             Assert.Equal(1, Field(summary, "ExpiringWarranties"));
         }
     }
+
+    // ---------------------------------------------------------------------------------------
+    // The assignee. ApplicationUser has no tenant query filter at all, so the "assigned user
+    // exists" check found users in any tenant for every caller, not only a super admin - a
+    // Staff user in tenant A could hang tenant B's employee off their own asset.
+    // ---------------------------------------------------------------------------------------
+
+    private static CreateAssetDto NewAssetFor(string assignedToUserId) => new()
+    {
+        DeviceType = DeviceTypes.Laptop,
+        Status = AssetStatus.InUse,
+        Currency = Currencies.PHP,
+        AssignedToUserId = assignedToUserId
+    };
+
+    private static async Task<Guid> SeedOtherTenantUserAsync(Data.AppDbContext db, Asset other)
+    {
+        var tenantB = (await db.Assets.IgnoreQueryFilters().SingleAsync(a => a.Id == other.Id)).TenantId;
+        await TestDb.SeedUserAsync(db, tenantB, "user-b", "Holder B");
+        db.ChangeTracker.Clear();
+        return tenantB;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Creating_an_asset_rejects_an_assignee_from_another_tenant(bool isSuperAdmin)
+    {
+        var (db, conn, tenantA, _, other) = await SeedAsync();
+        using (db)
+        using (conn)
+        {
+            await SeedOtherTenantUserAsync(db, other);
+
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantA, isSuperAdmin))
+                .CreateAsset(NewAssetFor("user-b"));
+
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+            db.ChangeTracker.Clear();
+            Assert.False(await db.Assets.IgnoreQueryFilters().AnyAsync(a => a.AssignedToUserId == "user-b"));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Updating_an_asset_rejects_an_assignee_from_another_tenant(bool isSuperAdmin)
+    {
+        var (db, conn, tenantA, own, other) = await SeedAsync();
+        using (db)
+        using (conn)
+        {
+            await SeedOtherTenantUserAsync(db, other);
+
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantA, isSuperAdmin))
+                .UpdateAsset(own.Id, new UpdateAssetDto { AssignedToUserId = "user-b" });
+
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+            Assert.Null((await ReloadAsync(db, own.Id))!.AssignedToUserId);
+        }
+    }
+
+    [Fact]
+    public async Task An_assignee_from_the_callers_own_tenant_is_still_accepted()
+    {
+        var (db, conn, tenantA, own, _) = await SeedAsync();
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedUserAsync(db, tenantA, "user-a", "Holder A");
+            db.ChangeTracker.Clear();
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantA));
+
+            Assert.IsType<CreatedAtActionResult>((await controller.CreateAsset(NewAssetFor("user-a"))).Result);
+            db.ChangeTracker.Clear();
+
+            Assert.IsType<OkObjectResult>(
+                (await controller.UpdateAsset(own.Id, new UpdateAssetDto { AssignedToUserId = "user-a" })).Result);
+            Assert.Equal("user-a", (await ReloadAsync(db, own.Id))!.AssignedToUserId);
+        }
+    }
+
+    // Separate from the predicate tests above: this one is the guard. With no current tenant the
+    // tenant-stamping in SaveChanges skips, so the row would otherwise be written with no owner.
+    [Fact]
+    public async Task Creating_an_asset_with_no_current_tenant_is_refused()
+    {
+        var (db, conn, _, _, _) = await SeedAsync();
+        using (db)
+        using (conn)
+        {
+            var result = await ControllerFor(db, new FakeTenantProvider(null, isSuperAdmin: true))
+                .CreateAsset(new CreateAssetDto
+                {
+                    DeviceType = DeviceTypes.Laptop, Status = AssetStatus.Available, Currency = Currencies.PHP
+                });
+
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+            db.ChangeTracker.Clear();
+            Assert.Equal(2, await db.Assets.IgnoreQueryFilters().CountAsync());
+        }
+    }
 }
