@@ -148,7 +148,10 @@ changes one that is already dated: add-on seats take the licence's existing term
 ten add-on seats ending in March would silently shorten a licence renewed last month to September, a
 backdated receipt booked after a renewal would undo it, and a buyer with procurement rights alone would
 be editing a licence's term. Correcting an expiry by hand stays possible through the licence page's
-manual entry, which needs `iams:licences:manage`.
+manual entry, which needs `iams:licences:manage`. The licence editor can change the expiry too, but only deliberately: it sends the
+expiry it was opened with, leaves the stored value alone when the field was not touched - so a notes
+edit made on a page loaded before a renewal cannot roll that renewal back - and refuses a deliberate
+change when the stored expiry has moved since the form opened.
 
 For an existing licence the move is a conditional update - `ExpiresAt` set only while it is still null
 (adding seats) or earlier than the new date (renewing) - rather than an assignment to the tracked row.
