@@ -212,8 +212,9 @@ else
                                         }
                                         <p class="text-xs text-muted-foreground mt-1">
                                             @* The description, where there is one, because two lines of the same device
-                                               type - two laptop models - would otherwise read identically here. *@
-                                            @string.Join(", ", receipt.Lines.Select(l => $"{l.QuantityReceived} × {(string.IsNullOrWhiteSpace(l.Description) ? l.DeviceType : l.Description)}"))
+                                               type - two laptop models - would otherwise read identically here. A software
+                                               line names the licence it went to, since it produced no assets to find. *@
+                                            @string.Join(", ", receipt.Lines.Select(LineSummary))
                                         </p>
                                         @if (!string.IsNullOrEmpty(receipt.Notes))
                                         {
@@ -254,18 +255,105 @@ else
                     <div class="space-y-2">
                         @foreach (var line in _receiveLines)
                         {
-                            <div class="flex items-end gap-3 rounded-xl border border-border p-3">
-                                <div class="flex-1">
-                                    <p class="text-sm font-medium text-foreground">@line.Line.DeviceType</p>
-                                    <p class="text-xs text-muted-foreground">
-                                        Outstanding: @line.Line.OutstandingQuantity of @line.Line.Quantity
-                                    </p>
+                            <div class="rounded-xl border border-border p-3 space-y-3">
+                                <div class="flex items-end gap-3">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-foreground">@(line.Line.Description ?? line.Line.DeviceType)</p>
+                                        <p class="text-xs text-muted-foreground">
+                                            @line.Line.DeviceType - outstanding: @line.Line.OutstandingQuantity of @line.Line.Quantity
+                                        </p>
+                                    </div>
+                                    <div class="w-24">
+                                        <FormField LabelText="Qty">
+                                            <Input Type="number" Value="@line.QuantityReceived" ValueChanged="v => line.QuantityReceived = v ?? string.Empty" Min="0" Max="@line.Line.OutstandingQuantity.ToString()" />
+                                        </FormField>
+                                    </div>
                                 </div>
-                                <div class="w-24">
-                                    <FormField LabelText="Qty">
-                                        <Input Type="number" Value="@line.QuantityReceived" ValueChanged="v => line.QuantityReceived = v ?? string.Empty" Min="0" Max="@line.Line.OutstandingQuantity.ToString()" />
-                                    </FormField>
-                                </div>
+
+                                @if (line.IsSoftware)
+                                {
+                                    @if (!_canSeeLicences)
+                                    {
+                                        <p class="text-xs text-muted-foreground">
+                                            Software is received onto a licence rather than as assets, which needs permission to view licences.
+                                        </p>
+                                    }
+                                    else
+                                    {
+                                        var chosenLicence = ChosenLicence(line);
+                                        var renewing = line.Mode == LicenceReceiptModes.Renew;
+
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <FormField LabelText="Licence" Required="true">
+                                                <Select Value="@line.LicenceChoice" ValueChanged="v => OnLicenceChosen(line, v)" Placeholder="Choose a licence">
+                                                    @foreach (var licence in _licences)
+                                                    {
+                                                        <option value="@licence.Id">@licence.Name</option>
+                                                    }
+                                                    @if (_canCreateLicences)
+                                                    {
+                                                        <option value="@NewLicenceChoice">New licence…</option>
+                                                    }
+                                                </Select>
+                                            </FormField>
+                                            <FormField LabelText="This delivery">
+                                                <Select Value="@line.Mode" ValueChanged="v => line.Mode = v ?? LicenceReceiptModes.AddSeats" Disabled="@(line.LicenceChoice == NewLicenceChoice)">
+                                                    <option value="@LicenceReceiptModes.AddSeats">Adds seats</option>
+                                                    <option value="@LicenceReceiptModes.Renew">Renews existing seats</option>
+                                                </Select>
+                                            </FormField>
+                                        </div>
+
+                                        @if (line.LicenceChoice == NewLicenceChoice)
+                                        {
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <FormField LabelText="New licence name" Required="true">
+                                                    <Input Value="@line.NewName" ValueChanged="v => line.NewName = v" MaxLength="200" />
+                                                </FormField>
+                                                <FormField LabelText="Publisher">
+                                                    <Input Value="@line.NewPublisher" ValueChanged="v => line.NewPublisher = v" MaxLength="200" />
+                                                </FormField>
+                                                <FormField LabelText="Counted">
+                                                    <Select Value="@line.NewModel" ValueChanged="v => line.NewModel = v ?? LicenceModels.PerUser">
+                                                        @foreach (var model in LicenceModels.All)
+                                                        {
+                                                            <option value="@model">@LicenceModels.Label(model)</option>
+                                                        }
+                                                    </Select>
+                                                </FormField>
+                                            </div>
+                                        }
+
+                                        @* Only a renewal moves an existing expiry, and only forward - the API refuses
+                                           anything else, so the field offered here never asks for a choice the server
+                                           would reject. Adding seats to a licence that already has a term takes that
+                                           term outright: no field, just the fact stated plainly. *@
+                                        @if (renewing)
+                                        {
+                                            <div class="space-y-1">
+                                                @if (chosenLicence?.ExpiresAt is { } currentExpiry)
+                                                {
+                                                    <p class="text-xs text-muted-foreground">Currently runs until @currentExpiry.ToString("MMM dd, yyyy")</p>
+                                                }
+                                                <FormField LabelText="Renewed until" Required="true">
+                                                    <Input Type="date" Value="@line.ExpiresAt" ValueChanged="v => line.ExpiresAt = v" />
+                                                </FormField>
+                                            </div>
+                                        }
+                                        else if (line.LicenceChoice == NewLicenceChoice || chosenLicence?.ExpiresAt is null)
+                                        {
+                                            <FormField LabelText="Expires (optional)">
+                                                <Input Type="date" Value="@line.ExpiresAt" ValueChanged="v => line.ExpiresAt = v" />
+                                            </FormField>
+                                        }
+                                        else
+                                        {
+                                            <p class="text-xs text-muted-foreground">
+                                                Runs until @chosenLicence.ExpiresAt.Value.ToString("MMM dd, yyyy") - added seats take that term.
+                                            </p>
+                                        }
+                                    }
+                                }
                             </div>
                         }
                     </div>
@@ -314,6 +402,10 @@ else
     private string _exchangeRate = "1";
     private string _receiveNotes = "";
     private List<ReceiveLineFormModel> _receiveLines = [];
+    private const string NewLicenceChoice = "new";
+    private List<SoftwareLicenceDto> _licences = [];
+    private bool _canSeeLicences;
+    private bool _canCreateLicences;
 
     protected override async Task OnInitializedAsync()
     {
@@ -386,7 +478,7 @@ else
         }
     }
 
-    private void OpenReceiveModal()
+    private async Task OpenReceiveModal()
     {
         if (_order is null) return;
 
@@ -403,10 +495,48 @@ else
         // receiving what has not arrived yet, not re-entering the whole order.
         _receiveLines = _order.Lines
             .Where(l => l.OutstandingQuantity > 0)
-            .Select(l => new ReceiveLineFormModel { Line = l, QuantityReceived = l.OutstandingQuantity.ToString() })
+            .Select(l => new ReceiveLineFormModel
+            {
+                Line = l,
+                QuantityReceived = l.OutstandingQuantity.ToString(),
+                // The order line's description is usually the product name - a sensible start for a
+                // licence created from it.
+                NewName = l.Description ?? ""
+            })
             .ToList();
 
+        // Software lines go onto a licence, which needs licence access to choose. Asked only when
+        // the delivery has a software line, so receiving laptops never touches the licence API.
+        if (_receiveLines.Any(l => l.IsSoftware))
+        {
+            _canSeeLicences = await PermissionChecker.HasPermissionAsync("iams:licences:view");
+            _canCreateLicences = await PermissionChecker.HasPermissionAsync("iams:licences:manage");
+            _licences = _canSeeLicences
+                ? (await Api.GetLicencesAsync()).Where(l => l.IsActive).ToList()
+                : [];
+        }
+
         _showReceiveModal = true;
+    }
+
+    // Small helper rather than repeating this lookup wherever the dialog needs to know what the
+    // chosen licence already carries (its expiry, mainly) - the "new licence" choice has nothing
+    // to look up and always resolves to null.
+    private SoftwareLicenceDto? ChosenLicence(ReceiveLineFormModel line) =>
+        line.LicenceChoice != NewLicenceChoice && int.TryParse(line.LicenceChoice, CultureInfo.InvariantCulture, out var id)
+            ? _licences.FirstOrDefault(l => l.Id == id)
+            : null;
+
+    private static void OnLicenceChosen(ReceiveLineFormModel line, string? choice)
+    {
+        line.LicenceChoice = choice ?? "";
+        // A date typed for one licence must not silently apply to a different one once the
+        // choice changes.
+        line.ExpiresAt = "";
+        // A renewal needs a licence that already exists; the API refuses the combination, so the
+        // dialog does not offer it.
+        if (line.LicenceChoice == NewLicenceChoice)
+            line.Mode = LicenceReceiptModes.AddSeats;
     }
 
     private void CloseReceiveModal() => _showReceiveModal = false;
@@ -421,7 +551,73 @@ else
             if (!int.TryParse(line.QuantityReceived, NumberStyles.Integer, CultureInfo.InvariantCulture, out var quantity) || quantity <= 0)
                 continue;
 
-            lines.Add(new ReceiveLineDto { PurchaseOrderLineId = line.Line.Id, QuantityReceived = quantity });
+            var receiveLine = new ReceiveLineDto { PurchaseOrderLineId = line.Line.Id, QuantityReceived = quantity };
+
+            if (line.IsSoftware)
+            {
+                var label = line.Line.Description ?? line.Line.DeviceType;
+
+                if (!_canSeeLicences)
+                {
+                    _receiveError = $"{label}: receiving software needs permission to view licences.";
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(line.LicenceChoice))
+                {
+                    _receiveError = $"{label}: choose the licence these seats belong to.";
+                    return;
+                }
+
+                var isNew = line.LicenceChoice == NewLicenceChoice;
+                var renewing = !isNew && line.Mode == LicenceReceiptModes.Renew;
+                DateTime? expiresAt = DateTime.TryParse(line.ExpiresAt, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedExpiry)
+                    ? parsedExpiry
+                    : null;
+
+                if (renewing && expiresAt is null)
+                {
+                    _receiveError = $"{label}: enter the date the renewal runs until.";
+                    return;
+                }
+
+                // Only a renewal moves an existing expiry, and only forward - the same rule the
+                // API enforces. Caught here so a bad date never makes the round trip.
+                var chosenLicence = ChosenLicence(line);
+                if (renewing && chosenLicence?.ExpiresAt is { } current && expiresAt <= current)
+                {
+                    _receiveError = $"{label}: a renewal must run past {current:MMM dd, yyyy}.";
+                    return;
+                }
+
+                if (isNew && string.IsNullOrWhiteSpace(line.NewName))
+                {
+                    _receiveError = $"{label}: name the new licence.";
+                    return;
+                }
+
+                // Adding seats to a licence that already has a term takes that term outright - the
+                // dialog never offers the field in that case, but nothing is sent either way.
+                if (!renewing && !isNew && chosenLicence?.ExpiresAt is not null)
+                    expiresAt = null;
+
+                receiveLine = receiveLine with
+                {
+                    SoftwareLicenceId = isNew ? null : int.Parse(line.LicenceChoice, CultureInfo.InvariantCulture),
+                    NewLicence = isNew
+                        ? new NewLicenceInputDto
+                        {
+                            Name = line.NewName.Trim(),
+                            Publisher = string.IsNullOrWhiteSpace(line.NewPublisher) ? null : line.NewPublisher.Trim(),
+                            LicenceModel = line.NewModel
+                        }
+                        : null,
+                    LicenceMode = renewing ? LicenceReceiptModes.Renew : LicenceReceiptModes.AddSeats,
+                    LicenceExpiresAt = expiresAt
+                };
+            }
+
+            lines.Add(receiveLine);
         }
 
         if (lines.Count == 0)
@@ -493,9 +689,30 @@ else
             ? parsed
             : null;
 
+    private static string LineSummary(GoodsReceiptLineDto line)
+    {
+        var what = $"{line.QuantityReceived} × {(string.IsNullOrWhiteSpace(line.Description) ? line.DeviceType : line.Description)}";
+        return line switch
+        {
+            { RenewedTo: { } until } => $"{what} → renewed to {until:MMM dd, yyyy}",
+            { LicenceName: { } name } => $"{what} → added to {name}",
+            _ => what
+        };
+    }
+
     private sealed class ReceiveLineFormModel
     {
         public required PurchaseOrderLineDto Line { get; set; }
         public string QuantityReceived { get; set; } = "";
+
+        public bool IsSoftware => Line.DeviceType == "Software";
+
+        /// <summary>A licence id, NewLicenceChoice, or empty when nothing is chosen yet.</summary>
+        public string LicenceChoice { get; set; } = "";
+        public string Mode { get; set; } = LicenceReceiptModes.AddSeats;
+        public string ExpiresAt { get; set; } = "";
+        public string NewName { get; set; } = "";
+        public string NewPublisher { get; set; } = "";
+        public string NewModel { get; set; } = LicenceModels.PerUser;
     }
 }

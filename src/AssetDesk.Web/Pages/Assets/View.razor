@@ -290,6 +290,26 @@ else
                     </Card>
                 }
 
+                @if (_deviceLicences.Count > 0)
+                {
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Licences on this device</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div class="space-y-2">
+                                @foreach (var licence in _deviceLicences)
+                                {
+                                    <div class="flex items-center justify-between gap-3 text-sm" @key="licence.LicenceId">
+                                        <a href="/licences/@licence.LicenceId" class="font-medium text-foreground hover:underline">@licence.Name</a>
+                                        <Badge Variant="@LicenceDisplay.RenewalVariant(licence.RenewalStatus)">@licence.RenewalStatus</Badge>
+                                    </div>
+                                }
+                            </div>
+                        </CardContent>
+                    </Card>
+                }
+
                 @if (!string.IsNullOrEmpty(_asset.Notes))
                 {
                     <Card>
@@ -782,6 +802,7 @@ else
     private AssetDto? _asset;
     private DepreciationReportRow? _depreciation;
     private bool _depreciationLoaded;
+    private List<DeviceLicenceDto> _deviceLicences = [];
 
     // Assignment state
     private List<AssetAssignmentDto>? _assignmentHistory;
@@ -842,6 +863,11 @@ else
         // an asset makes no request at all, rather than a guaranteed 403.
         if (await PermissionChecker.HasPermissionAsync("iams:reports:view"))
             _ = LoadDepreciationAsync();
+
+        // Gated for the same reason as the depreciation load above: Auditor-shaped roles can open an
+        // asset without licence access, and should make no request rather than a guaranteed 403.
+        if (await PermissionChecker.HasPermissionAsync("iams:licences:view"))
+            _ = LoadDeviceLicencesAsync();
     }
 
     private async Task LoadDepreciationAsync()
@@ -866,6 +892,12 @@ else
             _depreciationLoaded = false;
         }
 
+        StateHasChanged();
+    }
+
+    private async Task LoadDeviceLicencesAsync()
+    {
+        _deviceLicences = await Api.GetDeviceLicencesAsync(Id);
         StateHasChanged();
     }
 
