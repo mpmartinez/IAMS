@@ -17,11 +17,12 @@ public class AssetsController(
     AppDbContext db, IQrCodeService qrCodeService, IAssetImportService importService, ILookupService lookups,
     IAssetTagGenerator tags, ITenantProvider tenantProvider) : ControllerBase
 {
-    // The single-asset endpoints filter on the tenant explicitly rather than trusting the
-    // global query filter, which has an IsSuperAdmin() bypass: a super admin whose current
-    // tenant is A could otherwise read, rewrite and hard-delete tenant B's assets by id, and a
-    // tag lookup could land on another tenant's row because AssetTag is only unique per tenant.
-    // DepreciationPoliciesController shipped a Critical for exactly this shape.
+    // Every query here filters on the tenant explicitly rather than trusting the global query
+    // filter, which has an IsSuperAdmin() bypass: a super admin whose current tenant is A could
+    // otherwise read, rewrite and hard-delete tenant B's assets by id, see every tenant's rows
+    // in the lists and totals, and have a tag lookup land on another tenant's row because
+    // AssetTag is only unique per tenant. DepreciationPoliciesController shipped a Critical
+    // for exactly this shape.
 
     // Staff only. The register carries purchase prices and full assignment history, so
     // browsing it is not something every employee needs. Employees reach exactly one asset
@@ -37,10 +38,14 @@ public class AssetsController(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<PagedResponse<AssetDto>>.Fail("Select an organisation first."));
+
         // The GoodsReceiptLine chain is only for provenance display (MapToDto), not filtered or
         // sorted on here - a dotted Include of reference navigations is enough, no ThenInclude
         // needed since every hop is a single reference, not a collection.
         var query = db.Assets
+            .Where(a => a.TenantId == tenantId)
             .Include(a => a.AssignedToUser)
             .Include(a => a.GoodsReceiptLine!.GoodsReceipt!.PurchaseOrder!.Supplier)
             .AsQueryable();
@@ -324,23 +329,27 @@ public class AssetsController(
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewReports")]
     public async Task<ActionResult> GetAssetSummary()
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var assets = db.Assets.Where(a => a.TenantId == tenantId);
         var summary = new
         {
-            TotalAssets = await db.Assets.CountAsync(),
-            ByStatus = await db.Assets
+            TotalAssets = await assets.CountAsync(),
+            ByStatus = await assets
                 .GroupBy(a => a.Status)
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync(),
-            ByDeviceType = await db.Assets
+            ByDeviceType = await assets
                 .GroupBy(a => a.DeviceType)
                 .Select(g => new { DeviceType = g.Key, Count = g.Count() })
                 .ToListAsync(),
             // Pesos, converted at the rate each asset was booked at.
-            TotalValue = await db.Assets
+            TotalValue = await assets
                 .Where(a => a.PurchasePrice.HasValue)
                 .SumAsync(a => (a.PurchasePrice ?? 0) * a.ExchangeRate),
-            AssignedAssets = await db.Assets.CountAsync(a => a.AssignedToUserId != null),
-            ExpiringWarranties = await db.Assets
+            AssignedAssets = await assets.CountAsync(a => a.AssignedToUserId != null),
+            ExpiringWarranties = await assets
                 .CountAsync(a => a.WarrantyEndDate.HasValue && a.WarrantyEndDate <= DateTime.UtcNow.AddMonths(3) && a.WarrantyEndDate > DateTime.UtcNow)
         };
 
@@ -508,7 +517,10 @@ public class AssetsController(
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanListAssetTags")]
     public async Task<ActionResult<List<string>>> GetAllTags()
     {
-        var tags = await db.Assets.Select(a => a.AssetTag).OrderBy(t => t).ToListAsync();
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<List<string>>.Fail("Select an organisation first."));
+
+        var tags = await db.Assets.Where(a => a.TenantId == tenantId).Select(a => a.AssetTag).OrderBy(t => t).ToListAsync();
         return Ok(tags);
     }
 

@@ -12,14 +12,15 @@ using Microsoft.Extensions.Configuration;
 namespace AssetDesk.Api.Tests;
 
 /// <summary>
-/// Cross-tenant isolation for the single-asset endpoints. The Asset global query filter is
-/// bypassed outright for a super-admin (AppDbContext: `_tenantProvider.IsSuperAdmin() || ...`),
-/// so a controller that leans on the filter alone lets a super admin whose current tenant is A
-/// read, rewrite and hard-delete tenant B's assets. DepreciationPoliciesController shipped a
-/// Critical for exactly this shape.
+/// Cross-tenant isolation for AssetsController. The Asset global query filter is bypassed
+/// outright for a super-admin (AppDbContext: `_tenantProvider.IsSuperAdmin() || ...`), so a
+/// controller that leans on the filter alone lets a super admin whose current tenant is A read,
+/// rewrite and hard-delete tenant B's assets, and see them in every list and total.
+/// DepreciationPoliciesController shipped a Critical for exactly this shape.
 ///
 /// Every caller here has a current tenant, so a "Select an organisation first." guard cannot be
-/// what refuses them - only an explicit TenantId predicate can turn tenant B's row into a 404.
+/// what refuses them - only an explicit TenantId predicate can turn tenant B's row into a 404
+/// or keep it out of a list.
 /// </summary>
 public class AssetTenantIsolationTests
 {
@@ -239,6 +240,96 @@ public class AssetTenantIsolationTests
                 .GetAssetByTag(own.AssetTag);
 
             Assert.IsType<OkObjectResult>(result.Result);
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // The list endpoints. Same bypass, read-only: a super admin in tenant A was shown every
+    // tenant's assets, tags and totals. Each asset below is given a price, an assignee and an
+    // expiring warranty so that every sub-query in the summary is pinned, not just the count.
+    // ---------------------------------------------------------------------------------------
+
+    private static async Task DecorateBothAsync(Data.AppDbContext db, Guid tenantA, Asset own, Asset other)
+    {
+        var tenantB = (await db.Assets.IgnoreQueryFilters().SingleAsync(a => a.Id == other.Id)).TenantId;
+        await TestDb.SeedUserAsync(db, tenantA, "user-a", "Holder A");
+        await TestDb.SeedUserAsync(db, tenantB, "user-b", "Holder B");
+
+        foreach (var (id, price, userId) in new[] { (own.Id, 100m, "user-a"), (other.Id, 5000m, "user-b") })
+        {
+            var asset = await db.Assets.IgnoreQueryFilters().SingleAsync(a => a.Id == id);
+            asset.PurchasePrice = price;
+            asset.AssignedToUserId = userId;
+            asset.WarrantyEndDate = DateTime.UtcNow.AddMonths(1);
+        }
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+    }
+
+    [Fact]
+    public async Task A_super_admin_caller_lists_only_their_own_tenants_assets()
+    {
+        var (db, conn, tenantA, own, other) = await SeedAsync();
+        using (db)
+        using (conn)
+        {
+            await DecorateBothAsync(db, tenantA, own, other);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantA, isSuperAdmin: true));
+
+            var page = Assert.IsType<PagedResponse<AssetDto>>(
+                Assert.IsType<OkObjectResult>((await controller.GetAssets()).Result).Value);
+            Assert.Equal(own.Id, Assert.Single(page.Items).Id);
+            Assert.Equal(1, page.TotalCount);
+
+            // A filter naming tenant B's user or tag must not reach tenant B's rows either.
+            var byUser = Assert.IsType<PagedResponse<AssetDto>>(
+                Assert.IsType<OkObjectResult>((await controller.GetAssets(assignedToUserId: "user-b")).Result).Value);
+            Assert.Empty(byUser.Items);
+
+            var bySearch = Assert.IsType<PagedResponse<AssetDto>>(
+                Assert.IsType<OkObjectResult>((await controller.GetAssets(search: other.AssetTag)).Result).Value);
+            Assert.Empty(bySearch.Items);
+        }
+    }
+
+    [Fact]
+    public async Task A_super_admin_caller_lists_only_their_own_tenants_tags()
+    {
+        var (db, conn, tenantA, own, _) = await SeedAsync();
+        using (db)
+        using (conn)
+        {
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantA, isSuperAdmin: true))
+                .GetAllTags();
+
+            var tags = Assert.IsType<List<string>>(Assert.IsType<OkObjectResult>(result.Result).Value);
+            Assert.Equal([own.AssetTag], tags);
+        }
+    }
+
+    [Fact]
+    public async Task A_super_admin_callers_asset_summary_counts_only_their_own_tenant()
+    {
+        var (db, conn, tenantA, own, other) = await SeedAsync();
+        using (db)
+        using (conn)
+        {
+            await DecorateBothAsync(db, tenantA, own, other);
+
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantA, isSuperAdmin: true))
+                .GetAssetSummary();
+
+            var summary = Assert.IsType<ApiResponse<object>>(Assert.IsType<OkObjectResult>(result).Value).Data!;
+            object? Field(object o, string name) => o.GetType().GetProperty(name)!.GetValue(o);
+            int SumOfCounts(string name) =>
+                ((System.Collections.IEnumerable)Field(summary, name)!).Cast<object>().Sum(g => (int)Field(g, "Count")!);
+
+            Assert.Equal(1, Field(summary, "TotalAssets"));
+            Assert.Equal(1, SumOfCounts("ByStatus"));
+            Assert.Equal(1, SumOfCounts("ByDeviceType"));
+            Assert.Equal(100m, Field(summary, "TotalValue"));
+            Assert.Equal(1, Field(summary, "AssignedAssets"));
+            Assert.Equal(1, Field(summary, "ExpiringWarranties"));
         }
     }
 }
