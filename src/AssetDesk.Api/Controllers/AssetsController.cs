@@ -15,8 +15,15 @@ namespace AssetDesk.Api.Controllers;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AssetsController(
     AppDbContext db, IQrCodeService qrCodeService, IAssetImportService importService, ILookupService lookups,
-    IAssetTagGenerator tags) : ControllerBase
+    IAssetTagGenerator tags, ITenantProvider tenantProvider) : ControllerBase
 {
+    // Every query here filters on the tenant explicitly rather than trusting the global query
+    // filter, which has an IsSuperAdmin() bypass: a super admin whose current tenant is A could
+    // otherwise read, rewrite and hard-delete tenant B's assets by id, see every tenant's rows
+    // in the lists and totals, and have a tag lookup land on another tenant's row because
+    // AssetTag is only unique per tenant. DepreciationPoliciesController shipped a Critical
+    // for exactly this shape.
+
     // Staff only. The register carries purchase prices and full assignment history, so
     // browsing it is not something every employee needs. Employees reach exactly one asset
     // at a time through scan/{assetTag}, which is what filing a ticket from a QR sticker
@@ -31,10 +38,14 @@ public class AssetsController(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<PagedResponse<AssetDto>>.Fail("Select an organisation first."));
+
         // The GoodsReceiptLine chain is only for provenance display (MapToDto), not filtered or
         // sorted on here - a dotted Include of reference navigations is enough, no ThenInclude
         // needed since every hop is a single reference, not a collection.
         var query = db.Assets
+            .Where(a => a.TenantId == tenantId)
             .Include(a => a.AssignedToUser)
             .Include(a => a.GoodsReceiptLine!.GoodsReceipt!.PurchaseOrder!.Supplier)
             .AsQueryable();
@@ -80,10 +91,13 @@ public class AssetsController(
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewAssets")]
     public async Task<ActionResult<ApiResponse<AssetDto>>> GetAsset(int id)
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AssetDto>.Fail("Select an organisation first."));
+
         var asset = await db.Assets
             .Include(a => a.AssignedToUser)
             .Include(a => a.GoodsReceiptLine!.GoodsReceipt!.PurchaseOrder!.Supplier)
-            .FirstOrDefaultAsync(a => a.Id == id);
+            .FirstOrDefaultAsync(a => a.Id == id && a.TenantId == tenantId);
 
         return asset is null
             ? NotFound(ApiResponse<AssetDto>.Fail("Asset not found"))
@@ -100,6 +114,11 @@ public class AssetsController(
                 .SelectMany(v => v.Errors)
                 .Select(e => e.ErrorMessage)
                 .ToList()));
+
+        // Without a current tenant the TenantId stamping in SaveChanges skips, and the asset
+        // would be written belonging to no organisation.
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AssetDto>.Fail("Select an organisation first."));
 
         // Validate device type - editable lookup data, not the DeviceTypes constant.
         if (!await lookups.IsActiveValueAsync(LookupTypes.DeviceType, dto.DeviceType))
@@ -126,10 +145,12 @@ public class AssetsController(
         if (dto.WarrantyStartDate.HasValue && dto.WarrantyEndDate.HasValue && dto.WarrantyStartDate > dto.WarrantyEndDate)
             return BadRequest(ApiResponse<AssetDto>.Fail("Warranty start date cannot be after warranty end date"));
 
-        // Validate assigned user exists
+        // Validate assigned user exists in this tenant. ApplicationUser has no tenant query
+        // filter at all, so without the TenantId predicate this finds users in every tenant,
+        // for every caller - not only a super admin.
         if (!string.IsNullOrEmpty(dto.AssignedToUserId))
         {
-            var userExists = await db.Users.AnyAsync(u => u.Id == dto.AssignedToUserId);
+            var userExists = await db.Users.AnyAsync(u => u.Id == dto.AssignedToUserId && u.TenantId == tenantId);
             if (!userExists)
                 return BadRequest(ApiResponse<AssetDto>.Fail("Assigned user not found"));
         }
@@ -179,7 +200,10 @@ public class AssetsController(
                 .Select(e => e.ErrorMessage)
                 .ToList()));
 
-        var asset = await db.Assets.FindAsync(id);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AssetDto>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == id && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<AssetDto>.Fail("Asset not found"));
 
@@ -210,10 +234,10 @@ public class AssetsController(
         if (startDate.HasValue && endDate.HasValue && startDate > endDate)
             return BadRequest(ApiResponse<AssetDto>.Fail("Warranty start date cannot be after warranty end date"));
 
-        // Validate assigned user if provided
+        // Validate assigned user if provided - in this tenant, see the same check in CreateAsset.
         if (dto.AssignedToUserId is not null && !string.IsNullOrEmpty(dto.AssignedToUserId))
         {
-            var userExists = await db.Users.AnyAsync(u => u.Id == dto.AssignedToUserId);
+            var userExists = await db.Users.AnyAsync(u => u.Id == dto.AssignedToUserId && u.TenantId == tenantId);
             if (!userExists)
                 return BadRequest(ApiResponse<AssetDto>.Fail("Assigned user not found"));
         }
@@ -251,7 +275,10 @@ public class AssetsController(
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanDeleteAssets")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAsset(int id)
     {
-        var asset = await db.Assets.FindAsync(id);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == id && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<object>.Fail("Asset not found"));
 
@@ -309,23 +336,27 @@ public class AssetsController(
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewReports")]
     public async Task<ActionResult> GetAssetSummary()
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var assets = db.Assets.Where(a => a.TenantId == tenantId);
         var summary = new
         {
-            TotalAssets = await db.Assets.CountAsync(),
-            ByStatus = await db.Assets
+            TotalAssets = await assets.CountAsync(),
+            ByStatus = await assets
                 .GroupBy(a => a.Status)
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToListAsync(),
-            ByDeviceType = await db.Assets
+            ByDeviceType = await assets
                 .GroupBy(a => a.DeviceType)
                 .Select(g => new { DeviceType = g.Key, Count = g.Count() })
                 .ToListAsync(),
             // Pesos, converted at the rate each asset was booked at.
-            TotalValue = await db.Assets
+            TotalValue = await assets
                 .Where(a => a.PurchasePrice.HasValue)
                 .SumAsync(a => (a.PurchasePrice ?? 0) * a.ExchangeRate),
-            AssignedAssets = await db.Assets.CountAsync(a => a.AssignedToUserId != null),
-            ExpiringWarranties = await db.Assets
+            AssignedAssets = await assets.CountAsync(a => a.AssignedToUserId != null),
+            ExpiringWarranties = await assets
                 .CountAsync(a => a.WarrantyEndDate.HasValue && a.WarrantyEndDate <= DateTime.UtcNow.AddMonths(3) && a.WarrantyEndDate > DateTime.UtcNow)
         };
 
@@ -345,7 +376,10 @@ public class AssetsController(
     {
         Console.WriteLine($"QR PNG request: id={id}, size={size}, contentType={contentType}");
 
-        var asset = await db.Assets.FindAsync(id);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == id && a.TenantId == tenantId);
         if (asset is null)
         {
             Console.WriteLine($"QR PNG: Asset {id} not found");
@@ -383,7 +417,10 @@ public class AssetsController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetQrCodeSvg(int id, [FromQuery] int size = 10, [FromQuery] string contentType = "url")
     {
-        var asset = await db.Assets.FindAsync(id);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == id && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<object>.Fail("Asset not found"));
 
@@ -409,7 +446,10 @@ public class AssetsController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetQrCodeByTagPng(string assetTag, [FromQuery] int size = 10, [FromQuery] string contentType = "url")
     {
-        var asset = await db.Assets.FirstOrDefaultAsync(a => a.AssetTag == assetTag);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.AssetTag == assetTag && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<object>.Fail("Asset not found"));
 
@@ -438,12 +478,15 @@ public class AssetsController(
         if (string.IsNullOrEmpty(normalizedTag))
             return BadRequest(ApiResponse<AssetDto>.Fail("Asset tag is required"));
 
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AssetDto>.Fail("Select an organisation first."));
+
         // Case-insensitive match. Provider-neutral: translates to lower(...) = ... on any
         // backend, unlike a COLLATE clause which is dialect-specific.
         var loweredTag = normalizedTag.ToLower();
         var asset = await db.Assets
             .Include(a => a.AssignedToUser)
-            .FirstOrDefaultAsync(a => a.AssetTag.ToLower() == loweredTag);
+            .FirstOrDefaultAsync(a => a.AssetTag.ToLower() == loweredTag && a.TenantId == tenantId);
 
         if (asset is null)
             return NotFound(ApiResponse<AssetDto>.Fail($"Asset not found: {normalizedTag}"));
@@ -481,7 +524,10 @@ public class AssetsController(
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanListAssetTags")]
     public async Task<ActionResult<List<string>>> GetAllTags()
     {
-        var tags = await db.Assets.Select(a => a.AssetTag).OrderBy(t => t).ToListAsync();
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<List<string>>.Fail("Select an organisation first."));
+
+        var tags = await db.Assets.Where(a => a.TenantId == tenantId).Select(a => a.AssetTag).OrderBy(t => t).ToListAsync();
         return Ok(tags);
     }
 

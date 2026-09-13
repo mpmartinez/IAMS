@@ -32,8 +32,8 @@ public class MixedCurrencyAssignmentTotalsTests
             ],
             "TestAuth"));
 
-    private static AssignmentsController BuildController(AppDbContext db, string callerId) =>
-        new(db)
+    private static AssignmentsController BuildController(AppDbContext db, Guid tenantId, string callerId) =>
+        new(db, new FakeTenantProvider(tenantId))
         {
             ControllerContext = new ControllerContext
             {
@@ -103,7 +103,7 @@ public class MixedCurrencyAssignmentTotalsTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-1", "Mixed Holder");
             await SeedMixedHoldingAsync(db, tenantId, "emp-1", "UA");
 
-            var result = await BuildController(db, "emp-1").GetUserAssets("emp-1");
+            var result = await BuildController(db, tenantId, "emp-1").GetUserAssets("emp-1");
 
             var body = Assert.IsType<UserAssetsDto>(
                 Assert.IsType<OkObjectResult>(result.Result).Value);
@@ -130,7 +130,7 @@ public class MixedCurrencyAssignmentTotalsTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-1", "Leaver");
             await SeedMixedHoldingAsync(db, tenantId, "emp-1", "OB");
 
-            var result = await BuildController(db, "emp-1").GetOffboardingSummary("emp-1");
+            var result = await BuildController(db, tenantId, "emp-1").GetOffboardingSummary("emp-1");
 
             var body = Assert.IsType<OffboardingDto>(
                 Assert.IsType<OkObjectResult>(result.Result).Value);
@@ -158,7 +158,7 @@ public class MixedCurrencyAssignmentTotalsTests
             await db.SaveChangesAsync();
             await SeedMixedHoldingAsync(db, tenantId, "emp-1", "PO");
 
-            var result = await BuildController(db, "emp-1").GetPendingOffboardings();
+            var result = await BuildController(db, tenantId, "emp-1").GetPendingOffboardings();
 
             var rows = Assert.IsType<List<OffboardingSummaryItem>>(
                 Assert.IsType<OkObjectResult>(result.Result).Value);
@@ -182,7 +182,7 @@ public class MixedCurrencyAssignmentTotalsTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-1", "Mixed Holder");
             await SeedMixedHoldingAsync(db, tenantId, "emp-1", "SM");
 
-            var controller = new AssetsController(db, null!, null!, null!, null!);
+            var controller = new AssetsController(db, null!, null!, null!, null!, new FakeTenantProvider(tenantId));
             var result = await controller.GetAssetSummary();
 
             // The endpoint answers with an anonymous type, so read TotalValue off it reflectively

@@ -84,12 +84,12 @@ else
                     </CardHeader>
                     <CardContent>
                         <div class="space-y-4">
-                            <TicketAttachmentGallery @ref="_gallery" TicketId="_ticket.Id" />
+                            <TicketAttachmentGallery @key="_ticket.Id" @ref="_gallery" TicketId="_ticket.Id" />
 
                             @if (CanAddAttachments)
                             {
                                 <div class="pt-3 border-t border-border">
-                                    <TicketAttachmentPicker @bind-Files="_pendingFiles" Disabled="@_uploadingAttachments" />
+                                    <TicketAttachmentPicker @key="_ticket.Id" @bind-Files="_pendingFiles" Disabled="@_uploadingAttachments" />
 
                                     @if (_pendingFiles.Count > 0)
                                     {
@@ -379,23 +379,32 @@ else
     {
         if (_ticket is null || _pendingFiles.Count == 0) return;
 
+        // Captured up front: the loop awaits, and if the user moves to another ticket meanwhile
+        // the remaining files must still go to the ticket they were picked on.
+        var ticketId = _ticket.Id;
+        var files = _pendingFiles;
+
         _uploadingAttachments = true;
-        var total = _pendingFiles.Count;
+        var total = files.Count;
         var failed = 0;
 
         // Sequential, not parallel: same reason as Report.razor - these offices are on poor
         // connections and a batch of photos uploaded at once saturates the link.
-        foreach (var f in _pendingFiles)
+        foreach (var f in files)
         {
             using var stream = new MemoryStream(f.Data);
             var (ok, _, _) = await Api.UploadTicketAttachmentAsync(
-                _ticket.Id, stream, f.Name, f.ContentType, TicketAttachmentDefaults.Category);
+                ticketId, stream, f.Name, f.ContentType, TicketAttachmentDefaults.Category);
 
             if (!ok) failed++;
         }
 
-        _uploadingAttachments = false;
-        _pendingFiles = new();
+        var current = IsCurrent(ticketId);
+        if (current)
+        {
+            _uploadingAttachments = false;
+            _pendingFiles = new();
+        }
 
         var attached = total - failed;
         if (failed == 0)
@@ -405,7 +414,7 @@ else
         else
             Snackbar.Warning($"{attached} of {total} attachments uploaded.");
 
-        if (_gallery is not null)
+        if (current && _gallery is not null)
             await _gallery.ReloadAsync();
     }
 
@@ -416,21 +425,59 @@ else
         // SuperAdmin bypasses authorisation on the API, so it must bypass here too or the UI
         // would show requester-facing affordances to a role that can in fact manage the queue.
         _isStaff = authState.User.IsInRole("SuperAdmin") || authState.User.HasClaim("permission", "iams:tickets:queue");
+    }
+
+    private int? _loadedId;
+
+    // Runs after OnInitializedAsync has finished, so _currentUserId and _isStaff are already set.
+    protected override async Task OnParametersSetAsync()
+    {
+        // Blazor reuses this page when only the ticket id in the address changes - the Back
+        // button between two tickets - and does not run OnInitializedAsync again. Loading per id
+        // here is what stops one ticket being shown, and above all a half-typed reply or picked
+        // files being posted to it, under another ticket's address.
+        if (_loadedId == Id)
+            return;
+
+        _loadedId = Id;
+
+        _ticket = null;
+        _commentBody = "";
+        _submittingReply = false;
+        _submittingInternal = false;
+        _actionInProgress = false;
+        _showResolveModal = false;
+        _resolving = false;
+        _resolutionText = "";
+        _resolveError = "";
+        _pendingFiles = new();
+        _uploadingAttachments = false;
+        _loading = true;
 
         await LoadTicket();
     }
 
+    // The id can change while a request is in flight (see OnParametersSetAsync); a response for
+    // the ticket the user has left must not land on the one they are now looking at.
+    private bool IsCurrent(int id) => id == Id;
+
     private async Task LoadTicket()
     {
+        var id = Id;
+        TicketDto? ticket;
+
         try
         {
-            _ticket = await Api.GetTicketAsync(Id);
+            ticket = await Api.GetTicketAsync(id);
         }
         catch
         {
-            _ticket = null;
+            ticket = null;
         }
 
+        if (!IsCurrent(id)) return;
+
+        _ticket = ticket;
         _loading = false;
         StateHasChanged();
     }
@@ -456,14 +503,17 @@ else
     {
         if (string.IsNullOrWhiteSpace(_commentBody)) return;
 
+        var id = Id;
         if (isInternal) _submittingInternal = true; else _submittingReply = true;
 
-        var (success, _, error) = await Api.AddTicketCommentAsync(Id, _commentBody, isInternal);
+        var (success, _, error) = await Api.AddTicketCommentAsync(id, _commentBody, isInternal);
 
         if (success)
         {
-            _commentBody = "";
             Snackbar.Success(isInternal ? "Internal note added" : "Reply sent");
+            // Once the user has moved on, the box holds the other ticket's draft (or nothing).
+            if (!IsCurrent(id)) return;
+            _commentBody = "";
             await LoadTicket();
         }
         else

@@ -40,8 +40,8 @@ public class UserAssetsAuthorizationTests
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestAuth"));
     }
 
-    private static AssignmentsController BuildController(AppDbContext db, ClaimsPrincipal principal) =>
-        new(db)
+    private static AssignmentsController BuildController(AppDbContext db, Guid tenantId, ClaimsPrincipal principal) =>
+        new(db, new FakeTenantProvider(tenantId))
         {
             ControllerContext = new ControllerContext
             {
@@ -70,7 +70,7 @@ public class UserAssetsAuthorizationTests
 
             // The floor case: an Employee whose only grant is filing tickets. No assignments
             // permission at all, so this passes only via the self-service branch.
-            var controller = BuildController(db, BuildPrincipal(
+            var controller = BuildController(db, tenantId, BuildPrincipal(
                 "emp-1", roles: [Roles.Employee], permissions: [Permissions.TicketsFile]));
 
             var result = await controller.GetUserAssets("emp-1");
@@ -95,7 +95,7 @@ public class UserAssetsAuthorizationTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-2", "Target");
             await AssignAssetAsync(db, tenantId, "LT-002", "emp-2");
 
-            var controller = BuildController(db, BuildPrincipal(
+            var controller = BuildController(db, tenantId, BuildPrincipal(
                 "emp-1", roles: [Roles.Employee], permissions: [Permissions.TicketsFile]));
 
             var result = await controller.GetUserAssets("emp-2");
@@ -115,7 +115,7 @@ public class UserAssetsAuthorizationTests
             await TestDb.SeedTenantAsync(db, tenantId);
             await TestDb.SeedUserAsync(db, tenantId, "emp-1", "Nosy Colleague");
 
-            var controller = BuildController(db, BuildPrincipal(
+            var controller = BuildController(db, tenantId, BuildPrincipal(
                 "emp-1", roles: [Roles.Employee], permissions: [Permissions.TicketsFile]));
 
             // A 404 here where a real id yields 403 would hand an unprivileged caller a user-id
@@ -139,7 +139,7 @@ public class UserAssetsAuthorizationTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-2", "Target");
             await AssignAssetAsync(db, tenantId, "LT-003", "emp-2");
 
-            var controller = BuildController(db, BuildPrincipal(
+            var controller = BuildController(db, tenantId, BuildPrincipal(
                 "staff-1", roles: [Roles.Staff], permissions: [Permissions.AssignmentsView]));
 
             var result = await controller.GetUserAssets("emp-2");
@@ -167,7 +167,7 @@ public class UserAssetsAuthorizationTests
             // SuperAdmin holds no permission claims but bypasses every check elsewhere
             // (PermissionAuthorizationHandler, ClaimsPrincipalExtensions.HasPermission). This
             // gate must not become the one place that behaves differently.
-            var controller = BuildController(db, BuildPrincipal("root", roles: [Roles.SuperAdmin]));
+            var controller = BuildController(db, tenantId, BuildPrincipal("root", roles: [Roles.SuperAdmin]));
 
             var result = await controller.GetUserAssets("emp-2");
 

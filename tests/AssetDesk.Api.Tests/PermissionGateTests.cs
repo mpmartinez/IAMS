@@ -54,8 +54,9 @@ public class PermissionGateTests
             new FakeTenantProvider(tenantId),
             NullLogger<TicketsController>.Instance);
 
-    private static AssetsController BuildAssetsController(Data.AppDbContext db) =>
-        new(db, new UnusedQrCodeService(), new UnusedAssetImportService(), new UnusedLookupService(), new UnusedAssetTagGenerator());
+    private static AssetsController BuildAssetsController(Data.AppDbContext db, Guid tenantId) =>
+        new(db, new UnusedQrCodeService(), new UnusedAssetImportService(), new UnusedLookupService(), new UnusedAssetTagGenerator(),
+            new FakeTenantProvider(tenantId));
 
     // These three dependencies are never touched by the code paths under test (scan/{tag} and
     // Tickets.Get read straight from the DbContext), so a throwing stub both satisfies the
@@ -242,9 +243,9 @@ public class PermissionGateTests
         using (db)
         using (conn)
         {
-            await SeedAssetWithFinancialsAsync(db, "LAP-001");
+            var tenantId = await SeedAssetWithFinancialsAsync(db, "LAP-001");
 
-            var controller = BuildAssetsController(db);
+            var controller = BuildAssetsController(db, tenantId);
             SetUser(controller, BuildPrincipal(userId: "emp-1")); // no roles, no permissions
 
             var result = await controller.GetAssetByTag("LAP-001");
@@ -264,9 +265,9 @@ public class PermissionGateTests
         using (db)
         using (conn)
         {
-            await SeedAssetWithFinancialsAsync(db, "LAP-002");
+            var tenantId = await SeedAssetWithFinancialsAsync(db, "LAP-002");
 
-            var controller = BuildAssetsController(db);
+            var controller = BuildAssetsController(db, tenantId);
             SetUser(controller, BuildPrincipal(permissions: [Permissions.AssetsView], userId: "staff-1"));
 
             var result = await controller.GetAssetByTag("LAP-002");
@@ -288,9 +289,9 @@ public class PermissionGateTests
         using (db)
         using (conn)
         {
-            await SeedAssetWithFinancialsAsync(db, "LAP-003");
+            var tenantId = await SeedAssetWithFinancialsAsync(db, "LAP-003");
 
-            var controller = BuildAssetsController(db);
+            var controller = BuildAssetsController(db, tenantId);
             SetUser(controller, BuildPrincipal(roles: [Roles.SuperAdmin], userId: "root-1"));
 
             var result = await controller.GetAssetByTag("LAP-003");

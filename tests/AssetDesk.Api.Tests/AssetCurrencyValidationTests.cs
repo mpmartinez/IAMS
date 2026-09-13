@@ -66,8 +66,8 @@ public class AssetCurrencyValidationTests
     // these two arrived, deleting the rateError block from either CreateAsset or UpdateAsset
     // left the whole suite green.
 
-    private static AssetsController ControllerFor(AppDbContext db) =>
-        new(db, null!, null!, new LookupService(db), new AssetTagGenerator(db));
+    private static AssetsController ControllerFor(AppDbContext db, Guid tenantId) =>
+        new(db, null!, null!, new LookupService(db), new AssetTagGenerator(db), new FakeTenantProvider(tenantId));
 
     private static string FailureMessage(ActionResult<ApiResponse<AssetDto>> result)
     {
@@ -88,7 +88,7 @@ public class AssetCurrencyValidationTests
         {
             await TestDb.SeedTenantAsync(db, tenantId);
 
-            var result = await ControllerFor(db).CreateAsset(NewAsset(Currencies.USD, 1m));
+            var result = await ControllerFor(db, tenantId).CreateAsset(NewAsset(Currencies.USD, 1m));
 
             Assert.Contains("rate is required", FailureMessage(result));
             Assert.Empty(db.Assets);
@@ -105,7 +105,7 @@ public class AssetCurrencyValidationTests
         {
             await TestDb.SeedTenantAsync(db, tenantId);
 
-            var result = await ControllerFor(db).CreateAsset(NewAsset(Currencies.USD, 58.20m));
+            var result = await ControllerFor(db, tenantId).CreateAsset(NewAsset(Currencies.USD, 58.20m));
 
             Assert.IsType<CreatedAtActionResult>(result.Result);
             var stored = db.Assets.Single();
@@ -132,7 +132,7 @@ public class AssetCurrencyValidationTests
             // Only the currency is sent. The stored rate is still 1, so the pair that WOULD be
             // saved is USD at 1 - the effective-pair logic (dto.X ?? asset.X) is what has to
             // catch this, and a check on dto.ExchangeRate alone would wave it through.
-            var result = await ControllerFor(db).UpdateAsset(
+            var result = await ControllerFor(db, tenantId).UpdateAsset(
                 asset.Id, new UpdateAssetDto { Currency = Currencies.USD });
 
             Assert.Contains("rate is required", FailureMessage(result));
@@ -160,7 +160,7 @@ public class AssetCurrencyValidationTests
 
             // The mirror image: a rate arrives with no currency, so the effective pair is the
             // stored PHP against the new rate.
-            var result = await ControllerFor(db).UpdateAsset(
+            var result = await ControllerFor(db, tenantId).UpdateAsset(
                 asset.Id, new UpdateAssetDto { ExchangeRate = 58.20m });
 
             Assert.Contains("exactly 1", FailureMessage(result));
