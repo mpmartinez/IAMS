@@ -142,7 +142,19 @@ line, `CurrencyRules.Validate`, the status recomputation. After a line is claime
 | `ExpiresAtAfter` | the new expiry, when given |
 | `GoodsReceiptLineId` | the receipt line just created |
 
-When `ExpiresAtAfter` is set, the licence's `ExpiresAt` moves to it.
+**Only a renewal moves an existing expiry, and only forward.** Adding seats may date a licence that
+has no expiry yet - a first subscription purchase, or a licence created by this receipt - but never
+changes one that is already dated: add-on seats take the licence's existing term. Otherwise a quote for
+ten add-on seats ending in March would silently shorten a licence renewed last month to September, a
+backdated receipt booked after a renewal would undo it, and a buyer with procurement rights alone would
+be editing a licence's term. Correcting an expiry by hand stays possible through the licence page's
+manual entry, which needs `iams:licences:manage`.
+
+For an existing licence the move is a conditional update - `ExpiresAt` set only while it is still null
+(adding seats) or earlier than the new date (renewing) - rather than an assignment to the tracked row.
+The licence is read before the order lock, and receipts against different orders do not serialise, so
+two renewals landing together could otherwise leave the earlier date. A conditional update that matches
+no row refuses the receipt and rolls it back.
 
 The line's `ReceivedQuantity` advances for both choices, so an order for "50 seats, 2027 renewal"
 closes at 50 of 50 received.
@@ -153,9 +165,10 @@ closes at 50 of 50 received.
 **Refused, before anything is written:**
 
 - a Software line with neither `SoftwareLicenceId` nor `NewLicence`, or with both
-- a licence id on a hardware line
+- a licence id, a new licence, a `Renew` mode or an expiry on a hardware line
 - a licence not in the caller's tenant (explicit predicate), or deactivated
-- `Renew` without `ExpiresAt`, or with `ExpiresAt` on or before the receipt date
+- `Renew` without `ExpiresAt`, or with `ExpiresAt` on or before the receipt date, or not later than the licence's current expiry
+- `AddSeats` with `ExpiresAt` against a licence that already has an expiry
 - `NewLicence` whose name already exists in the tenant
 
 A licence created through `NewLicence` is inserted inside the same transaction, so a refusal on a
