@@ -32,4 +32,8 @@ public static class AuditActions
     /// AuditedTypes - auditing it wholesale would serialise PasswordHash and SecurityStamp
     /// into Changes on every edit.
     public const string PasswordResetSent = "PasswordResetSent";
+
+    /// Someone read a licence key in full. Written explicitly by the reveal endpoint: reading a key
+    /// changes no row, so the automatic change log would never see it.
+    public const string LicenceKeyRevealed = "LicenceKeyRevealed";
 }

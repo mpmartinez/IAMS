@@ -46,11 +46,25 @@ public class HttpContextCurrentUserAccessor : ICurrentUserAccessor
 public class AuditSaveChangesInterceptor : SaveChangesInterceptor
 {
     private static readonly HashSet<string> AuditedTypes =
-        [nameof(Asset), nameof(AssetAssignment), nameof(Ticket), nameof(TicketComment), nameof(TicketAttachment)];
+    [
+        nameof(Asset), nameof(AssetAssignment), nameof(Ticket), nameof(TicketComment), nameof(TicketAttachment),
+        nameof(SoftwareLicence), nameof(LicenceEntitlement), nameof(LicenceSeatAssignment)
+    ];
 
     // Noise, or already captured by the audited fields themselves.
     private static readonly HashSet<string> IgnoredProperties =
         ["CreatedAt", "UpdatedAt"];
+
+    /// <summary>
+    /// Secrets. A change to one is recorded - who rotated the key, and when, is exactly what an
+    /// audit trail is for - but never its value, for the reason ApplicationUser is kept out of
+    /// AuditedTypes altogether: Changes is a table that only grows, readable by anyone holding
+    /// iams:audit:view.
+    /// </summary>
+    private static readonly HashSet<string> RedactedProperties =
+        [nameof(SoftwareLicence.LicenceKey)];
+
+    private const string RedactedValue = "[redacted]";
 
     /// <summary>Individual string values in Changes are capped so a long comment edit doesn't
     /// write its full before-and-after text into a table that only ever grows.</summary>
@@ -295,6 +309,19 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
             if (!property.IsModified) continue;
             if (IgnoredProperties.Contains(property.Metadata.Name)) continue;
             if (Equals(property.OriginalValue, property.CurrentValue)) continue;
+
+            // Compared above on the real values, so rotating one key to another is still recorded
+            // as a change even though both sides serialise identically. Null stays null: whether a
+            // key exists is not the secret.
+            if (RedactedProperties.Contains(property.Metadata.Name))
+            {
+                changes[property.Metadata.Name] = new
+                {
+                    from = property.OriginalValue is null ? null : RedactedValue,
+                    to = property.CurrentValue is null ? null : RedactedValue
+                };
+                continue;
+            }
 
             changes[property.Metadata.Name] = new
             {
