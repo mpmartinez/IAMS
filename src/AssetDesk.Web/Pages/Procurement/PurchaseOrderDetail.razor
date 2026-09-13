@@ -51,7 +51,7 @@ else
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-3 flex-wrap">
                         <h1 class="text-xl sm:text-2xl font-bold text-foreground truncate">@_order.Reference</h1>
-                        <Badge Variant="@StatusVariant(_order.Status)">@_order.Status</Badge>
+                        <Badge Variant="@PurchaseOrderStatusDisplay.Variant(_order.Status)">@PurchaseOrderStatusDisplay.Label(_order.Status)</Badge>
                     </div>
                     <p class="text-sm text-muted-foreground mt-1">@(_order.SupplierName ?? "—")</p>
                 </div>
@@ -117,7 +117,7 @@ else
                     <div class="p-4 sm:p-5 pb-2">
                         <h3 class="text-lg font-semibold leading-none tracking-tight text-foreground">Lines</h3>
                     </div>
-                    <Table WrapperClass="-mx-4 sm:mx-0">
+                    <Table>
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Device Type</TableHead>
@@ -346,18 +346,10 @@ else
     // count then stands alone rather than naming nobody.
     private static string ReceiptSummary(GoodsReceiptDto receipt) =>
         receipt.ReceivedByName is { } name
-            ? $"{receipt.TotalUnits} units, received by {name}"
-            : $"{receipt.TotalUnits} units";
+            ? $"{Units(receipt.TotalUnits)}, received by {name}"
+            : Units(receipt.TotalUnits);
 
-    private static string StatusVariant(string status) => status switch
-    {
-        "Draft" => "secondary",
-        "Ordered" => "info",
-        "PartiallyReceived" => "warning",
-        "Received" => "success",
-        "Cancelled" => "destructive",
-        _ => "default"
-    };
+    private static string Units(int count) => count == 1 ? "1 unit" : $"{count} units";
 
     private async Task SendOrder()
     {

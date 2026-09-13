@@ -48,7 +48,7 @@
         }
         else
         {
-            <Table WrapperClass="-mx-4 sm:mx-0">
+            <Table>
                 <TableHeader>
                     <TableRow>
                         <TableHead>Reference</TableHead>
@@ -68,7 +68,7 @@
                             <TableCell>@(order.SupplierName ?? "—")</TableCell>
                             <TableCell>@order.OrderDate.ToString("MMM dd, yyyy")</TableCell>
                             <TableCell>
-                                <Badge Variant="@StatusVariant(order.Status)">@order.Status</Badge>
+                                <Badge Variant="@PurchaseOrderStatusDisplay.Variant(order.Status)">@PurchaseOrderStatusDisplay.Label(order.Status)</Badge>
                             </TableCell>
                             <TableCell Class="text-right">
                                 @* Always the order's own currency - never a hardcoded peso sign,
@@ -221,18 +221,6 @@
     }
 
     private void ViewOrder(int id) => Navigation.NavigateTo($"/purchase-orders/{id}");
-
-    // Mirrors the five PurchaseOrderStatus values the API defines - not referenced directly
-    // since the Web project only references AssetDesk.Shared, not the Api project's entities.
-    private static string StatusVariant(string status) => status switch
-    {
-        "Draft" => "secondary",
-        "Ordered" => "info",
-        "PartiallyReceived" => "warning",
-        "Received" => "success",
-        "Cancelled" => "destructive",
-        _ => "default"
-    };
 
     private async Task OpenCreateModal()
     {
