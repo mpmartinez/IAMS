@@ -182,7 +182,7 @@ public class MixedCurrencyAssignmentTotalsTests
             await TestDb.SeedUserAsync(db, tenantId, "emp-1", "Mixed Holder");
             await SeedMixedHoldingAsync(db, tenantId, "emp-1", "SM");
 
-            var controller = new AssetsController(db, null!, null!, null!, null!);
+            var controller = new AssetsController(db, null!, null!, null!, null!, new FakeTenantProvider(tenantId));
             var result = await controller.GetAssetSummary();
 
             // The endpoint answers with an anonymous type, so read TotalValue off it reflectively

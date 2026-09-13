@@ -15,8 +15,14 @@ namespace AssetDesk.Api.Controllers;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AssetsController(
     AppDbContext db, IQrCodeService qrCodeService, IAssetImportService importService, ILookupService lookups,
-    IAssetTagGenerator tags) : ControllerBase
+    IAssetTagGenerator tags, ITenantProvider tenantProvider) : ControllerBase
 {
+    // The single-asset endpoints filter on the tenant explicitly rather than trusting the
+    // global query filter, which has an IsSuperAdmin() bypass: a super admin whose current
+    // tenant is A could otherwise read, rewrite and hard-delete tenant B's assets by id, and a
+    // tag lookup could land on another tenant's row because AssetTag is only unique per tenant.
+    // DepreciationPoliciesController shipped a Critical for exactly this shape.
+
     // Staff only. The register carries purchase prices and full assignment history, so
     // browsing it is not something every employee needs. Employees reach exactly one asset
     // at a time through scan/{assetTag}, which is what filing a ticket from a QR sticker
@@ -80,10 +86,13 @@ public class AssetsController(
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewAssets")]
     public async Task<ActionResult<ApiResponse<AssetDto>>> GetAsset(int id)
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AssetDto>.Fail("Select an organisation first."));
+
         var asset = await db.Assets
             .Include(a => a.AssignedToUser)
             .Include(a => a.GoodsReceiptLine!.GoodsReceipt!.PurchaseOrder!.Supplier)
-            .FirstOrDefaultAsync(a => a.Id == id);
+            .FirstOrDefaultAsync(a => a.Id == id && a.TenantId == tenantId);
 
         return asset is null
             ? NotFound(ApiResponse<AssetDto>.Fail("Asset not found"))
@@ -179,7 +188,10 @@ public class AssetsController(
                 .Select(e => e.ErrorMessage)
                 .ToList()));
 
-        var asset = await db.Assets.FindAsync(id);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AssetDto>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == id && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<AssetDto>.Fail("Asset not found"));
 
@@ -251,7 +263,10 @@ public class AssetsController(
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanDeleteAssets")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAsset(int id)
     {
-        var asset = await db.Assets.FindAsync(id);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == id && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<object>.Fail("Asset not found"));
 
@@ -345,7 +360,10 @@ public class AssetsController(
     {
         Console.WriteLine($"QR PNG request: id={id}, size={size}, contentType={contentType}");
 
-        var asset = await db.Assets.FindAsync(id);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == id && a.TenantId == tenantId);
         if (asset is null)
         {
             Console.WriteLine($"QR PNG: Asset {id} not found");
@@ -383,7 +401,10 @@ public class AssetsController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetQrCodeSvg(int id, [FromQuery] int size = 10, [FromQuery] string contentType = "url")
     {
-        var asset = await db.Assets.FindAsync(id);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == id && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<object>.Fail("Asset not found"));
 
@@ -409,7 +430,10 @@ public class AssetsController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetQrCodeByTagPng(string assetTag, [FromQuery] int size = 10, [FromQuery] string contentType = "url")
     {
-        var asset = await db.Assets.FirstOrDefaultAsync(a => a.AssetTag == assetTag);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.AssetTag == assetTag && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<object>.Fail("Asset not found"));
 
@@ -438,12 +462,15 @@ public class AssetsController(
         if (string.IsNullOrEmpty(normalizedTag))
             return BadRequest(ApiResponse<AssetDto>.Fail("Asset tag is required"));
 
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AssetDto>.Fail("Select an organisation first."));
+
         // Case-insensitive match. Provider-neutral: translates to lower(...) = ... on any
         // backend, unlike a COLLATE clause which is dialect-specific.
         var loweredTag = normalizedTag.ToLower();
         var asset = await db.Assets
             .Include(a => a.AssignedToUser)
-            .FirstOrDefaultAsync(a => a.AssetTag.ToLower() == loweredTag);
+            .FirstOrDefaultAsync(a => a.AssetTag.ToLower() == loweredTag && a.TenantId == tenantId);
 
         if (asset is null)
             return NotFound(ApiResponse<AssetDto>.Fail($"Asset not found: {normalizedTag}"));
