@@ -1,0 +1,171 @@
+@using System.Globalization
+@using AssetDesk.Shared
+@inject ApiClient Api
+@inject PermissionChecker PermissionChecker
+
+<Modal IsOpen="@IsOpen" Title="@(Licence is null ? "Add Licence" : "Edit Licence")" OnClose="OnClose">
+    <ChildContent>
+        <div class="space-y-4">
+            <FormField LabelText="Name" Required="true">
+                <Input Value="@_name" ValueChanged="v => _name = v" Placeholder="e.g. Microsoft 365 Business Standard" MaxLength="200" />
+            </FormField>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField LabelText="Publisher">
+                    <Input Value="@_publisher" ValueChanged="v => _publisher = v" Placeholder="e.g. Microsoft" MaxLength="200" />
+                </FormField>
+                <FormField LabelText="Counted" Required="true"
+                           HelperText="@(Licence?.ModelLocked == true ? "Fixed once seats have been assigned." : null)">
+                    <Select Value="@_model" ValueChanged="v => _model = v ?? LicenceModels.PerUser" Disabled="@(Licence?.ModelLocked == true)">
+                        @foreach (var model in LicenceModels.All)
+                        {
+                            <option value="@model">@LicenceModels.Label(model)</option>
+                        }
+                    </Select>
+                </FormField>
+            </div>
+
+            @if (_canSeeSuppliers)
+            {
+                <FormField LabelText="Supplier">
+                    <Select Value="@_supplierId" ValueChanged="v => _supplierId = v ?? string.Empty" Placeholder="No supplier">
+                        @foreach (var supplier in _suppliers.Where(s => s.IsActive || s.Id.ToString(CultureInfo.InvariantCulture) == _supplierId))
+                        {
+                            <option value="@supplier.Id">@supplier.Name</option>
+                        }
+                    </Select>
+                </FormField>
+            }
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField LabelText="Licence key"
+                           HelperText="@(Licence?.MaskedKey is null ? "Stored masked. Revealing it later is recorded." : "Leave blank to keep the current key.")">
+                    @* Never pre-filled: this form is not given the key, so there is nothing to show and a
+                       blank field on save means "unchanged". *@
+                    <Input Value="@_key" ValueChanged="v => _key = v" Placeholder="@(Licence?.MaskedKey ?? "Optional")"
+                           MaxLength="500" AutoComplete="off" Disabled="@_clearKey" />
+                </FormField>
+                <FormField LabelText="Expires" HelperText="Leave blank for a perpetual licence.">
+                    <Input Type="date" Value="@_expiresAt" ValueChanged="v => _expiresAt = v" />
+                </FormField>
+            </div>
+
+            @if (Licence?.MaskedKey is not null)
+            {
+                <Checkbox Value="@_clearKey" ValueChanged="v => _clearKey = v">Remove the stored key</Checkbox>
+            }
+
+            <FormField LabelText="Notes">
+                <Textarea Value="@_notes" ValueChanged="v => _notes = v" Rows="2" Placeholder="Agreement number, reseller contact, renewal terms..." />
+            </FormField>
+
+            @if (Licence is not null)
+            {
+                <Checkbox Value="@_isActive" ValueChanged="v => _isActive = v">Active</Checkbox>
+            }
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <Alert Variant="destructive">@_error</Alert>
+            }
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <Button Variant="ghost" OnClick="OnClose">Cancel</Button>
+        <Button OnClick="Save" Loading="@_saving" Disabled="@string.IsNullOrWhiteSpace(_name)">
+            @(Licence is null ? "Add" : "Save")
+        </Button>
+    </FooterContent>
+</Modal>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+
+    /// <summary>The licence being edited, or null to add one.</summary>
+    [Parameter] public SoftwareLicenceDto? Licence { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<SoftwareLicenceDetailDto> OnSaved { get; set; }
+
+    private bool _wasOpen;
+    private string _name = "";
+    private string _publisher = "";
+    private string _model = LicenceModels.PerUser;
+    private string _supplierId = "";
+    private string _key = "";
+    private bool _clearKey;
+    private string _expiresAt = "";
+    private string _notes = "";
+    private bool _isActive = true;
+    private string? _error;
+    private bool _saving;
+
+    private List<SupplierDto> _suppliers = [];
+    private bool _canSeeSuppliers;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reset only as the dialog opens. Resetting on every parameter pass would wipe what the user
+        // has typed whenever the parent re-renders while the dialog is open.
+        if (IsOpen && !_wasOpen)
+        {
+            _name = Licence?.Name ?? "";
+            _publisher = Licence?.Publisher ?? "";
+            _model = Licence?.LicenceModel ?? LicenceModels.PerUser;
+            _supplierId = Licence?.SupplierId?.ToString(CultureInfo.InvariantCulture) ?? "";
+            _key = "";
+            _clearKey = false;
+            _expiresAt = Licence?.ExpiresAt?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "";
+            _notes = Licence?.Notes ?? "";
+            _isActive = Licence?.IsActive ?? true;
+            _error = null;
+
+            // Suppliers are procurement data. Someone who manages licences without procurement
+            // access still gets the rest of the form, rather than a 403 as it opens.
+            _canSeeSuppliers = await PermissionChecker.HasPermissionAsync("iams:procurement:view");
+            if (_canSeeSuppliers)
+                _suppliers = await Api.GetSuppliersAsync();
+        }
+
+        _wasOpen = IsOpen;
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+        _saving = true;
+
+        var dto = new UpsertSoftwareLicenceDto
+        {
+            Name = _name.Trim(),
+            Publisher = BlankToNull(_publisher),
+            // With the supplier field hidden, keep whatever is stored rather than clearing it.
+            SupplierId = _canSeeSuppliers
+                ? int.TryParse(_supplierId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var supplierId) ? supplierId : null
+                : Licence?.SupplierId,
+            LicenceModel = _model,
+            LicenceKey = _clearKey ? null : BlankToNull(_key),
+            ClearKey = _clearKey,
+            ExpiresAt = DateTime.TryParse(_expiresAt, CultureInfo.InvariantCulture, DateTimeStyles.None, out var expires)
+                ? expires
+                : null,
+            Notes = BlankToNull(_notes),
+            IsActive = _isActive
+        };
+
+        var (success, saved, error) = await Api.SaveLicenceAsync(Licence?.Id, dto);
+        _saving = false;
+
+        // The API is the authority on duplicate names and the model lock; show its message as-is.
+        if (!success || saved is null)
+        {
+            _error = error ?? "Could not save the licence.";
+            return;
+        }
+
+        await OnSaved.InvokeAsync(saved);
+    }
+
+    private static string? BlankToNull(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}

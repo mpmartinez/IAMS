@@ -1322,6 +1322,95 @@ public class ApiClient(HttpClient http, AuthService authService)
 
     public string GetPurchaseOrderPdfUrl(int id) => $"api/purchaseorders/{id}/pdf";
 
+    // Licences - gated on iams:licences:view; writes need iams:licences:manage, and the key reveal
+    // iams:licences:reveal. No licence read carries the full key: RevealLicenceKeyAsync is the only
+    // call that returns it, and the API records every use of it.
+    public async Task<List<SoftwareLicenceDto>> GetLicencesAsync()
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetFromJsonAsync<ApiResponse<List<SoftwareLicenceDto>>>("api/licences");
+        return response?.Data ?? [];
+    }
+
+    /// <summary>Null for a licence that does not exist or belongs to another organisation.</summary>
+    public async Task<SoftwareLicenceDetailDto?> GetLicenceAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.GetAsync($"api/licences/{id}");
+        if (!response.IsSuccessStatusCode) return null;
+        return (await response.Content.ReadFromJsonAsync<ApiResponse<SoftwareLicenceDetailDto>>())?.Data;
+    }
+
+    public async Task<(bool Success, SoftwareLicenceDetailDto? Licence, string? Error)> SaveLicenceAsync(
+        int? id, UpsertSoftwareLicenceDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = id is null
+            ? await client.PostAsJsonAsync("api/licences", dto)
+            : await client.PutAsJsonAsync($"api/licences/{id}", dto);
+
+        if (!response.IsSuccessStatusCode)
+            return (false, null, await ReadErrorMessageAsync(response) ?? "Failed to save the licence.");
+
+        return (true, (await response.Content.ReadFromJsonAsync<ApiResponse<SoftwareLicenceDetailDto>>())?.Data, null);
+    }
+
+    public async Task<(bool Success, string? Error)> DeactivateLicenceAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.DeleteAsync($"api/licences/{id}");
+        return response.IsSuccessStatusCode
+            ? (true, null)
+            : (false, await ReadErrorMessageAsync(response) ?? "Failed to deactivate the licence.");
+    }
+
+    public async Task<(bool Success, string? Key, string? Error)> RevealLicenceKeyAsync(int id)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsync($"api/licences/{id}/key/reveal", null);
+
+        if (!response.IsSuccessStatusCode)
+            return (false, null, await ReadErrorMessageAsync(response) ?? "Could not reveal the key.");
+
+        return (true, (await response.Content.ReadFromJsonAsync<ApiResponse<RevealedLicenceKeyDto>>())?.Data?.LicenceKey, null);
+    }
+
+    public async Task<(bool Success, string? Error)> AddLicenceEntitlementAsync(int id, AddLicenceEntitlementDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync($"api/licences/{id}/entitlements", dto);
+        return response.IsSuccessStatusCode
+            ? (true, null)
+            : (false, await ReadErrorMessageAsync(response) ?? "Failed to record the entry.");
+    }
+
+    public async Task<(bool Success, string? Error)> AssignLicenceSeatAsync(int id, AssignLicenceSeatDto dto)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsJsonAsync($"api/licences/{id}/seats", dto);
+        return response.IsSuccessStatusCode
+            ? (true, null)
+            : (false, await ReadErrorMessageAsync(response) ?? "Failed to assign the seat.");
+    }
+
+    public async Task<(bool Success, string? Error)> ReleaseLicenceSeatAsync(int id, int seatId)
+    {
+        var client = await GetAuthenticatedClient();
+        var response = await client.PostAsync($"api/licences/{id}/seats/{seatId}/release", null);
+        return response.IsSuccessStatusCode
+            ? (true, null)
+            : (false, await ReadErrorMessageAsync(response) ?? "Failed to release the seat.");
+    }
+
+    public async Task<List<DeviceLicenceDto>> GetDeviceLicencesAsync(int assetId)
+    {
+        var response = await SafeGetAsync<ApiResponse<List<DeviceLicenceDto>>>($"api/licences/device/{assetId}");
+        return response?.Data ?? [];
+    }
+
+    public async Task<int> GetLicenceRenewalCountAsync() =>
+        await SafeGetAsync<int>("api/licences/renewals/count");
+
     // Platform SMTP settings (SuperAdmin only) - what makes forgot-password mail actually
     // send. The stored password is never returned by the API; HasPassword is the only signal
     // the UI gets, and an empty Password on save means "keep the current one".

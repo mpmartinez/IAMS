@@ -1,0 +1,155 @@
+@page "/licences"
+@attribute [Authorize]
+@using AssetDesk.Shared
+@inject ApiClient Api
+@inject AuthService AuthService
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject SnackbarService Snackbar
+@inject PermissionChecker PermissionChecker
+
+<PageTitle>Licences - AssetDesk</PageTitle>
+
+<PermissionView Permission="iams:licences:view" ShowDeniedMessage="true">
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold text-foreground">Licences</h1>
+            <p class="text-muted-foreground mt-1">
+                Software the organisation is entitled to use, who holds its seats, and when it renews.
+                Assigning more seats than are owned is allowed - it shows here so it can be put right.
+            </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <PermissionView Permission="iams:reports:view">
+                <Button Variant="outline" OnClick="() => DownloadReport(pdf: false)">CSV</Button>
+                <Button Variant="outline" OnClick="() => DownloadReport(pdf: true)">PDF</Button>
+            </PermissionView>
+            <PermissionView Permission="iams:licences:manage">
+                <Button OnClick="() => _showEditor = true">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Licence
+                </Button>
+            </PermissionView>
+        </div>
+    </div>
+
+    <Card Class="overflow-hidden">
+        @if (_loading)
+        {
+            <div class="p-4 sm:p-5 space-y-2">
+                @for (int i = 0; i < 4; i++)
+                {
+                    <div class="h-12 rounded-xl skeleton"></div>
+                }
+            </div>
+        }
+        else if (_licences.Count == 0)
+        {
+            <div class="p-4 sm:p-5">
+                <EmptyState Title="No licences yet" Description="Add a licence, or receive a software line on a purchase order." />
+            </div>
+        }
+        else
+        {
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Licence</TableHead>
+                        <TableHead>Counted</TableHead>
+                        <TableHead>Seats</TableHead>
+                        <TableHead>Reclaimable</TableHead>
+                        <TableHead>Renewal</TableHead>
+                        <TableHead>Status</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    @foreach (var licence in _licences)
+                    {
+                        <TableRow @key="licence.Id" @onclick="() => ViewLicence(licence.Id)"
+                                  Class="@(licence.IsActive ? "cursor-pointer" : "cursor-pointer opacity-50")">
+                            <TableCell>
+                                <span class="font-medium text-foreground text-sm">@licence.Name</span>
+                                @if (!string.IsNullOrEmpty(licence.Publisher))
+                                {
+                                    <p class="text-xs text-muted-foreground">@licence.Publisher</p>
+                                }
+                            </TableCell>
+                            <TableCell>@LicenceModels.Label(licence.LicenceModel)</TableCell>
+                            <TableCell>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="whitespace-nowrap">@licence.SeatsAssigned of @licence.SeatsOwned</span>
+                                    @if (licence.OverAssigned > 0)
+                                    {
+                                        <Badge Variant="destructive">@licence.OverAssigned over</Badge>
+                                    }
+                                </div>
+                            </TableCell>
+                            <TableCell>
+                                @if (licence.Reclaimable > 0)
+                                {
+                                    <Badge Variant="warning">@licence.Reclaimable</Badge>
+                                }
+                                else
+                                {
+                                    <span class="text-muted-foreground">—</span>
+                                }
+                            </TableCell>
+                            <TableCell>
+                                <Badge Variant="@LicenceDisplay.RenewalVariant(licence.RenewalStatus)">
+                                    @LicenceDisplay.RenewalLabel(licence.RenewalStatus, licence.DaysUntilExpiry)
+                                </Badge>
+                            </TableCell>
+                            <TableCell>
+                                <Badge Variant="@(licence.IsActive ? "success" : "secondary")">@(licence.IsActive ? "Active" : "Inactive")</Badge>
+                            </TableCell>
+                        </TableRow>
+                    }
+                </TableBody>
+            </Table>
+        }
+    </Card>
+</div>
+
+<LicenceEditor IsOpen="@_showEditor" OnClose="() => _showEditor = false" OnSaved="OnCreated" />
+</PermissionView>
+
+@code {
+    private List<SoftwareLicenceDto> _licences = [];
+    private bool _loading = true;
+    private bool _showEditor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Matches the page's PermissionView gate - see the identical note on
+        // Pages/Procurement/Suppliers.razor.
+        if (!await PermissionChecker.HasPermissionAsync("iams:licences:view"))
+        {
+            _loading = false;
+            return;
+        }
+
+        _licences = await Api.GetLicencesAsync();
+        _loading = false;
+    }
+
+    private void ViewLicence(int id) => Navigation.NavigateTo($"/licences/{id}");
+
+    private void OnCreated(SoftwareLicenceDetailDto saved)
+    {
+        _showEditor = false;
+        Snackbar.Success("Licence added");
+        Navigation.NavigateTo($"/licences/{saved.Licence.Id}");
+    }
+
+    private async Task DownloadReport(bool pdf)
+    {
+        var url = pdf ? Api.GetReportPdfUrl("licences") : Api.GetReportExportUrl("licences");
+        var token = await AuthService.GetTokenAsync();
+        var baseUrl = (Configuration["ApiBaseUrl"] ?? "https://localhost:5021").TrimEnd('/');
+        await JS.InvokeVoidAsync("downloadWithAuth", $"{baseUrl}/{url}", token);
+    }
+}

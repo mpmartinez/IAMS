@@ -127,6 +127,14 @@
                         <NavItem Href="/purchase-orders" Icon="clipboard-list" Label="Purchase Orders" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
                     </div>
                 </PermissionView>
+
+                <PermissionView Permission="iams:licences:view">
+                    <div class="mt-2 space-y-1">
+                        <div class="mx-2 my-2 h-px bg-sidebar-border"></div>
+                        <p class="@SectionLabelClasses">Licences</p>
+                        <NavItem Href="/licences" Icon="tag" Label="Software Licences" BadgeCount="@_licenceRenewalCount" Collapsed="_sidebarCollapsed" OnNavigation="CloseMobileMenu" />
+                    </div>
+                </PermissionView>
             </nav>
 
             @* Logout lives in the top bar's user menu now - this is the profile shortcut only. *@
@@ -541,6 +549,7 @@
     private bool _showAdminGroup;
     private bool _showSelfServiceLinks;
     private int _alertCount;
+    private int _licenceRenewalCount;
     private bool _showNotifications;
     private bool _showSearch;
     private bool _showUserMenu;
@@ -652,6 +661,7 @@
             && !await PermissionChecker.HasPermissionAsync("iams:tickets:queue");
 
         await LoadAlertCount();
+        await LoadLicenceRenewalCount();
 
         // Initialize sync services. The status indicator was removed from the top bar, but the
         // offline queue still has to come up so queued actions replay when the app is back online.
@@ -705,6 +715,18 @@
             // Silently fail if not authenticated or API unavailable
             _alertCount = 0;
         }
+    }
+
+    /// <summary>
+    /// Licences due within ninety days or already expired. Asked only of someone who can see
+    /// licences - the endpoint is gated, and a guaranteed 403 on every page load is noise.
+    /// </summary>
+    private async Task LoadLicenceRenewalCount()
+    {
+        if (!await PermissionChecker.HasPermissionAsync("iams:licences:view"))
+            return;
+
+        _licenceRenewalCount = await Api.GetLicenceRenewalCountAsync();
     }
 
     private void OpenMobileMenu() => _mobileMenuOpen = true;
