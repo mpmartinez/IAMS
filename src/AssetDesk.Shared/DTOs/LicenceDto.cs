@@ -153,3 +153,34 @@ public record DeviceLicenceDto
     public DateTime AssignedAt { get; init; }
     public required string RenewalStatus { get; init; }
 }
+
+public record LicenceComplianceRow
+{
+    public int LicenceId { get; init; }
+    public required string Name { get; init; }
+    public string? Publisher { get; init; }
+    public required string LicenceModel { get; init; }
+    public int SeatsOwned { get; init; }
+    public int SeatsAssigned { get; init; }
+    public int OverAssigned { get; init; }
+    public int Reclaimable { get; init; }
+    public DateTime? ExpiresAt { get; init; }
+    public required string RenewalStatus { get; init; }
+    public decimal SpendInPesos { get; init; }
+}
+
+public record LicenceComplianceSummaryDto
+{
+    public int LicenceCount { get; init; }
+    public int TotalSeatsOwned { get; init; }
+    public int TotalSeatsAssigned { get; init; }
+    public int OverAssignedLicenceCount { get; init; }
+    public int OverAssignedSeats { get; init; }
+    public int ReclaimableSeats { get; init; }
+    public int RenewalsDue { get; init; }
+    public int RenewalsExpired { get; init; }
+    public decimal TotalSpendInPesos { get; init; }
+    public string PrimaryCurrency { get; init; } = "PHP";
+    public DateTime AsOf { get; init; }
+    public List<LicenceComplianceRow> Rows { get; init; } = [];
+}

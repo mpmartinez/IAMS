@@ -16,6 +16,7 @@ public interface IPdfReportService
     byte[] BuildAssetValuePdf(AssetValueSummaryDto summary);
     byte[] BuildDepreciationPdf(DepreciationSummaryDto summary);
     byte[] BuildPurchaseOrderPdf(PurchaseOrderDto order);
+    byte[] BuildLicenceCompliancePdf(LicenceComplianceSummaryDto summary);
 }
 
 public class PdfReportService : IPdfReportService
@@ -248,6 +249,65 @@ public class PdfReportService : IPdfReportService
                         AddBodyCell(table, row.IsDepreciable
                             ? (row.IsFullyDepreciated ? "Fully depreciated" : "Depreciating")
                             : row.NotDepreciableReason ?? "");
+                    }
+                });
+            });
+        });
+    }
+
+    public byte[] BuildLicenceCompliancePdf(LicenceComplianceSummaryDto summary)
+    {
+        var filters = BuildFilterLine(("As of", summary.AsOf.ToString("yyyy-MM-dd")));
+
+        return BuildDocument("Licence Compliance Report", filters, summary.Rows.Count, content =>
+        {
+            content.Column(col =>
+            {
+                col.Item().Text(
+                    $"{summary.TotalSeatsAssigned} of {summary.TotalSeatsOwned} seats assigned   •   " +
+                    $"Spend {FormatCurrency(summary.TotalSpendInPesos, summary.PrimaryCurrency)}");
+
+                // Named rather than left for a reader to spot in the rows: an over-assigned licence
+                // is a compliance exposure, and a reclaimable seat is money already spent on nobody.
+                if (summary.OverAssignedLicenceCount > 0 || summary.ReclaimableSeats > 0)
+                    col.Item().PaddingTop(4).Text(
+                        $"{summary.OverAssignedLicenceCount} licence(s) over-assigned by {summary.OverAssignedSeats} seat(s)   •   " +
+                        $"{summary.ReclaimableSeats} seat(s) reclaimable");
+
+                if (summary.RenewalsDue > 0 || summary.RenewalsExpired > 0)
+                    col.Item().PaddingTop(4).Text(
+                        $"{summary.RenewalsDue} renewal(s) due within {LicenceRules.RenewalWindowDays} days   •   " +
+                        $"{summary.RenewalsExpired} expired");
+
+                col.Item().PaddingTop(10).Table(table =>
+                {
+                    table.ColumnsDefinition(c =>
+                    {
+                        c.RelativeColumn(3);    // licence
+                        c.RelativeColumn(1.5f); // model
+                        c.RelativeColumn(1);    // owned
+                        c.RelativeColumn(1);    // assigned
+                        c.RelativeColumn(1);    // over
+                        c.RelativeColumn(1);    // reclaimable
+                        c.RelativeColumn(1.5f); // expires
+                        c.RelativeColumn(1.5f); // status
+                        c.RelativeColumn(2);    // spend
+                    });
+
+                    AddHeaderRow(table,
+                        "Licence", "Model", "Owned", "Assigned", "Over", "Reclaimable", "Expires", "Renewal", "Spend");
+
+                    foreach (var row in summary.Rows)
+                    {
+                        AddBodyCell(table, row.Publisher is null ? row.Name : $"{row.Name} ({row.Publisher})");
+                        AddBodyCell(table, LicenceModels.Label(row.LicenceModel));
+                        AddBodyCell(table, row.SeatsOwned.ToString());
+                        AddBodyCell(table, row.SeatsAssigned.ToString());
+                        AddBodyCell(table, row.OverAssigned > 0 ? row.OverAssigned.ToString() : "—");
+                        AddBodyCell(table, row.Reclaimable > 0 ? row.Reclaimable.ToString() : "—");
+                        AddBodyCell(table, row.ExpiresAt?.ToString("yyyy-MM-dd") ?? "—");
+                        AddBodyCell(table, row.RenewalStatus);
+                        AddBodyCell(table, FormatCurrency(row.SpendInPesos, summary.PrimaryCurrency));
                     }
                 });
             });

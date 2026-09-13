@@ -160,18 +160,18 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
                 : r.NotDepreciableReason;
 
             sb.AppendLine(string.Join(',',
-                EscapeCsv(r.AssetTag),
-                EscapeCsv(r.DeviceType),
-                EscapeCsv(r.Name),
+                CsvFormat.Escape(r.AssetTag),
+                CsvFormat.Escape(r.DeviceType),
+                CsvFormat.Escape(r.Name),
                 r.PurchaseDate?.ToString("yyyy-MM-dd") ?? "",
                 r.PurchasePrice?.ToString("F2", CultureInfo.InvariantCulture) ?? "",
-                EscapeCsv(r.Currency),
+                CsvFormat.Escape(r.Currency),
                 r.CostBasis.ToString("F2", CultureInfo.InvariantCulture),
                 r.UsefulLifeMonths?.ToString(CultureInfo.InvariantCulture) ?? "",
                 r.ElapsedMonths?.ToString(CultureInfo.InvariantCulture) ?? "",
                 r.AccumulatedDepreciation?.ToString("F2", CultureInfo.InvariantCulture) ?? "",
                 r.NetBookValue?.ToString("F2", CultureInfo.InvariantCulture) ?? "",
-                EscapeCsv(status)));
+                CsvFormat.Escape(status)));
         }
 
         var fileName = $"Depreciation {summary.AsOf:yyyy-MM-dd}.csv";
@@ -750,16 +750,16 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
         foreach (var row in data)
         {
             sb.AppendLine(string.Join(",",
-                EscapeCsv(row.AssetTag),
-                EscapeCsv(row.DeviceType),
-                EscapeCsv(row.Manufacturer),
-                EscapeCsv(row.Model),
-                EscapeCsv(row.SerialNumber),
-                EscapeCsv(row.Status),
-                EscapeCsv(row.AssignedTo),
-                EscapeCsv(row.Location),
+                CsvFormat.Escape(row.AssetTag),
+                CsvFormat.Escape(row.DeviceType),
+                CsvFormat.Escape(row.Manufacturer),
+                CsvFormat.Escape(row.Model),
+                CsvFormat.Escape(row.SerialNumber),
+                CsvFormat.Escape(row.Status),
+                CsvFormat.Escape(row.AssignedTo),
+                CsvFormat.Escape(row.Location),
                 row.PurchasePrice?.ToString("F2", CultureInfo.InvariantCulture) ?? "",
-                EscapeCsv(row.Currency),
+                CsvFormat.Escape(row.Currency),
                 row.PurchaseDate?.ToString("yyyy-MM-dd") ?? "",
                 row.WarrantyEndDate?.ToString("yyyy-MM-dd") ?? "",
                 row.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")
@@ -780,16 +780,16 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
         foreach (var row in data)
         {
             sb.AppendLine(string.Join(",",
-                EscapeCsv(row.UserName),
-                EscapeCsv(row.Department),
-                EscapeCsv(row.AssetTag),
-                EscapeCsv(row.DeviceType),
-                EscapeCsv(row.Manufacturer),
-                EscapeCsv(row.Model),
-                EscapeCsv(row.SerialNumber),
+                CsvFormat.Escape(row.UserName),
+                CsvFormat.Escape(row.Department),
+                CsvFormat.Escape(row.AssetTag),
+                CsvFormat.Escape(row.DeviceType),
+                CsvFormat.Escape(row.Manufacturer),
+                CsvFormat.Escape(row.Model),
+                CsvFormat.Escape(row.SerialNumber),
                 row.AssignedDate?.ToString("yyyy-MM-dd") ?? "",
                 row.PurchasePrice?.ToString("F2", CultureInfo.InvariantCulture) ?? "",
-                EscapeCsv(row.Currency)
+                CsvFormat.Escape(row.Currency)
             ));
         }
 
@@ -807,17 +807,17 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
         foreach (var row in data)
         {
             sb.AppendLine(string.Join(",",
-                EscapeCsv(row.AssetTag),
-                EscapeCsv(row.DeviceType),
-                EscapeCsv(row.Manufacturer),
-                EscapeCsv(row.Model),
-                EscapeCsv(row.WarrantyProvider),
+                CsvFormat.Escape(row.AssetTag),
+                CsvFormat.Escape(row.DeviceType),
+                CsvFormat.Escape(row.Manufacturer),
+                CsvFormat.Escape(row.Model),
+                CsvFormat.Escape(row.WarrantyProvider),
                 row.WarrantyStartDate?.ToString("yyyy-MM-dd") ?? "",
                 row.WarrantyEndDate.ToString("yyyy-MM-dd"),
                 row.DaysRemaining.ToString(),
-                EscapeCsv(row.WarrantyStatus),
-                EscapeCsv(row.AssignedTo),
-                EscapeCsv(row.Location)
+                CsvFormat.Escape(row.WarrantyStatus),
+                CsvFormat.Escape(row.AssignedTo),
+                CsvFormat.Escape(row.Location)
             ));
         }
 
@@ -835,11 +835,11 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
         foreach (var row in data)
         {
             sb.AppendLine(string.Join(",",
-                EscapeCsv(row.DeviceType),
+                CsvFormat.Escape(row.DeviceType),
                 row.AssetCount.ToString(),
                 row.TotalValue.ToString("F2", CultureInfo.InvariantCulture),
                 row.AverageValue.ToString("F2", CultureInfo.InvariantCulture),
-                EscapeCsv(row.Currency)
+                CsvFormat.Escape(row.Currency)
             ));
         }
 
@@ -848,19 +848,5 @@ public class ReportsController(AppDbContext db, IPdfReportService pdf) : Control
         sb.AppendLine($"GRAND TOTAL,{data.Sum(r => r.AssetCount)},{grandTotal:F2},,{currency}");
 
         return sb.ToString();
-    }
-
-    private static string EscapeCsv(string? value)
-    {
-        if (string.IsNullOrEmpty(value))
-            return "";
-
-        // Escape quotes and wrap in quotes if contains special characters
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
-        {
-            return $"\"{value.Replace("\"", "\"\"")}\"";
-        }
-
-        return value;
     }
 }
