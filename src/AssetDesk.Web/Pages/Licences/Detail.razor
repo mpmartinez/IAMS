@@ -510,9 +510,22 @@ else
         await LoadAsync();
     }
 
+    /// <summary>
+    /// Every handler below that awaits the API notes the id it asked about and, when the answer
+    /// arrives, drops it if the address has since moved to another licence. The page is reused
+    /// across ids, so a late answer would otherwise land under the new address - one licence's
+    /// details or revealed key shown as another's, with the action buttons posting to the licence
+    /// in the address rather than the one on screen. Busy flags are still cleared, because the call
+    /// they track has ended either way.
+    /// </summary>
     private async Task LoadAsync()
     {
-        _detail = await Api.GetLicenceAsync(Id);
+        var requestedId = Id;
+        var detail = await Api.GetLicenceAsync(requestedId);
+        if (Id != requestedId)
+            return;
+
+        _detail = detail;
         _loading = false;
     }
 
@@ -531,9 +544,14 @@ else
 
     private async Task RevealKey()
     {
+        var requestedId = Id;
         _revealing = true;
-        var (success, key, error) = await Api.RevealLicenceKeyAsync(Id);
+        var (success, key, error) = await Api.RevealLicenceKeyAsync(requestedId);
         _revealing = false;
+
+        // Neither the key nor an error belongs to the licence now in the address.
+        if (Id != requestedId)
+            return;
 
         if (success)
             _revealedKey = key;
@@ -543,6 +561,11 @@ else
 
     private void OnEdited(SoftwareLicenceDetailDto saved)
     {
+        // The editor awaits its own save and calls back even after this page has moved on and
+        // removed it, so the saved licence is checked against the address here.
+        if (saved.Licence.Id != Id)
+            return;
+
         _showEditor = false;
         _detail = saved;
         // A revealed key may be the one that was just replaced or removed.
@@ -552,9 +575,14 @@ else
 
     private async Task Deactivate()
     {
+        var requestedId = Id;
         _deactivating = true;
-        var (success, error) = await Api.DeactivateLicenceAsync(Id);
+        var (success, error) = await Api.DeactivateLicenceAsync(requestedId);
         _deactivating = false;
+
+        if (Id != requestedId)
+            return;
+
         _showDeactivate = false;
 
         if (!success)
@@ -648,9 +676,13 @@ else
             Notes = string.IsNullOrWhiteSpace(_entryNotes) ? null : _entryNotes.Trim()
         };
 
+        var requestedId = Id;
         _savingEntry = true;
-        var (success, error) = await Api.AddLicenceEntitlementAsync(Id, dto);
+        var (success, error) = await Api.AddLicenceEntitlementAsync(requestedId, dto);
         _savingEntry = false;
+
+        if (Id != requestedId)
+            return;
 
         if (!success)
         {
@@ -701,12 +733,16 @@ else
             ? new AssignLicenceSeatDto { UserId = _assignTarget }
             : new AssignLicenceSeatDto { AssetId = int.Parse(_assignTarget, CultureInfo.InvariantCulture) };
 
+        var requestedId = Id;
         _assigning = true;
-        var (success, error) = await Api.AssignLicenceSeatAsync(Id, dto with
+        var (success, error) = await Api.AssignLicenceSeatAsync(requestedId, dto with
         {
             Notes = string.IsNullOrWhiteSpace(_assignNotes) ? null : _assignNotes.Trim()
         });
         _assigning = false;
+
+        if (Id != requestedId)
+            return;
 
         if (!success)
         {
@@ -721,9 +757,13 @@ else
 
     private async Task ReleaseSeat(LicenceSeatDto seat)
     {
+        var requestedId = Id;
         _releasingSeatId = seat.Id;
-        var (success, error) = await Api.ReleaseLicenceSeatAsync(Id, seat.Id);
+        var (success, error) = await Api.ReleaseLicenceSeatAsync(requestedId, seat.Id);
         _releasingSeatId = null;
+
+        if (Id != requestedId)
+            return;
 
         if (!success)
         {
