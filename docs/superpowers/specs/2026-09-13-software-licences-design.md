@@ -180,7 +180,7 @@ the compliance report below.
 - Every DTO that carries a licence returns `MaskedKey` only - the last four characters, e.g.
   `****-X7Q2` - or null. No list, detail, report or export contains the full key.
 - The full key is returned only by `POST /api/licences/{id}/key/reveal`, gated on
-  `iams:licences:keys:reveal`. POST rather than GET so the key does not land in browser history or
+  `iams:licences:reveal`. POST rather than GET so the key does not land in browser history or
   intermediary logs.
 - Each successful reveal writes an `AuditLog` row of its own: who, which licence, when.
 - **The automatic change log redacts `LicenceKey`.** `AuditSaveChangesInterceptor` gains a set of
@@ -196,10 +196,10 @@ Three new keys in a new "Licences" group:
 |---|---|---|---|
 | `iams:licences:view` | yes | yes | yes |
 | `iams:licences:manage` | yes | yes | - |
-| `iams:licences:keys:reveal` | yes | yes | - |
+| `iams:licences:reveal` | yes | yes | - |
 
 `manage` covers creating and editing licences, adding entitlements by hand, and assigning and
-releasing seats. Staff get `keys:reveal` because installing the software is their job; every reveal
+releasing seats. Staff get `reveal` because installing the software is their job; every reveal
 is logged, and a tenant can revoke it per role at `/admin/roles`.
 
 One backfill migration covers all three, copying `20260912150845_GrantProcurementPermissions`:
@@ -268,7 +268,10 @@ targeting tenant B's rows, constructed so it would pass only because of the expl
 **Report:** peso totals across mixed currencies; deactivated licences excluded; CSV columns align;
 the PDF begins with `%PDF-`.
 
-**Permissions:** the backfill grants all three keys as tabled, alongside `RolePermissionSeedTests`.
+**Permissions:** the role defaults grant all three keys as tabled, in `PermissionCatalogTests` - which also
+requires every key to have exactly three colon-separated parts, hence `iams:licences:reveal` rather than a
+fourth segment. The backfill migration's SQL is PostgreSQL-only (`md5(...)::uuid`) and cannot run on the
+SQLite suite, so it is verified against a PostgreSQL database holding a pre-existing tenant before merge.
 
 The suite runs on in-memory SQLite, which proves neither the check constraint nor the partial
 unique indexes on PostgreSQL. The generated SQL is read by hand, and the branch is exercised against
