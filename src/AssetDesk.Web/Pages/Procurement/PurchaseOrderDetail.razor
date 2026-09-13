@@ -197,8 +197,8 @@ else
                                 {
                                     <div class="rounded-xl border border-border p-3" @key="receipt.Id">
                                         <div class="flex justify-between gap-3">
-                                            <span class="text-sm font-medium text-foreground">@receipt.ReceiptDate.ToString("MMM dd, yyyy")</span>
-                                            <span class="text-sm font-medium text-foreground">@receipt.TotalUnits units</span>
+                                            <span class="text-sm font-medium text-foreground whitespace-nowrap">@receipt.ReceiptDate.ToString("MMM dd, yyyy")</span>
+                                            <span class="text-sm font-medium text-foreground text-right">@ReceiptSummary(receipt)</span>
                                         </div>
                                         @if (_order.Currency != CurrencyFormat.Php)
                                         {
@@ -211,7 +211,9 @@ else
                                             </p>
                                         }
                                         <p class="text-xs text-muted-foreground mt-1">
-                                            @string.Join(", ", receipt.Lines.Select(l => $"{l.QuantityReceived} × {l.DeviceType}"))
+                                            @* The description, where there is one, because two lines of the same device
+                                               type - two laptop models - would otherwise read identically here. *@
+                                            @string.Join(", ", receipt.Lines.Select(l => $"{l.QuantityReceived} × {(string.IsNullOrWhiteSpace(l.Description) ? l.DeviceType : l.Description)}"))
                                         </p>
                                         @if (!string.IsNullOrEmpty(receipt.Notes))
                                         {
@@ -339,6 +341,13 @@ else
     private static bool CanSend(string status) => status == "Draft";
     private static bool CanCancel(string status) => status is "Draft" or "Ordered" or "PartiallyReceived";
     private static bool CanReceive(string status) => status is "Ordered" or "PartiallyReceived";
+
+    // The receiver is null when the account that recorded the delivery no longer exists; the
+    // count then stands alone rather than naming nobody.
+    private static string ReceiptSummary(GoodsReceiptDto receipt) =>
+        receipt.ReceivedByName is { } name
+            ? $"{receipt.TotalUnits} units, received by {name}"
+            : $"{receipt.TotalUnits} units";
 
     private static string StatusVariant(string status) => status switch
     {

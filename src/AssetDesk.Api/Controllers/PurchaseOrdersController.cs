@@ -53,6 +53,7 @@ public class PurchaseOrdersController(
             .Include(p => p.Lines)
             .Include(p => p.Receipts)
                 .ThenInclude(r => r.Lines)
+            .AsSplitQuery()
             .FirstOrDefaultAsync();
 
         return order is null
@@ -234,21 +235,15 @@ public class PurchaseOrdersController(
         return Ok(ApiResponse<PurchaseOrderDto>.Ok(Map(order)));
     }
 
-    /// <summary>
-    /// The detail read, and only the detail read. Map is deliberately left without the receipts:
-    /// the list screen renders nothing from them, so including them there would be a join per
-    /// row for data nobody looks at. A caller that needs the delivery history asks for one order.
-    ///
-    /// Expects Receipts and their Lines to be loaded already - see GetById.
-    /// </summary>
+    /// <summary>Expects Receipts and their Lines to be loaded already - see GetById.</summary>
     private async Task<PurchaseOrderDto> MapDetailAsync(PurchaseOrder p)
     {
         var receiverNames = await ResolveUserNamesAsync(p.Receipts.Select(r => r.ReceivedByUserId));
 
         return Map(p) with
         {
-            // Newest first: the question a delivery history answers is almost always "what
-            // arrived last, and at what rate".
+            // Id breaks the tie so two deliveries booked on the same day come back in a stable
+            // order rather than whichever the database happened to return.
             Receipts = [.. p.Receipts
                 .OrderByDescending(r => r.ReceiptDate)
                 .ThenByDescending(r => r.Id)
@@ -260,13 +255,15 @@ public class PurchaseOrdersController(
                     ReceivedByName = receiverNames.GetValueOrDefault(r.ReceivedByUserId),
                     Notes = r.Notes,
                     TotalUnits = r.Lines.Sum(l => l.QuantityReceived),
-                    Lines = [.. r.Lines.Select(l => new GoodsReceiptLineDto
+                    Lines = [.. r.Lines.Select(l =>
                     {
-                        Id = l.Id,
-                        PurchaseOrderLineId = l.PurchaseOrderLineId,
-                        DeviceType = p.Lines.First(o => o.Id == l.PurchaseOrderLineId).DeviceType,
-                        Description = p.Lines.First(o => o.Id == l.PurchaseOrderLineId).Description,
-                        QuantityReceived = l.QuantityReceived
+                        var ordered = p.Lines.First(o => o.Id == l.PurchaseOrderLineId);
+                        return new GoodsReceiptLineDto
+                        {
+                            DeviceType = ordered.DeviceType,
+                            Description = ordered.Description,
+                            QuantityReceived = l.QuantityReceived
+                        };
                     })]
                 })]
         };
@@ -297,7 +294,6 @@ public class PurchaseOrdersController(
 
     /// <summary>
     /// The shared mapper, used by the list, the PDF and (through MapDetailAsync) the detail read.
-    /// It leaves Receipts empty on purpose; only MapDetailAsync fills them.
     /// </summary>
     private static PurchaseOrderDto Map(PurchaseOrder p) => new()
     {

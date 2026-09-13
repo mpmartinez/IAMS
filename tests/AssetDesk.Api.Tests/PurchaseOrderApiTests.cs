@@ -463,6 +463,53 @@ public class PurchaseOrderApiTests
     }
 
     /// <summary>
+    /// A receipt has to outlive the account that recorded it, so its receiver id can point at a
+    /// user row that is gone. The name is then null - never the raw Identity guid, which is what
+    /// a "?? ReceivedByUserId" fallback would put in front of the user.
+    /// </summary>
+    [Fact]
+    public async Task A_delivery_whose_receiver_no_longer_exists_has_no_receiver_name()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var supplier = await SeedSupplierAsync(db, tenantId);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
+            await controller.Create(NewOrder(supplier.Id));
+            var order = await db.PurchaseOrders.SingleAsync();
+            await controller.Send(order.Id);
+
+            var service = new GoodsReceiptService(
+                db, new AssetTagGenerator(db), NullLogger<GoodsReceiptService>.Instance);
+            var receipt = await service.ReceiveAsync(tenantId, order.Id, new ReceiveGoodsDto
+            {
+                ReceiptDate = new DateTime(2026, 9, 12),
+                ExchangeRate = 1m,
+                Lines =
+                [
+                    new ReceiveLineDto
+                    {
+                        PurchaseOrderLineId = (await db.PurchaseOrderLines.SingleAsync()).Id,
+                        QuantityReceived = 3
+                    }
+                ]
+            }, "departed-user-id");
+            Assert.True(receipt.Success);
+            Assert.False(await db.Users.AnyAsync(u => u.Id == "departed-user-id"));
+
+            var result = await ControllerFor(db, new FakeTenantProvider(tenantId)).GetById(order.Id);
+
+            var ok = Assert.IsType<OkObjectResult>(result.Result);
+            var delivery = Assert.Single(Assert.IsType<ApiResponse<PurchaseOrderDto>>(ok.Value).Data!.Receipts);
+            Assert.Equal(3, delivery.TotalUnits);
+            Assert.Null(delivery.ReceivedByName);
+        }
+    }
+
+    /// <summary>
     /// The list is the other half of that decision: the receipts are a per-row join for data the
     /// list renders nothing from, so only the detail read pays for them.
     /// </summary>

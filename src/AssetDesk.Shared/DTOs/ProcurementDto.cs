@@ -70,8 +70,6 @@ public record PurchaseOrderLineDto
 
 public record GoodsReceiptLineDto
 {
-    public int Id { get; init; }
-    public int PurchaseOrderLineId { get; init; }
     public required string DeviceType { get; init; }
     public string? Description { get; init; }
     public int QuantityReceived { get; init; }
