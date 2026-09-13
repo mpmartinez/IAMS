@@ -478,8 +478,27 @@ else
     private IEnumerable<LicenceSeatDto> VisibleSeats =>
         _detail?.Seats.Where(s => s.IsActive || _showReleased) ?? [];
 
-    protected override async Task OnInitializedAsync()
+    private int? _loadedId;
+
+    protected override async Task OnParametersSetAsync()
     {
+        // Blazor reuses this page when only the licence id in the address changes - following a
+        // link from one licence to another, or the Back button - and does not run
+        // OnInitializedAsync again. Loading per id here is what stops one licence's details, and
+        // above all a key revealed on it, being shown under another licence's address.
+        if (_loadedId == Id)
+            return;
+
+        _loadedId = Id;
+        _detail = null;
+        _revealedKey = null;
+        _showReleased = false;
+        _showEditor = false;
+        _showEntitlement = false;
+        _showAssign = false;
+        _showDeactivate = false;
+        _loading = true;
+
         // Matches the page's PermissionView gate - see the identical note on
         // Pages/Procurement/Suppliers.razor.
         if (!await PermissionChecker.HasPermissionAsync("iams:licences:view"))
