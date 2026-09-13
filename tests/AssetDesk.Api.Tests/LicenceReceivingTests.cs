@@ -372,6 +372,35 @@ public class LicenceReceivingTests
     }
 
     [Fact]
+    public async Task A_name_taken_only_in_another_tenant_does_not_block_a_new_licence()
+    {
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantA, isSuperAdmin: true));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantA);
+            await TestDb.SeedTenantAsync(db, tenantB);
+            var (order, software, _) = await SeedOrderAsync(db, tenantA);
+            var theirs = await LicenceTestKit.SeedLicenceAsync(db, tenantB);
+
+            // Super-admin context: the global filter admits tenant B's licence to the name check, so
+            // only the explicit tenant predicate keeps B's name from refusing A's new licence.
+            var result = await ServiceFor(db).ReceiveAsync(tenantA, order.Id,
+                Receive(1m, Line(software.Id, 50) with { NewLicence = NewLicence(theirs.Name) }), "user-1");
+
+            Assert.True(result.Success, result.Message);
+            db.ChangeTracker.Clear();
+
+            var ours = await db.SoftwareLicences.IgnoreQueryFilters().SingleAsync(l => l.TenantId == tenantA);
+            Assert.Equal("Microsoft 365 Business Standard", ours.Name);
+            Assert.NotEqual(theirs.Id, ours.Id);
+            Assert.Equal(ours.Id, (await db.LicenceEntitlements.IgnoreQueryFilters().SingleAsync()).SoftwareLicenceId);
+        }
+    }
+
+    [Fact]
     public async Task A_refused_delivery_leaves_no_new_licence_behind()
     {
         var tenantId = Guid.NewGuid();
