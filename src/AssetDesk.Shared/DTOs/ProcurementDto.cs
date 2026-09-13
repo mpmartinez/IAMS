@@ -73,6 +73,16 @@ public record GoodsReceiptLineDto
     public required string DeviceType { get; init; }
     public string? Description { get; init; }
     public int QuantityReceived { get; init; }
+
+    /// <summary>
+    /// Where a software line's seats went. Null for hardware, which became assets instead - and
+    /// without this the delivery history would show fifty seats arriving and then nothing.
+    /// </summary>
+    public int? SoftwareLicenceId { get; init; }
+    public string? LicenceName { get; init; }
+
+    /// <summary>Set when the line renewed its licence rather than adding seats to it.</summary>
+    public DateTime? RenewedTo { get; init; }
 }
 
 /// <summary>
@@ -125,12 +135,36 @@ public record PurchaseOrderDto
     public List<GoodsReceiptDto> Receipts { get; init; } = [];
 }
 
+/// <summary>A licence created in the same transaction as the delivery that brings its first seats.</summary>
+public record NewLicenceInputDto
+{
+    [Required, StringLength(200)]
+    public required string Name { get; init; }
+
+    [StringLength(200)]
+    public string? Publisher { get; init; }
+
+    [Required]
+    public string LicenceModel { get; init; } = "PerUser";
+}
+
 public record ReceiveLineDto
 {
     public int PurchaseOrderLineId { get; init; }
 
     [Range(1, 100000, ErrorMessage = "Quantity received must be at least 1")]
     public int QuantityReceived { get; init; }
+
+    /// <summary>Software lines only: an existing licence, or NewLicence - exactly one of the two.</summary>
+    public int? SoftwareLicenceId { get; init; }
+
+    public NewLicenceInputDto? NewLicence { get; init; }
+
+    /// <summary>Software lines only: "AddSeats" or "Renew".</summary>
+    public string LicenceMode { get; init; } = "AddSeats";
+
+    /// <summary>Software lines only: required for a renewal, optional when adding seats.</summary>
+    public DateTime? LicenceExpiresAt { get; init; }
 }
 
 public record ReceiveGoodsDto

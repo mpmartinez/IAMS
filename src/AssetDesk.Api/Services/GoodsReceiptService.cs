@@ -1,6 +1,7 @@
 using System.Data.Common;
 using AssetDesk.Api.Data;
 using AssetDesk.Api.Entities;
+using AssetDesk.Shared;
 using AssetDesk.Shared.DTOs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -125,6 +126,76 @@ public class GoodsReceiptService(
                 if (CurrencyRules.Validate(order.Currency, dto.ExchangeRate) is { } currencyError)
                     return ServiceResult<int>.Fail(currencyError);
 
+                // Software lines are resolved to their licences here, before the order row is locked
+                // and before anything is written, so every refusal returns with nothing to roll back.
+                // A licence this receipt creates is only described at this point; it is added to the
+                // context after the lines are claimed, inside the same transaction, so a later refusal
+                // or failure cannot leave it behind.
+                var existingLicenceFor = new Dictionary<int, SoftwareLicence>();
+                var newLicenceNames = new HashSet<string>(StringComparer.Ordinal);
+
+                foreach (var incoming in dto.Lines)
+                {
+                    var line = order.Lines.FirstOrDefault(l => l.Id == incoming.PurchaseOrderLineId);
+                    if (line is null)
+                        return ServiceResult<int>.Fail("That line does not belong to this purchase order.");
+
+                    if (line.DeviceType != DeviceTypes.Software)
+                    {
+                        if (incoming.SoftwareLicenceId is not null || incoming.NewLicence is not null)
+                            return ServiceResult<int>.Fail(
+                                $"{line.DeviceType} is not software, so it cannot be received into a licence.");
+                        continue;
+                    }
+
+                    var label = line.Description ?? line.DeviceType;
+
+                    if ((incoming.SoftwareLicenceId is null) == (incoming.NewLicence is null))
+                        return ServiceResult<int>.Fail(
+                            $"{label}: choose the licence these seats belong to, or name a new one.");
+
+                    if (!LicenceReceiptModes.IsValid(incoming.LicenceMode))
+                        return ServiceResult<int>.Fail(
+                            $"{label}: choose whether this adds seats or renews the licence.");
+
+                    if (incoming.LicenceMode == LicenceReceiptModes.Renew)
+                    {
+                        if (incoming.NewLicence is not null)
+                            return ServiceResult<int>.Fail($"{label}: a renewal needs an existing licence.");
+                        if (incoming.LicenceExpiresAt is null)
+                            return ServiceResult<int>.Fail($"{label}: a renewal needs the new expiry date.");
+                    }
+
+                    if (incoming.LicenceExpiresAt is { } expiry && expiry.Date <= dto.ReceiptDate.Date)
+                        return ServiceResult<int>.Fail($"{label}: the new expiry must be after the receipt date.");
+
+                    if (incoming.NewLicence is { } described)
+                    {
+                        var name = described.Name?.Trim();
+                        if (string.IsNullOrEmpty(name))
+                            return ServiceResult<int>.Fail($"{label}: the new licence needs a name.");
+                        if (!LicenceModels.IsValid(described.LicenceModel))
+                            return ServiceResult<int>.Fail(
+                                $"{label}: choose whether the new licence is counted per user or per device.");
+
+                        // Explicit tenant predicate: the global filter has an IsSuperAdmin() bypass, and
+                        // a name taken only in another organisation must not block this one.
+                        if (!newLicenceNames.Add(name)
+                            || await db.SoftwareLicences.AnyAsync(l => l.TenantId == tenantId && l.Name == name, ct))
+                            return ServiceResult<int>.Fail($"A licence named '{name}' already exists.");
+                        continue;
+                    }
+
+                    var licence = await db.SoftwareLicences.FirstOrDefaultAsync(
+                        l => l.Id == incoming.SoftwareLicenceId && l.TenantId == tenantId, ct);
+                    if (licence is null)
+                        return ServiceResult<int>.Fail($"{label}: licence not found.");
+                    if (!licence.IsActive)
+                        return ServiceResult<int>.Fail($"{label}: licence '{licence.Name}' is deactivated.");
+
+                    existingLicenceFor[line.Id] = licence;
+                }
+
                 // Take the ORDER's row lock before claiming any line. The lock is the point; the
                 // assignment is only how you get it - an UPDATE takes the row's write lock and
                 // holds it until this transaction ends.
@@ -226,6 +297,39 @@ public class GoodsReceiptService(
                 {
                     var line = order.Lines.First(l => l.Id == receiptLine.PurchaseOrderLineId);
 
+                    if (line.DeviceType == DeviceTypes.Software)
+                    {
+                        var incoming = dto.Lines.First(l => l.PurchaseOrderLineId == line.Id);
+                        var licence = existingLicenceFor.GetValueOrDefault(line.Id)
+                            ?? AddLicence(order, incoming.NewLicence!);
+                        var renewing = incoming.LicenceMode == LicenceReceiptModes.Renew;
+
+                        db.LicenceEntitlements.Add(new LicenceEntitlement
+                        {
+                            TenantId = order.TenantId,
+                            SoftwareLicence = licence,
+                            // A renewal is paid for per seat but adds none: the same seats run for
+                            // another term. Counting them again would report seats nobody owns.
+                            SeatsAdded = renewing ? 0 : receiptLine.QuantityReceived,
+                            Cost = line.UnitPrice * receiptLine.QuantityReceived,
+                            Currency = order.Currency,
+                            ExchangeRate = dto.ExchangeRate,
+                            EntitlementDate = dto.ReceiptDate,
+                            ExpiresAtAfter = incoming.LicenceExpiresAt,
+                            GoodsReceiptLineId = receiptLine.Id,
+                            CreatedByUserId = actingUserId,
+                            Notes = dto.Notes
+                        });
+
+                        if (incoming.LicenceExpiresAt is { } newExpiry)
+                        {
+                            licence.ExpiresAt = newExpiry;
+                            licence.UpdatedAt = DateTime.UtcNow;
+                        }
+
+                        continue;
+                    }
+
                     for (var i = 0; i < receiptLine.QuantityReceived; i++)
                     {
                         db.Assets.Add(new Asset
@@ -271,7 +375,10 @@ public class GoodsReceiptService(
 
                 logger.LogInformation(
                     "Received {Lines} line(s) against purchase order {PoNumber}, creating {Assets} asset(s)",
-                    receipt.Lines.Count, order.PoNumber, receipt.Lines.Sum(l => l.QuantityReceived));
+                    receipt.Lines.Count, order.PoNumber,
+                    receipt.Lines
+                        .Where(l => order.Lines.First(o => o.Id == l.PurchaseOrderLineId).DeviceType != DeviceTypes.Software)
+                        .Sum(l => l.QuantityReceived));
 
                 // The committed ReceivedQuantity values are still not the ones this context has
                 // tracked. Anything reading the order afterwards on the same scoped DbContext -
@@ -348,6 +455,25 @@ public class GoodsReceiptService(
             ct);
 
         return result;
+    }
+
+    /// <summary>
+    /// A licence named in the receive dialog, created inside the receiving transaction. Its supplier
+    /// is the order's - the delivery is the evidence of who sold it.
+    /// </summary>
+    private SoftwareLicence AddLicence(PurchaseOrder order, NewLicenceInputDto described)
+    {
+        var licence = new SoftwareLicence
+        {
+            TenantId = order.TenantId,
+            Name = described.Name.Trim(),
+            Publisher = string.IsNullOrWhiteSpace(described.Publisher) ? null : described.Publisher.Trim(),
+            LicenceModel = described.LicenceModel,
+            SupplierId = order.SupplierId
+        };
+
+        db.SoftwareLicences.Add(licence);
+        return licence;
     }
 
     /// <summary>

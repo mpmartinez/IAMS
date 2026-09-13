@@ -921,4 +921,44 @@ public class GoodsReceiptTests
             Assert.Equal(5, reloaded.Lines.First().ReceivedQuantity);
         }
     }
+
+    /// <summary>
+    /// The same replay as above, for a software line. An entitlement is written in the same
+    /// delegate as the receipt, so a replay that re-ran it would double the seats owned without
+    /// any second delivery ever arriving.
+    /// </summary>
+    [Fact]
+    public async Task A_replayed_software_delivery_records_its_seats_once()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(
+            new FakeTenantProvider(tenantId),
+            builder => builder.ReplaceService<IExecutionStrategyFactory, ReplayingExecutionStrategy>());
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, line) = await SeedOrderedAsync(db, tenantId);
+            line.DeviceType = DeviceTypes.Software;
+            var licence = new SoftwareLicence
+            {
+                TenantId = tenantId, Name = "Microsoft 365", LicenceModel = AssetDesk.Shared.LicenceModels.PerUser
+            };
+            db.SoftwareLicences.Add(licence);
+            await db.SaveChangesAsync();
+
+            var dto = Receive(line.Id, 5) with
+            {
+                Lines = [new ReceiveLineDto { PurchaseOrderLineId = line.Id, QuantityReceived = 5, SoftwareLicenceId = licence.Id }]
+            };
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, dto, "user-1");
+
+            Assert.True(result.Success, result.Message);
+            db.ChangeTracker.Clear();
+
+            Assert.Equal(1, await db.GoodsReceipts.CountAsync());
+            Assert.Equal(1, await db.LicenceEntitlements.CountAsync());
+            Assert.Equal(5, await db.LicenceEntitlements.SumAsync(e => e.SeatsAdded));
+        }
+    }
 }

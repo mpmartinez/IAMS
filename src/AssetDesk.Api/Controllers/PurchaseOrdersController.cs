@@ -1,3 +1,4 @@
+using AssetDesk.Api.Authorization;
 using AssetDesk.Api.Data;
 using AssetDesk.Api.Entities;
 using AssetDesk.Api.Services;
@@ -58,7 +59,7 @@ public class PurchaseOrdersController(
 
         return order is null
             ? NotFound(ApiResponse<PurchaseOrderDto>.Fail("Purchase order not found."))
-            : Ok(ApiResponse<PurchaseOrderDto>.Ok(await MapDetailAsync(order)));
+            : Ok(ApiResponse<PurchaseOrderDto>.Ok(await MapDetailAsync(tenantId, order)));
     }
 
     [HttpGet("{id:int}/pdf")]
@@ -169,6 +170,13 @@ public class PurchaseOrdersController(
         if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
             return BadRequest(ApiResponse<PurchaseOrderDto>.Fail("Select an organisation first."));
 
+        // Adding seats to a licence that already exists is part of receiving - the receipt is the
+        // record of that purchase. Creating a licence is licence management, and must not become
+        // something anyone holding procurement rights can do as a side effect of a delivery.
+        if (dto.Lines.Any(l => l.NewLicence is not null) && !User.HasPermission(Permissions.LicencesManage))
+            return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<PurchaseOrderDto>.Fail(
+                "Creating a licence while receiving needs permission to manage licences."));
+
         // Resolve through an explicit tenant filter so a caller naming another organisation's
         // order gets a 404 with a message rather than a bare refusal from the service. The
         // global query filter is not enough on its own - it admits every tenant's orders for a
@@ -236,9 +244,29 @@ public class PurchaseOrdersController(
     }
 
     /// <summary>Expects Receipts and their Lines to be loaded already - see GetById.</summary>
-    private async Task<PurchaseOrderDto> MapDetailAsync(PurchaseOrder p)
+    private async Task<PurchaseOrderDto> MapDetailAsync(Guid tenantId, PurchaseOrder p)
     {
         var receiverNames = await ResolveUserNamesAsync(p.Receipts.Select(r => r.ReceivedByUserId));
+
+        // A software line became an entitlement rather than assets. Where it went is looked up here
+        // so the delivery history can say "added to" or "renewed to" instead of showing seats that
+        // arrived and went nowhere.
+        var receiptLineIds = p.Receipts.SelectMany(r => r.Lines).Select(l => l.Id).ToList();
+        var destinations = (await db.LicenceEntitlements
+                .AsNoTracking()
+                .Where(e => e.TenantId == tenantId
+                         && e.GoodsReceiptLineId != null
+                         && receiptLineIds.Contains(e.GoodsReceiptLineId.Value))
+                .Select(e => new
+                {
+                    ReceiptLineId = e.GoodsReceiptLineId!.Value,
+                    e.SoftwareLicenceId,
+                    LicenceName = e.SoftwareLicence!.Name,
+                    e.SeatsAdded,
+                    e.ExpiresAtAfter
+                })
+                .ToListAsync())
+            .ToDictionary(e => e.ReceiptLineId);
 
         return Map(p) with
         {
@@ -258,11 +286,15 @@ public class PurchaseOrdersController(
                     Lines = [.. r.Lines.Select(l =>
                     {
                         var ordered = p.Lines.First(o => o.Id == l.PurchaseOrderLineId);
+                        var destination = destinations.GetValueOrDefault(l.Id);
                         return new GoodsReceiptLineDto
                         {
                             DeviceType = ordered.DeviceType,
                             Description = ordered.Description,
-                            QuantityReceived = l.QuantityReceived
+                            QuantityReceived = l.QuantityReceived,
+                            SoftwareLicenceId = destination?.SoftwareLicenceId,
+                            LicenceName = destination?.LicenceName,
+                            RenewedTo = destination is { SeatsAdded: 0 } ? destination.ExpiresAtAfter : null
                         };
                     })]
                 })]
