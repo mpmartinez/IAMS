@@ -274,6 +274,94 @@ public class PurchaseOrderApiTests
         }
     }
 
+    /// <summary>
+    /// Create only produces a Draft, and nothing can be received against one. Send is where the
+    /// order becomes a real commitment, so a supplier retired between the two has to stop it
+    /// there - otherwise retiring a supplier never closes its pipeline, it only stops new drafts.
+    ///
+    /// This test and the next cover the flag rather than the mechanism: Delete and Update are two
+    /// routes to the same IsActive = false, and a gate written against only one is not a gate.
+    /// </summary>
+    [Fact]
+    public async Task A_draft_cannot_be_sent_once_its_supplier_has_been_deleted()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var supplier = await SeedSupplierAsync(db, tenantId);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
+            await controller.Create(NewOrder(supplier.Id));
+            var order = await db.PurchaseOrders.SingleAsync();
+
+            await new SuppliersController(db, new FakeTenantProvider(tenantId)).Delete(supplier.Id);
+
+            var result = await controller.Send(order.Id);
+
+            var refusal = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var body = Assert.IsType<ApiResponse<PurchaseOrderDto>>(refusal.Value);
+            Assert.Contains("inactive", body.Message);
+            Assert.Equal(PurchaseOrderStatus.Draft,
+                (await db.PurchaseOrders.SingleAsync()).Status);
+        }
+    }
+
+    [Fact]
+    public async Task A_draft_cannot_be_sent_once_its_supplier_has_been_marked_inactive()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var supplier = await SeedSupplierAsync(db, tenantId);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
+            await controller.Create(NewOrder(supplier.Id));
+            var order = await db.PurchaseOrders.SingleAsync();
+
+            // The other route to retirement: the Active checkbox on the supplier editor.
+            await new SuppliersController(db, new FakeTenantProvider(tenantId))
+                .Update(supplier.Id, new UpsertSupplierDto { Name = supplier.Name, IsActive = false });
+
+            var result = await controller.Send(order.Id);
+
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+            Assert.Equal(PurchaseOrderStatus.Draft,
+                (await db.PurchaseOrders.SingleAsync()).Status);
+        }
+    }
+
+    /// <summary>
+    /// The other side of the gate. Cancelling is how an order to a supplier nobody deals with
+    /// any more gets taken off the books; refusing it would strand the draft forever.
+    /// </summary>
+    [Fact]
+    public async Task A_draft_can_still_be_cancelled_once_its_supplier_has_been_retired()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var supplier = await SeedSupplierAsync(db, tenantId);
+            var controller = ControllerFor(db, new FakeTenantProvider(tenantId));
+            await controller.Create(NewOrder(supplier.Id));
+            var order = await db.PurchaseOrders.SingleAsync();
+
+            await new SuppliersController(db, new FakeTenantProvider(tenantId)).Delete(supplier.Id);
+
+            var result = await controller.Cancel(order.Id);
+
+            Assert.IsType<OkObjectResult>(result.Result);
+            Assert.Equal(PurchaseOrderStatus.Cancelled,
+                (await db.PurchaseOrders.SingleAsync()).Status);
+        }
+    }
+
     [Fact]
     public async Task A_received_order_cannot_be_cancelled()
     {

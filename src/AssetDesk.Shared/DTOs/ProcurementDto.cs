@@ -104,6 +104,14 @@ public record PurchaseOrderDto
 
     public int SupplierId { get; init; }
     public string? SupplierName { get; init; }
+
+    /// <summary>
+    /// A retired supplier still has orders in flight, and the name alone does not say so. This
+    /// is what lets the detail screen withhold Send with a reason attached instead of leaving
+    /// the user to discover the refusal by clicking it.
+    /// </summary>
+    public bool SupplierIsActive { get; init; }
+
     public required string Currency { get; init; }
     public required string Status { get; init; }
     public DateTime OrderDate { get; init; }

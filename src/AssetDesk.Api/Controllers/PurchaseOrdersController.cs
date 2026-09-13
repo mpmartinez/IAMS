@@ -217,6 +217,16 @@ public class PurchaseOrdersController(
             return BadRequest(ApiResponse<PurchaseOrderDto>.Fail(
                 $"A {order.Status} purchase order cannot become {to}."));
 
+        // Ordered is only ever reached through Send, and Send is where an order stops being a
+        // private draft and becomes a commitment: only then is it receivable, and only then does
+        // the PDF go out bearing the supplier's name. Create's check is not enough on its own,
+        // because a draft raised while the supplier was active can be sent days after finance
+        // retired it. Cancel is deliberately not gated the same way - taking an order to a
+        // retired supplier off the books is exactly what should stay possible.
+        if (to == PurchaseOrderStatus.Ordered && order.Supplier is { IsActive: false })
+            return BadRequest(ApiResponse<PurchaseOrderDto>.Fail(
+                $"Supplier '{order.Supplier.Name}' is inactive and cannot be ordered from."));
+
         order.Status = to;
         order.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
@@ -296,6 +306,9 @@ public class PurchaseOrdersController(
         Reference = $"PO-{p.PoNumber:D4}",
         SupplierId = p.SupplierId,
         SupplierName = p.Supplier?.Name,
+        // Unresolved reads as retired: every caller here loads the supplier, and a screen that
+        // offers Send on a supplier it could not see would only be offering a refusal.
+        SupplierIsActive = p.Supplier?.IsActive ?? false,
         Currency = p.Currency,
         Status = p.Status,
         OrderDate = p.OrderDate,
