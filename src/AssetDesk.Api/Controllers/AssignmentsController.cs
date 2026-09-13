@@ -129,7 +129,13 @@ public class AssignmentsController(AppDbContext db, ITenantProvider tenantProvid
     /// <summary>
     /// Get assignment history for an asset
     /// </summary>
+    /// <remarks>
+    /// Who held an asset, when, and who handed it over is exactly what iams:assignments:view
+    /// covers. There is no self-service case to keep open, unlike GetUserAssets: the history is
+    /// about the asset, not the caller.
+    /// </remarks>
     [HttpGet("assets/{assetId:int}/history")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewAssignments")]
     public async Task<ActionResult<List<AssetAssignmentDto>>> GetAssetHistory(int assetId)
     {
         if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
