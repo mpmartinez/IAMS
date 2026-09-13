@@ -1,0 +1,725 @@
+@page "/licences/{Id:int}"
+@attribute [Authorize]
+@using System.Globalization
+@using AssetDesk.Shared
+@inject ApiClient Api
+@inject SnackbarService Snackbar
+@inject PermissionChecker PermissionChecker
+
+<PageTitle>@(_detail?.Licence.Name ?? "Licence") - AssetDesk</PageTitle>
+
+<PermissionView Permission="iams:licences:view" ShowDeniedMessage="true">
+@if (_loading)
+{
+    <div class="space-y-6 animate-pulse">
+        <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-lg skeleton"></div>
+            <div class="h-8 w-48 rounded skeleton"></div>
+        </div>
+        <div class="bg-card rounded-2xl border border-border p-6">
+            <div class="space-y-4">
+                <div class="h-6 w-1/3 rounded skeleton"></div>
+                <div class="h-4 w-1/2 rounded skeleton"></div>
+            </div>
+        </div>
+    </div>
+}
+else if (_detail is null)
+{
+    <Card Class="p-6">
+        <EmptyState Title="Licence not found" Description="It may belong to another organisation.">
+            <a href="/licences" class="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl font-medium hover:bg-primary/90 transition-all duration-200">
+                Back to Licences
+            </a>
+        </EmptyState>
+    </Card>
+}
+else
+{
+    var licence = _detail.Licence;
+
+    <div class="space-y-4 sm:space-y-6">
+        <div class="flex flex-col gap-4">
+            <div class="flex items-center gap-2 sm:gap-4">
+                <a href="/licences" class="p-2 rounded-lg text-muted-foreground hover:text-muted-foreground hover:bg-muted transition-all duration-200">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h1 class="text-xl sm:text-2xl font-bold text-foreground truncate">@licence.Name</h1>
+                        <Badge Variant="secondary">@LicenceModels.Label(licence.LicenceModel)</Badge>
+                        <Badge Variant="@LicenceDisplay.RenewalVariant(licence.RenewalStatus)">
+                            @LicenceDisplay.RenewalLabel(licence.RenewalStatus, licence.DaysUntilExpiry)
+                        </Badge>
+                        @if (!licence.IsActive)
+                        {
+                            <Badge Variant="secondary">Inactive</Badge>
+                        }
+                    </div>
+                    <p class="text-sm text-muted-foreground mt-1">@(licence.Publisher ?? "—")</p>
+                </div>
+            </div>
+            <PermissionView Permission="iams:licences:manage">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <Button Variant="outline" OnClick="() => _showEditor = true">Edit</Button>
+                    @if (licence.IsActive)
+                    {
+                        <Button OnClick="OpenEntitlement">Record Seats or Renewal</Button>
+                        <Button OnClick="OpenAssign">Assign Seat</Button>
+                        <Button Variant="outline" Class="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" OnClick="() => _showDeactivate = true">
+                            Deactivate
+                        </Button>
+                    }
+                </div>
+            </PermissionView>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div class="lg:col-span-2 space-y-4 sm:space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Details</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                            <DetailItem Label="Supplier" Value="@(licence.SupplierName ?? "—")" />
+                            <DetailItem Label="Expires" Value="@(licence.ExpiresAt?.ToString("MMM dd, yyyy") ?? "Never")" />
+                            <DetailItem Label="Spend" Value="@CurrencyFormat.Format(_detail.SpendInPesos, CurrencyFormat.Php)" />
+                            <div>
+                                <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Licence key</p>
+                                @if (licence.MaskedKey is null)
+                                {
+                                    <p class="text-sm text-foreground">—</p>
+                                }
+                                else if (_revealedKey is not null)
+                                {
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="text-sm text-foreground font-mono break-all">@_revealedKey</span>
+                                        <Button Variant="ghost" Size="sm" OnClick="() => _revealedKey = null">Hide</Button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="text-sm text-foreground font-mono">@licence.MaskedKey</span>
+                                        @* Revealing is recorded against the person who does it; the button says
+                                           nothing more because the audit trail, not a warning, is the control. *@
+                                        <PermissionView Permission="iams:licences:reveal">
+                                            <Button Variant="ghost" Size="sm" OnClick="RevealKey" Loading="@_revealing">Reveal</Button>
+                                        </PermissionView>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(licence.Notes))
+                        {
+                            <div class="mt-4">
+                                <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Notes</p>
+                                <p class="text-sm text-foreground whitespace-pre-wrap">@licence.Notes</p>
+                            </div>
+                        }
+                    </CardContent>
+                </Card>
+
+                <Card Class="overflow-hidden">
+                    <div class="p-4 sm:p-5 pb-2 flex items-center justify-between gap-3">
+                        <h3 class="text-lg font-semibold leading-none tracking-tight text-foreground">Seats</h3>
+                        @if (_detail.Seats.Any(s => !s.IsActive))
+                        {
+                            <Button Variant="ghost" Size="sm" OnClick="() => _showReleased = !_showReleased">
+                                @(_showReleased ? "Hide released" : $"Show released ({_detail.Seats.Count(s => !s.IsActive)})")
+                            </Button>
+                        }
+                    </div>
+                    @if (!VisibleSeats.Any())
+                    {
+                        <div class="p-4 sm:p-5 pt-0">
+                            <p class="text-sm text-muted-foreground">No seats assigned.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Held by</TableHead>
+                                    <TableHead>Assigned</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead Class="text-right">&nbsp;</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                @foreach (var seat in VisibleSeats)
+                                {
+                                    <TableRow @key="seat.Id" Class="@(seat.IsActive ? "" : "opacity-50")">
+                                        <TableCell>
+                                            @if (seat.AssetId is { } assetId)
+                                            {
+                                                <a href="/assets/@assetId" class="font-medium text-foreground text-sm hover:underline">@seat.AssetTag</a>
+                                                @if (!string.IsNullOrEmpty(seat.AssetName))
+                                                {
+                                                    <p class="text-xs text-muted-foreground">@seat.AssetName</p>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="font-medium text-foreground text-sm">@(seat.UserName ?? "Unknown user")</span>
+                                            }
+                                        </TableCell>
+                                        <TableCell>
+                                            <span class="whitespace-nowrap">@seat.AssignedAt.ToString("MMM dd, yyyy")</span>
+                                            @if (seat.AssignedByName is not null)
+                                            {
+                                                <p class="text-xs text-muted-foreground">by @seat.AssignedByName</p>
+                                            }
+                                        </TableCell>
+                                        <TableCell>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                @if (seat.IsActive)
+                                                {
+                                                    <Badge Variant="success">Active</Badge>
+                                                    @if (seat.IsReclaimable)
+                                                    {
+                                                        <Badge Variant="warning">Reclaimable</Badge>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <Badge Variant="secondary">Released @seat.ReleasedAt?.ToString("MMM dd, yyyy")</Badge>
+                                                }
+                                            </div>
+                                        </TableCell>
+                                        <TableCell Class="text-right">
+                                            @if (seat.IsActive)
+                                            {
+                                                <PermissionView Permission="iams:licences:manage">
+                                                    <Button Variant="ghost" Size="sm" OnClick="() => ReleaseSeat(seat)" Loading="@(_releasingSeatId == seat.Id)">Release</Button>
+                                                </PermissionView>
+                                            }
+                                        </TableCell>
+                                    </TableRow>
+                                }
+                            </TableBody>
+                        </Table>
+                    }
+                </Card>
+
+                <Card Class="overflow-hidden">
+                    <div class="p-4 sm:p-5 pb-2">
+                        <h3 class="text-lg font-semibold leading-none tracking-tight text-foreground">Seats bought and renewals</h3>
+                    </div>
+                    @if (_detail.Entitlements.Count == 0)
+                    {
+                        <div class="p-4 sm:p-5 pt-0">
+                            <p class="text-sm text-muted-foreground">Nothing recorded yet.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Entry</TableHead>
+                                    <TableHead Class="text-right">Seats</TableHead>
+                                    <TableHead Class="text-right">Cost</TableHead>
+                                    <TableHead>Source</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                @foreach (var entry in _detail.Entitlements)
+                                {
+                                    <TableRow @key="entry.Id">
+                                        <TableCell><span class="whitespace-nowrap">@entry.EntitlementDate.ToString("MMM dd, yyyy")</span></TableCell>
+                                        <TableCell>
+                                            <span class="text-sm text-foreground">@EntryLabel(entry)</span>
+                                            @if (entry.ExpiresAtAfter is { } until)
+                                            {
+                                                <p class="text-xs text-muted-foreground">until @until.ToString("MMM dd, yyyy")</p>
+                                            }
+                                            @if (!string.IsNullOrEmpty(entry.Notes))
+                                            {
+                                                <p class="text-xs text-muted-foreground whitespace-pre-wrap">@entry.Notes</p>
+                                            }
+                                        </TableCell>
+                                        <TableCell Class="text-right">@(entry.SeatsAdded > 0 ? $"+{entry.SeatsAdded}" : entry.SeatsAdded.ToString(CultureInfo.InvariantCulture))</TableCell>
+                                        <TableCell Class="text-right">
+                                            @* The row's own currency, then pesos for a foreign one - the same rule the
+                                               asset register follows, so a USD renewal never shows a peso sign. *@
+                                            <span class="whitespace-nowrap">@CurrencyFormat.Format(entry.Cost, entry.Currency)</span>
+                                            @if (entry.Currency != CurrencyFormat.Php)
+                                            {
+                                                <p class="text-xs text-muted-foreground whitespace-nowrap">@CurrencyFormat.Format(entry.CostInPesos, CurrencyFormat.Php)</p>
+                                            }
+                                        </TableCell>
+                                        <TableCell>
+                                            @if (entry.PurchaseOrderId is { } orderId)
+                                            {
+                                                <a href="/purchase-orders/@orderId" class="text-sm text-primary hover:underline">@entry.PurchaseOrderReference</a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-sm text-muted-foreground">@(entry.CreatedByName is null ? "Recorded by hand" : $"Recorded by {entry.CreatedByName}")</span>
+                                            }
+                                        </TableCell>
+                                    </TableRow>
+                                }
+                            </TableBody>
+                        </Table>
+                    }
+                </Card>
+            </div>
+
+            <div class="space-y-4 sm:space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Compliance</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Seats owned</span>
+                                <span class="text-foreground font-medium">@licence.SeatsOwned</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Seats assigned</span>
+                                <span class="text-foreground font-medium">@licence.SeatsAssigned</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Over-assigned</span>
+                                <span class="@(licence.OverAssigned > 0 ? "text-destructive font-semibold" : "text-foreground font-medium")">@licence.OverAssigned</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-muted-foreground">Reclaimable</span>
+                                <span class="text-foreground font-medium">@licence.Reclaimable</span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        </div>
+    </div>
+
+    <LicenceEditor IsOpen="@_showEditor" Licence="licence" OnClose="() => _showEditor = false" OnSaved="OnEdited" />
+
+    <Modal IsOpen="@_showEntitlement" Title="Record Seats or Renewal" OnClose="() => _showEntitlement = false">
+        <ChildContent>
+            <div class="space-y-4">
+                <FormField LabelText="This entry">
+                    <Select Value="@_entryKind" ValueChanged="v => _entryKind = v ?? EntryAddSeats">
+                        <option value="@EntryAddSeats">Adds seats</option>
+                        <option value="@EntryRenew">Renews existing seats</option>
+                        <option value="@EntryReduce">Removes seats</option>
+                    </Select>
+                </FormField>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    @if (_entryKind != EntryRenew)
+                    {
+                        <FormField LabelText="Seats" Required="true">
+                            <Input Type="number" Value="@_entrySeats" ValueChanged="v => _entrySeats = v" Min="1" />
+                        </FormField>
+                    }
+                    <FormField LabelText="Date">
+                        <Input Type="date" Value="@_entryDate" ValueChanged="v => _entryDate = v" />
+                    </FormField>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField LabelText="Cost">
+                        <Input Type="number" Value="@_entryCost" ValueChanged="v => _entryCost = v" Min="0" Placeholder="0" />
+                    </FormField>
+                    <FormField LabelText="Currency">
+                        <Select Value="@_entryCurrency" ValueChanged="OnEntryCurrencyChanged">
+                            @foreach (var currencyCode in EntryCurrencies)
+                            {
+                                <option value="@currencyCode">@currencyCode</option>
+                            }
+                        </Select>
+                    </FormField>
+                </div>
+
+                @if (_entryCurrency != CurrencyFormat.Php)
+                {
+                    <FormField LabelText="@($"Exchange Rate ({CurrencyFormat.SymbolFor(CurrencyFormat.Php)} per 1 {_entryCurrency})")" Required="true">
+                        <Input Type="number" Value="@_entryRate" ValueChanged="v => _entryRate = v" Placeholder="58.20" />
+                    </FormField>
+                }
+
+                <FormField LabelText="@(_entryKind == EntryRenew ? "Renewed until" : "New expiry (optional)")" Required="@(_entryKind == EntryRenew)">
+                    <Input Type="date" Value="@_entryExpiry" ValueChanged="v => _entryExpiry = v" />
+                </FormField>
+
+                <FormField LabelText="Notes" Required="@(_entryKind == EntryReduce)">
+                    <Textarea Value="@_entryNotes" ValueChanged="v => _entryNotes = v" Rows="2"
+                              Placeholder="@(_entryKind == EntryReduce ? "Why are seats being removed?" : "Invoice number, agreement reference...")" />
+                </FormField>
+
+                @if (!string.IsNullOrEmpty(_entryError))
+                {
+                    <Alert Variant="destructive">@_entryError</Alert>
+                }
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="() => _showEntitlement = false">Cancel</Button>
+            <Button OnClick="SaveEntitlement" Loading="@_savingEntry">Record</Button>
+        </FooterContent>
+    </Modal>
+
+    <Modal IsOpen="@_showAssign" Title="Assign Seat" OnClose="() => _showAssign = false">
+        <ChildContent>
+            <div class="space-y-4">
+                @if (licence.LicenceModel == LicenceModels.PerUser)
+                {
+                    <FormField LabelText="Person" Required="true">
+                        <Select Value="@_assignTarget" ValueChanged="v => _assignTarget = v ?? string.Empty" Placeholder="Select a person...">
+                            @foreach (var user in (_users ?? []).Where(u => !HeldBy(u.Id)))
+                            {
+                                <option value="@user.Id">@user.FullName @(user.Department is not null ? $"({user.Department})" : "")</option>
+                            }
+                        </Select>
+                    </FormField>
+                }
+                else
+                {
+                    <FormField LabelText="Device" Required="true">
+                        <Select Value="@_assignTarget" ValueChanged="v => _assignTarget = v ?? string.Empty" Placeholder="Select a device...">
+                            @foreach (var asset in (_devices ?? []).Where(a => !HeldBy(a.Id)))
+                            {
+                                <option value="@asset.Id">@asset.AssetTag @(string.IsNullOrEmpty(asset.Name) ? "" : $"- {asset.Name}")</option>
+                            }
+                        </Select>
+                    </FormField>
+                }
+
+                @if (licence.SeatsAssigned >= licence.SeatsOwned)
+                {
+                    @* Allowed on purpose - see LicencesController.AssignSeat - but never silently. *@
+                    <Alert Variant="warning">
+                        All @licence.SeatsOwned owned seats are already assigned. This seat will be recorded as over-assigned.
+                    </Alert>
+                }
+
+                <FormField LabelText="Notes (Optional)">
+                    <Textarea Value="@_assignNotes" ValueChanged="v => _assignNotes = v" Rows="2" Placeholder="Assignment notes..." />
+                </FormField>
+
+                @if (!string.IsNullOrEmpty(_assignError))
+                {
+                    <Alert Variant="destructive">@_assignError</Alert>
+                }
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="() => _showAssign = false">Cancel</Button>
+            <Button OnClick="AssignSeat" Loading="@_assigning" Disabled="@string.IsNullOrEmpty(_assignTarget)">Assign</Button>
+        </FooterContent>
+    </Modal>
+
+    <Modal IsOpen="@_showDeactivate" Title="Deactivate Licence" OnClose="() => _showDeactivate = false">
+        <ChildContent>
+            <p class="text-muted-foreground">
+                Deactivate <strong>@licence.Name</strong>? It stays on record with its seats and history, drops out of the
+                compliance report, and can be reactivated by editing it.
+            </p>
+        </ChildContent>
+        <FooterContent>
+            <Button Variant="ghost" OnClick="() => _showDeactivate = false">Keep Active</Button>
+            <Button Variant="destructive" OnClick="Deactivate" Loading="@_deactivating">Deactivate</Button>
+        </FooterContent>
+    </Modal>
+}
+</PermissionView>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private const string EntryAddSeats = "AddSeats";
+    private const string EntryRenew = "Renew";
+    private const string EntryReduce = "Reduce";
+    private static readonly string[] EntryCurrencies = [CurrencyFormat.Php, CurrencyFormat.Usd];
+
+    private SoftwareLicenceDetailDto? _detail;
+    private bool _loading = true;
+
+    private bool _showEditor;
+    private bool _showDeactivate;
+    private bool _deactivating;
+
+    private string? _revealedKey;
+    private bool _revealing;
+
+    private bool _showReleased;
+    private int? _releasingSeatId;
+
+    private bool _showEntitlement;
+    private bool _savingEntry;
+    private string? _entryError;
+    private string _entryKind = EntryAddSeats;
+    private string _entrySeats = "";
+    private string _entryCost = "";
+    private string _entryCurrency = CurrencyFormat.Php;
+    private string _entryRate = "1";
+    private string _entryDate = "";
+    private string _entryExpiry = "";
+    private string _entryNotes = "";
+
+    private bool _showAssign;
+    private bool _assigning;
+    private string? _assignError;
+    private string _assignTarget = "";
+    private string _assignNotes = "";
+    private List<UserListItem>? _users;
+    private List<AssetDto>? _devices;
+
+    private IEnumerable<LicenceSeatDto> VisibleSeats =>
+        _detail?.Seats.Where(s => s.IsActive || _showReleased) ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Matches the page's PermissionView gate - see the identical note on
+        // Pages/Procurement/Suppliers.razor.
+        if (!await PermissionChecker.HasPermissionAsync("iams:licences:view"))
+        {
+            _loading = false;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _detail = await Api.GetLicenceAsync(Id);
+        _loading = false;
+    }
+
+    private static string EntryLabel(LicenceEntitlementDto entry) => entry.SeatsAdded switch
+    {
+        > 0 => "Seats added",
+        < 0 => "Seats removed",
+        _ => "Renewal"
+    };
+
+    private bool HeldBy(string userId) =>
+        _detail?.Seats.Any(s => s.IsActive && s.UserId == userId) == true;
+
+    private bool HeldBy(int assetId) =>
+        _detail?.Seats.Any(s => s.IsActive && s.AssetId == assetId) == true;
+
+    private async Task RevealKey()
+    {
+        _revealing = true;
+        var (success, key, error) = await Api.RevealLicenceKeyAsync(Id);
+        _revealing = false;
+
+        if (success)
+            _revealedKey = key;
+        else
+            Snackbar.Error(error ?? "Could not reveal the key.");
+    }
+
+    private void OnEdited(SoftwareLicenceDetailDto saved)
+    {
+        _showEditor = false;
+        _detail = saved;
+        // A revealed key may be the one that was just replaced or removed.
+        _revealedKey = null;
+        Snackbar.Success("Licence updated");
+    }
+
+    private async Task Deactivate()
+    {
+        _deactivating = true;
+        var (success, error) = await Api.DeactivateLicenceAsync(Id);
+        _deactivating = false;
+        _showDeactivate = false;
+
+        if (!success)
+        {
+            Snackbar.Error(error ?? "Could not deactivate the licence.");
+            return;
+        }
+
+        Snackbar.Success("Licence deactivated");
+        await LoadAsync();
+    }
+
+    private void OpenEntitlement()
+    {
+        _entryKind = EntryAddSeats;
+        _entrySeats = "";
+        _entryCost = "";
+        _entryCurrency = CurrencyFormat.Php;
+        _entryRate = "1";
+        _entryDate = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        _entryExpiry = "";
+        _entryNotes = "";
+        _entryError = null;
+        _showEntitlement = true;
+    }
+
+    private void OnEntryCurrencyChanged(string? code)
+    {
+        _entryCurrency = code ?? CurrencyFormat.Php;
+        // A foreign currency starts with an empty rate so it cannot be booked at parity by accident -
+        // the same reason the receive dialog on a purchase order starts empty.
+        _entryRate = _entryCurrency == CurrencyFormat.Php ? "1" : "";
+    }
+
+    private async Task SaveEntitlement()
+    {
+        _entryError = null;
+
+        var seats = 0;
+        if (_entryKind != EntryRenew
+            && (!int.TryParse(_entrySeats, NumberStyles.Integer, CultureInfo.InvariantCulture, out seats) || seats <= 0))
+        {
+            _entryError = "Enter how many seats.";
+            return;
+        }
+
+        var cost = string.IsNullOrWhiteSpace(_entryCost) ? 0m : ParseDecimal(_entryCost);
+        if (cost is null or < 0)
+        {
+            _entryError = "Enter a cost of zero or more.";
+            return;
+        }
+
+        decimal rate;
+        if (_entryCurrency == CurrencyFormat.Php)
+            rate = 1m;
+        else if (ParseDecimal(_entryRate) is { } parsedRate && parsedRate > 0)
+            rate = parsedRate;
+        else
+        {
+            _entryError = $"Enter the exchange rate ({CurrencyFormat.SymbolFor(CurrencyFormat.Php)} per 1 {_entryCurrency}).";
+            return;
+        }
+
+        DateTime? expiry = DateTime.TryParse(_entryExpiry, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedExpiry)
+            ? parsedExpiry
+            : null;
+
+        if (_entryKind == EntryRenew && expiry is null)
+        {
+            _entryError = "Enter the date the renewal runs until.";
+            return;
+        }
+
+        if (_entryKind == EntryReduce && string.IsNullOrWhiteSpace(_entryNotes))
+        {
+            _entryError = "Say why seats are being removed.";
+            return;
+        }
+
+        var dto = new AddLicenceEntitlementDto
+        {
+            SeatsAdded = _entryKind switch { EntryAddSeats => seats, EntryReduce => -seats, _ => 0 },
+            Cost = cost.Value,
+            Currency = _entryCurrency,
+            ExchangeRate = rate,
+            EntitlementDate = DateTime.TryParse(_entryDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+                ? date
+                : DateTime.UtcNow,
+            ExpiresAt = expiry,
+            Notes = string.IsNullOrWhiteSpace(_entryNotes) ? null : _entryNotes.Trim()
+        };
+
+        _savingEntry = true;
+        var (success, error) = await Api.AddLicenceEntitlementAsync(Id, dto);
+        _savingEntry = false;
+
+        if (!success)
+        {
+            _entryError = error;
+            return;
+        }
+
+        _showEntitlement = false;
+        Snackbar.Success("Recorded");
+        await LoadAsync();
+    }
+
+    private async Task OpenAssign()
+    {
+        _assignTarget = "";
+        _assignNotes = "";
+        _assignError = null;
+        _showAssign = true;
+
+        try
+        {
+            if (_detail!.Licence.LicenceModel == LicenceModels.PerUser)
+            {
+                _users ??= await Api.GetUserListAsync() ?? [];
+            }
+            else if (_devices is null)
+            {
+                // Software rows are licences recorded the old way, and a retired or lost machine
+                // cannot take a seat - the API refuses both, so neither is offered.
+                var page = await Api.GetAssetsAsync(pageSize: 1000);
+                _devices = page?.Items
+                    .Where(a => a.DeviceType != "Software" && a.Status is not ("Retired" or "Lost"))
+                    .OrderBy(a => a.AssetTag)
+                    .ToList() ?? [];
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _assignError = "You do not have access to the list of people or devices needed to assign a seat.";
+        }
+    }
+
+    private async Task AssignSeat()
+    {
+        _assignError = null;
+
+        var dto = _detail!.Licence.LicenceModel == LicenceModels.PerUser
+            ? new AssignLicenceSeatDto { UserId = _assignTarget }
+            : new AssignLicenceSeatDto { AssetId = int.Parse(_assignTarget, CultureInfo.InvariantCulture) };
+
+        _assigning = true;
+        var (success, error) = await Api.AssignLicenceSeatAsync(Id, dto with
+        {
+            Notes = string.IsNullOrWhiteSpace(_assignNotes) ? null : _assignNotes.Trim()
+        });
+        _assigning = false;
+
+        if (!success)
+        {
+            _assignError = error;
+            return;
+        }
+
+        _showAssign = false;
+        Snackbar.Success("Seat assigned");
+        await LoadAsync();
+    }
+
+    private async Task ReleaseSeat(LicenceSeatDto seat)
+    {
+        _releasingSeatId = seat.Id;
+        var (success, error) = await Api.ReleaseLicenceSeatAsync(Id, seat.Id);
+        _releasingSeatId = null;
+
+        if (!success)
+        {
+            Snackbar.Error(error ?? "Could not release the seat.");
+            return;
+        }
+
+        Snackbar.Success("Seat released");
+        await LoadAsync();
+    }
+
+    // Same DOM-value parsing rule as Assets/Edit.razor.ParseDecimal: a number input is always
+    // invariant-formatted, so parsing it under CurrentCulture can silently misread the value.
+    private static decimal? ParseDecimal(string? value) =>
+        decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+}
