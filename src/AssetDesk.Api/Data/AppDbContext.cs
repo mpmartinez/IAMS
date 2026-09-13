@@ -41,6 +41,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<PurchaseOrderLine> PurchaseOrderLines => Set<PurchaseOrderLine>();
     public DbSet<GoodsReceipt> GoodsReceipts => Set<GoodsReceipt>();
     public DbSet<GoodsReceiptLine> GoodsReceiptLines => Set<GoodsReceiptLine>();
+    public DbSet<SoftwareLicence> SoftwareLicences => Set<SoftwareLicence>();
+    public DbSet<LicenceEntitlement> LicenceEntitlements => Set<LicenceEntitlement>();
+    public DbSet<LicenceSeatAssignment> LicenceSeatAssignments => Set<LicenceSeatAssignment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -658,6 +661,118 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
                 .WithMany()
                 .HasForeignKey(e => e.PurchaseOrderLineId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SoftwareLicence>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.TenantId, e.Name }).IsUnique();
+
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Publisher).HasMaxLength(200);
+            entity.Property(e => e.LicenceModel).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.LicenceKey).HasMaxLength(500);
+
+            entity.HasOne(e => e.Supplier)
+                .WithMany()
+                .HasForeignKey(e => e.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        modelBuilder.Entity<LicenceEntitlement>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Cost).HasPrecision(18, 2);
+            entity.Property(e => e.ExchangeRate).HasPrecision(18, 6);
+            entity.Property(e => e.Currency).HasMaxLength(3).HasDefaultValue(Currencies.PHP);
+
+            // Restrict, not Cascade: licences are deactivated, never deleted, and an entitlement
+            // is the record of a purchase.
+            entity.HasOne(e => e.SoftwareLicence)
+                .WithMany(l => l.Entitlements)
+                .HasForeignKey(e => e.SoftwareLicenceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Unique: one receipt line is one delivery of one product, so it can feed only one
+            // entitlement. PostgreSQL and SQLite both let any number of NULLs through a unique
+            // index, so hand-entered entries are unaffected.
+            entity.HasOne(e => e.GoodsReceiptLine)
+                .WithMany()
+                .HasForeignKey(e => e.GoodsReceiptLineId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(e => e.GoodsReceiptLineId).IsUnique();
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
+        });
+
+        modelBuilder.Entity<LicenceSeatAssignment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Ignore(e => e.IsActive);
+
+            // Exactly one target. Held by the database rather than only the API so that no code
+            // path - a future import, a hand-written fix - can write a seat nobody holds.
+            entity.ToTable(t => t.HasCheckConstraint(
+                "CK_LicenceSeatAssignments_ExactlyOneTarget",
+                "(\"UserId\" IS NULL) <> (\"AssetId\" IS NULL)"));
+
+            // One active seat per person or device per licence. Partial, so a released seat is
+            // history rather than an obstacle to assigning that person again.
+            entity.HasIndex(e => new { e.SoftwareLicenceId, e.UserId })
+                .IsUnique()
+                .HasFilter("\"ReleasedAt\" IS NULL AND \"UserId\" IS NOT NULL")
+                .HasDatabaseName("IX_LicenceSeatAssignments_ActiveUserSeat");
+            entity.HasIndex(e => new { e.SoftwareLicenceId, e.AssetId })
+                .IsUnique()
+                .HasFilter("\"ReleasedAt\" IS NULL AND \"AssetId\" IS NOT NULL")
+                .HasDatabaseName("IX_LicenceSeatAssignments_ActiveAssetSeat");
+
+            entity.HasOne(e => e.SoftwareLicence)
+                .WithMany(l => l.Seats)
+                .HasForeignKey(e => e.SoftwareLicenceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Users are deactivated, never deleted, so Restrict costs nothing and keeps a seat
+            // from silently vanishing.
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Cascade, matching AssetAssignment: deleting an asset already removes its assignment
+            // history. Retiring an asset is the path that keeps history.
+            entity.HasOne(e => e.Asset)
+                .WithMany()
+                .HasForeignKey(e => e.AssetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasQueryFilter(e =>
+                _tenantProvider == null ||
+                _tenantProvider.IsSuperAdmin() ||
+                e.TenantId == _tenantProvider.GetCurrentTenantId());
         });
 
         // Normalise every DateTime to UTC on the way to the database.
