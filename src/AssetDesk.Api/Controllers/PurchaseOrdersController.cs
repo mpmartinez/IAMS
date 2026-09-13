@@ -276,11 +276,12 @@ public class PurchaseOrdersController(
     /// GoodsReceipt names its receiver by Identity id and has no navigation to the user - the
     /// receipt has to outlive the account that recorded it - so the display names are a separate
     /// lookup, and an id that no longer resolves is simply absent, leaving the name null rather
-    /// than showing a raw guid. Same shape as AuditController.ResolveUserNamesAsync.
+    /// than showing a raw guid.
     ///
-    /// Read past the query filter on purpose: a receiver whose account sits in another tenant (a
-    /// super admin standing in, say) would otherwise read as a blank name. It leaks nothing a
-    /// caller can steer - the only ids reaching here are the ones its own order's receipts carry.
+    /// ApplicationUser has no query filter, so this lookup is not tenant-scoped. What bounds it is
+    /// the ids: they come off the caller's own tenant-filtered order. The one cross-tenant name it
+    /// can surface is a super admin from another organisation who recorded a delivery against
+    /// that order.
     /// </summary>
     private async Task<Dictionary<string, string>> ResolveUserNamesAsync(IEnumerable<string> userIds)
     {
@@ -288,7 +289,6 @@ public class PurchaseOrdersController(
         if (ids.Count == 0) return [];
 
         return await db.Users
-            .IgnoreQueryFilters()
             .AsNoTracking()
             .Where(u => ids.Contains(u.Id))
             .Select(u => new { u.Id, u.FullName })
