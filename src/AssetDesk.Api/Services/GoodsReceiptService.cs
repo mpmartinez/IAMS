@@ -136,6 +136,7 @@ public class GoodsReceiptService(
                 // or failure cannot leave it behind.
                 var existingLicenceFor = new Dictionary<int, SoftwareLicence>();
                 var newLicenceNames = new HashSet<string>(StringComparer.Ordinal);
+                var redatedLicenceIds = new HashSet<int>();
 
                 foreach (var incoming in dto.Lines)
                 {
@@ -199,6 +200,16 @@ public class GoodsReceiptService(
                         return ServiceResult<int>.Fail($"{label}: licence not found.");
                     if (!licence.IsActive)
                         return ServiceResult<int>.Fail($"{label}: licence '{licence.Name}' is deactivated.");
+
+                    // One new expiry per licence per delivery. The checks below see each line alone,
+                    // so two dated lines for one licence would both pass them; then the first line's
+                    // move decides what the second's conditional update matches, and the outcome
+                    // turns on line order - a later date second quietly wins, an earlier one is
+                    // refused as though another delivery had got there first.
+                    if (incoming.LicenceExpiresAt is not null && !redatedLicenceIds.Add(licence.Id))
+                        return ServiceResult<int>.Fail(
+                            $"{label}: '{licence.Name}' is re-dated on more than one line of this delivery. " +
+                            "Put its new expiry on one line.");
 
                     // Only a renewal moves a term that is already set, and only forward. Seats bought
                     // part-way through a term take the term already running: an add-on quote's end
@@ -396,8 +407,11 @@ public class GoodsReceiptService(
                                     // the tracker is cleared for the reason the catch below gives.
                                     db.ChangeTracker.Clear();
 
+                                    // Worded for both modes: a renewal overtaken by a later one and
+                                    // added seats whose undated licence was dated meanwhile both
+                                    // arrive here.
                                     return ServiceResult<int>.Fail(
-                                        $"{line.Description ?? line.DeviceType}: '{licence.Name}' was renewed past {newExpiry:MMM dd, yyyy} by another delivery.");
+                                        $"{line.Description ?? line.DeviceType}: '{licence.Name}' was re-dated by another delivery - check its expiry and try again.");
                                 }
                             }
                         }

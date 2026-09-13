@@ -54,6 +54,35 @@ public class LicenceReceivingTests
             order.Lines.Single(l => l.DeviceType == DeviceTypes.Laptop));
     }
 
+    /// <summary>An order carrying the same product on two lines, as a head-office and a branch quote might.</summary>
+    private static async Task<(PurchaseOrder Order, PurchaseOrderLine First, PurchaseOrderLine Second)> SeedTwoSoftwareLineOrderAsync(
+        AppDbContext db, Guid tenantId)
+    {
+        var supplier = new Supplier { TenantId = tenantId, Name = "Acme Software" };
+        db.Suppliers.Add(supplier);
+        await db.SaveChangesAsync();
+
+        var order = new PurchaseOrder
+        {
+            TenantId = tenantId, PoNumber = 1, SupplierId = supplier.Id, Currency = Currencies.PHP,
+            Status = PurchaseOrderStatus.Ordered, OrderDate = new DateTime(2026, 9, 1), CreatedByUserId = "user-1"
+        };
+        var first = new PurchaseOrderLine
+        {
+            DeviceType = DeviceTypes.Software, Description = "Microsoft 365 - head office", Quantity = 40, UnitPrice = 700m
+        };
+        var second = new PurchaseOrderLine
+        {
+            DeviceType = DeviceTypes.Software, Description = "Microsoft 365 - branch", Quantity = 10, UnitPrice = 700m
+        };
+        order.Lines.Add(first);
+        order.Lines.Add(second);
+        db.PurchaseOrders.Add(order);
+        await db.SaveChangesAsync();
+
+        return (order, first, second);
+    }
+
     private static GoodsReceiptService ServiceFor(AppDbContext db) =>
         new(db, new AssetTagGenerator(db), NullLogger<GoodsReceiptService>.Instance);
 
@@ -653,10 +682,59 @@ public class LicenceReceivingTests
             Assert.True(overtaker.Raised, "The renewal never reached its conditional update.");
             Assert.False(result.Success);
             Assert.Equal(
-                "Microsoft 365 Business Standard: 'Microsoft 365 Business Standard' was renewed past Sep 30, 2027 by another delivery.",
+                "Microsoft 365 Business Standard: 'Microsoft 365 Business Standard' was re-dated by another delivery - check its expiry and try again.",
                 result.Message);
             await AssertNothingWrittenAsync(db, licencesBefore: 1);
             Assert.Equal(original, (await db.SoftwareLicences.SingleAsync()).ExpiresAt);
+        }
+    }
+
+    /// <summary>
+    /// Both renewals pass every check on their own. Without a check across lines, which one the
+    /// delivery honoured turned on line order: a later date second quietly won, leaving two
+    /// entitlements that disagree about the term, and an earlier date second matched nothing in the
+    /// conditional update - refusing the delivery for a race with "another delivery" that does not
+    /// exist. Both orders are asserted, so the refusal cannot depend on it.
+    /// </summary>
+    [Fact]
+    public async Task A_licence_re_dated_on_two_lines_of_one_delivery_is_refused()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, first, second) = await SeedTwoSoftwareLineOrderAsync(db, tenantId);
+            var term = new DateTime(2026, 9, 30);
+            var licence = await LicenceTestKit.SeedLicenceAsync(db, tenantId, expiresAt: term);
+            var earlier = new DateTime(2027, 9, 30);
+            var later = new DateTime(2027, 12, 31);
+
+            foreach (var (firstTo, secondTo) in new[] { (earlier, later), (later, earlier) })
+            {
+                var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(1m,
+                    Line(first.Id, 40) with
+                    {
+                        SoftwareLicenceId = licence.Id,
+                        LicenceMode = LicenceReceiptModes.Renew,
+                        LicenceExpiresAt = firstTo
+                    },
+                    Line(second.Id, 10) with
+                    {
+                        SoftwareLicenceId = licence.Id,
+                        LicenceMode = LicenceReceiptModes.Renew,
+                        LicenceExpiresAt = secondTo
+                    }), "user-1");
+
+                Assert.False(result.Success);
+                Assert.Equal(
+                    "Microsoft 365 - branch: 'Microsoft 365 Business Standard' is re-dated on more than one line of this delivery. " +
+                    "Put its new expiry on one line.",
+                    result.Message);
+                await AssertNothingWrittenAsync(db, licencesBefore: 1);
+                Assert.Equal(term, (await db.SoftwareLicences.SingleAsync()).ExpiresAt);
+            }
         }
     }
 
