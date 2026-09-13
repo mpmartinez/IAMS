@@ -19,8 +19,8 @@ namespace AssetDesk.Api.Tests;
 /// </summary>
 public class AssetDtoExchangeRateTests
 {
-    private static AssignmentsController BuildController(AppDbContext db, string callerId) =>
-        new(db)
+    private static AssignmentsController BuildController(AppDbContext db, Guid tenantId, string callerId) =>
+        new(db, new FakeTenantProvider(tenantId))
         {
             ControllerContext = new ControllerContext
             {
@@ -59,7 +59,7 @@ public class AssetDtoExchangeRateTests
             });
             await db.SaveChangesAsync();
 
-            var result = await BuildController(db, "emp-1").GetUserAssets("emp-1");
+            var result = await BuildController(db, tenantId, "emp-1").GetUserAssets("emp-1");
 
             var body = Assert.IsType<UserAssetsDto>(
                 Assert.IsType<OkObjectResult>(result.Result).Value);

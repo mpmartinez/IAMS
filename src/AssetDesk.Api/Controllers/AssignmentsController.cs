@@ -2,6 +2,7 @@ using System.Security.Claims;
 using AssetDesk.Api.Authorization;
 using AssetDesk.Api.Data;
 using AssetDesk.Api.Entities;
+using AssetDesk.Api.Services;
 using AssetDesk.Shared.DTOs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -13,8 +14,13 @@ namespace AssetDesk.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-public class AssignmentsController(AppDbContext db) : ControllerBase
+public class AssignmentsController(AppDbContext db, ITenantProvider tenantProvider) : ControllerBase
 {
+    // Every query here filters on the tenant explicitly. Assets and assignments carry a global
+    // query filter with an IsSuperAdmin() bypass, so a super admin whose current tenant is A
+    // would otherwise reach tenant B's rows. ApplicationUser has no tenant query filter at all,
+    // so a user looked up by id without the predicate is found in any tenant, for every caller.
+
     /// <summary>
     /// Assign an asset to a user
     /// </summary>
@@ -22,7 +28,10 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanAssignAssets")]
     public async Task<ActionResult<ApiResponse<AssetAssignmentDto>>> AssignAsset(int assetId, AssignAssetRequest request)
     {
-        var asset = await db.Assets.FindAsync(assetId);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AssetAssignmentDto>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == assetId && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<AssetAssignmentDto>.Fail("Asset not found"));
 
@@ -30,8 +39,8 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
         if (!string.IsNullOrEmpty(asset.AssignedToUserId))
             return BadRequest(ApiResponse<AssetAssignmentDto>.Fail($"Asset is already assigned to another user. Please return it first."));
 
-        // Validate user exists
-        var user = await db.Users.FindAsync(request.UserId);
+        // Validate user exists in this tenant
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == request.UserId && u.TenantId == tenantId);
         if (user is null)
             return BadRequest(ApiResponse<AssetAssignmentDto>.Fail("User not found"));
 
@@ -71,7 +80,10 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanReturnAssets")]
     public async Task<ActionResult<ApiResponse<AssetAssignmentDto>>> ReturnAsset(int assetId, ReturnAssetRequest request)
     {
-        var asset = await db.Assets.FindAsync(assetId);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AssetAssignmentDto>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == assetId && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<AssetAssignmentDto>.Fail("Asset not found"));
 
@@ -83,7 +95,7 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
             .Include(a => a.Asset)
             .Include(a => a.User)
             .Include(a => a.AssignedByUser)
-            .FirstOrDefaultAsync(a => a.AssetId == assetId && a.ReturnedAt == null);
+            .FirstOrDefaultAsync(a => a.AssetId == assetId && a.TenantId == tenantId && a.ReturnedAt == null);
 
         if (assignment is null)
             return BadRequest(ApiResponse<AssetAssignmentDto>.Fail("No active assignment found for this asset"));
@@ -120,7 +132,10 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     [HttpGet("assets/{assetId:int}/history")]
     public async Task<ActionResult<List<AssetAssignmentDto>>> GetAssetHistory(int assetId)
     {
-        var asset = await db.Assets.FindAsync(assetId);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<List<AssetAssignmentDto>>.Fail("Select an organisation first."));
+
+        var asset = await db.Assets.FirstOrDefaultAsync(a => a.Id == assetId && a.TenantId == tenantId);
         if (asset is null)
             return NotFound(ApiResponse<List<AssetAssignmentDto>>.Fail("Asset not found"));
 
@@ -129,7 +144,7 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
             .Include(a => a.User)
             .Include(a => a.AssignedByUser)
             .Include(a => a.ReturnedByUser)
-            .Where(a => a.AssetId == assetId)
+            .Where(a => a.AssetId == assetId && a.TenantId == tenantId)
             .OrderByDescending(a => a.AssignedAt)
             .Select(a => MapToDto(a))
             .ToListAsync();
@@ -159,18 +174,21 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
             && !User.HasPermission(Permissions.AssignmentsView))
             return Forbid();
 
-        var user = await db.Users.FindAsync(userId);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<UserAssetsDto>.Fail("Select an organisation first."));
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == tenantId);
         if (user is null)
             return NotFound(ApiResponse<UserAssetsDto>.Fail("User not found"));
 
         var currentAssets = await db.Assets
-            .Where(a => a.AssignedToUserId == userId)
+            .Where(a => a.AssignedToUserId == userId && a.TenantId == tenantId)
             .OrderBy(a => a.DeviceType)
             .ThenBy(a => a.AssetTag)
             .ToListAsync();
 
         var pastAssignmentsCount = await db.AssetAssignments
-            .Where(a => a.UserId == userId && a.ReturnedAt != null)
+            .Where(a => a.UserId == userId && a.TenantId == tenantId && a.ReturnedAt != null)
             .CountAsync();
 
         return Ok(new UserAssetsDto
@@ -218,13 +236,16 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewAssignments")]
     public async Task<ActionResult<OffboardingDto>> GetOffboardingSummary(string userId)
     {
-        var user = await db.Users.FindAsync(userId);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<OffboardingDto>.Fail("Select an organisation first."));
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == tenantId);
         if (user is null)
             return NotFound(ApiResponse<OffboardingDto>.Fail("User not found"));
 
         var unreturnedAssets = await db.AssetAssignments
             .Include(a => a.Asset)
-            .Where(a => a.UserId == userId && a.ReturnedAt == null)
+            .Where(a => a.UserId == userId && a.TenantId == tenantId && a.ReturnedAt == null)
             .OrderBy(a => a.Asset.DeviceType)
             .ThenBy(a => a.AssignedAt)
             .ToListAsync();
@@ -261,7 +282,10 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanReturnAssets")]
     public async Task<ActionResult<ApiResponse<BulkReturnResult>>> BulkReturnAssets(string userId, BulkReturnRequest request)
     {
-        var user = await db.Users.FindAsync(userId);
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<BulkReturnResult>.Fail("Select an organisation first."));
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == tenantId);
         if (user is null)
             return NotFound(ApiResponse<BulkReturnResult>.Fail("User not found"));
 
@@ -278,7 +302,7 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
         {
             var assignment = await db.AssetAssignments
                 .Include(a => a.Asset)
-                .FirstOrDefaultAsync(a => a.AssetId == assetId && a.UserId == userId && a.ReturnedAt == null);
+                .FirstOrDefaultAsync(a => a.AssetId == assetId && a.UserId == userId && a.TenantId == tenantId && a.ReturnedAt == null);
 
             if (assignment is null)
             {
@@ -323,10 +347,13 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanViewAssignments")]
     public async Task<ActionResult<List<OffboardingSummaryItem>>> GetPendingOffboardings()
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<List<OffboardingSummaryItem>>.Fail("Select an organisation first."));
+
         var usersWithAssets = await db.AssetAssignments
             .Include(a => a.User)
             .Include(a => a.Asset)
-            .Where(a => a.ReturnedAt == null && !a.User.IsActive)
+            .Where(a => a.TenantId == tenantId && a.ReturnedAt == null && !a.User.IsActive)
             .GroupBy(a => a.User)
             .Select(g => new OffboardingSummaryItem
             {
@@ -357,7 +384,11 @@ public class AssignmentsController(AppDbContext db) : ControllerBase
         [FromQuery] DateTime? fromDate = null,
         [FromQuery] DateTime? toDate = null)
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<PagedResponse<AssetAssignmentDto>>.Fail("Select an organisation first."));
+
         var query = db.AssetAssignments
+            .Where(a => a.TenantId == tenantId)
             .Include(a => a.Asset)
             .Include(a => a.User)
             .Include(a => a.AssignedByUser)
