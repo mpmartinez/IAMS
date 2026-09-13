@@ -27,12 +27,15 @@ public class GoodsReceiptService(
     ILogger<GoodsReceiptService> logger) : IGoodsReceiptService
 {
     /// <summary>
-    /// Records a delivery against a purchase order and creates one asset per unit received.
+    /// Records a delivery against a purchase order. A hardware line creates one asset per unit
+    /// received; a software line records one licence entitlement instead - seats added to, or a
+    /// renewal of, the licence it names - and may create that licence or move its expiry.
     ///
-    /// Receipt creation, asset creation, the line's received count and the order's status are
-    /// one transaction. A partial success would create assets the order does not know it
-    /// produced, or advance a received count without the assets to match - either leaves the
-    /// register lying, which is the one thing this system exists to prevent.
+    /// Receipt creation, asset and entitlement creation, any licence created or re-dated, the
+    /// line's received count and the order's status are one transaction. A partial success would
+    /// create assets or seats the order does not know it produced, or advance a received count
+    /// without the assets or seats to match - either leaves the register lying, which is the one
+    /// thing this system exists to prevent.
     ///
     /// The transaction runs through the provider's execution strategy because production is
     /// Npgsql with EnableRetryOnFailure and EF Core refuses a user-initiated transaction under a
@@ -120,9 +123,9 @@ public class GoodsReceiptService(
                 // there is nothing to validate against before this. The dto.ExchangeRate <= 0m
                 // check above is only a fast, friendly pre-check for the common typo; it cannot
                 // catch a PHP order at a non-1 rate or a foreign-currency order left at 1, which
-                // is exactly what this call exists to refuse. Every asset this receipt creates
-                // takes Currency from the order and ExchangeRate from the dto, so a bad pair here
-                // is a bad pair on every asset created below - refuse before anything is written.
+                // is exactly what this call exists to refuse. Every asset and entitlement this
+                // receipt creates takes Currency from the order and ExchangeRate from the dto, so a
+                // bad pair here is a bad pair on every one of them - refuse before anything is written.
                 if (CurrencyRules.Validate(order.Currency, dto.ExchangeRate) is { } currencyError)
                     return ServiceResult<int>.Fail(currencyError);
 
@@ -142,7 +145,11 @@ public class GoodsReceiptService(
 
                     if (line.DeviceType != DeviceTypes.Software)
                     {
-                        if (incoming.SoftwareLicenceId is not null || incoming.NewLicence is not null)
+                        // A renewal or an expiry on a hardware line has nothing to act on. Accepting
+                        // it quietly would tell the caller a licence term was recorded when none was.
+                        if (incoming.SoftwareLicenceId is not null || incoming.NewLicence is not null
+                            || incoming.LicenceMode != LicenceReceiptModes.AddSeats
+                            || incoming.LicenceExpiresAt is not null)
                             return ServiceResult<int>.Fail(
                                 $"{line.DeviceType} is not software, so it cannot be received into a licence.");
                         continue;
@@ -192,6 +199,24 @@ public class GoodsReceiptService(
                         return ServiceResult<int>.Fail($"{label}: licence not found.");
                     if (!licence.IsActive)
                         return ServiceResult<int>.Fail($"{label}: licence '{licence.Name}' is deactivated.");
+
+                    // Only a renewal moves a term that is already set, and only forward. Seats bought
+                    // part-way through a term take the term already running: an add-on quote's end
+                    // date, or a receipt booked late after a newer renewal, would otherwise shorten a
+                    // licence someone has just paid to extend. These read the licence before the
+                    // order lock, so they give the reason; the conditional update after the claims
+                    // is what holds.
+                    if (incoming.LicenceExpiresAt is { } requested && licence.ExpiresAt is { } current)
+                    {
+                        if (incoming.LicenceMode == LicenceReceiptModes.AddSeats)
+                            return ServiceResult<int>.Fail(
+                                $"{label}: '{licence.Name}' already runs until {licence.ExpiresAt:MMM dd, yyyy}. " +
+                                "Added seats take that term - use Renew to change it.");
+
+                        if (requested <= current)
+                            return ServiceResult<int>.Fail(
+                                $"{label}: a renewal must run past the licence's current expiry of {licence.ExpiresAt:MMM dd, yyyy}.");
+                    }
 
                     existingLicenceFor[line.Id] = licence;
                 }
@@ -290,7 +315,8 @@ public class GoodsReceiptService(
 
                 db.GoodsReceipts.Add(receipt);
 
-                // Saved before the assets so each receipt line has an id to point at.
+                // Saved before the assets and entitlements so each receipt line has an id for them
+                // to point at.
                 await db.SaveChangesAsync(ct);
 
                 foreach (var receiptLine in receipt.Lines)
@@ -323,8 +349,57 @@ public class GoodsReceiptService(
 
                         if (incoming.LicenceExpiresAt is { } newExpiry)
                         {
-                            licence.ExpiresAt = newExpiry;
-                            licence.UpdatedAt = DateTime.UtcNow;
+                            if (!existingLicenceFor.ContainsKey(line.Id))
+                            {
+                                // Created by this receipt: the row does not exist yet, so nobody
+                                // else can have dated it.
+                                licence.ExpiresAt = newExpiry;
+                                licence.UpdatedAt = DateTime.UtcNow;
+                            }
+                            else
+                            {
+                                // The move, as a conditional update rather than an assignment to the
+                                // tracked licence. That licence was read before the order lock, and
+                                // receipts against different orders do not serialise on it, so its
+                                // ExpiresAt may already be stale: two renewals would both pass the
+                                // checks above and whichever saved last would win - possibly pulling
+                                // a later term back to an earlier one. SoftwareLicence carries no
+                                // concurrency token, so nothing else would catch it.
+                                //
+                                // This UPDATE ... WHERE ExpiresAt IS NULL OR ExpiresAt < new is the
+                                // rule: the predicate is re-evaluated against the row at write time
+                                // under that row's lock, so a concurrent renewal either blocks here
+                                // and then matches nothing, or has already landed in the value being
+                                // compared. Added seats may date an undated licence but never move a
+                                // term, so they get only the IS NULL half. Same shape as the line
+                                // claim above.
+                                //
+                                // Going round the tracker is safe: the tracked licence stays
+                                // Unchanged, so SaveChanges writes nothing back over this, and the
+                                // tracker is cleared before the result is returned. The automatic
+                                // change log does not see this write; the audited entitlement's
+                                // ExpiresAtAfter is the record of the new term.
+                                var renewable = db.SoftwareLicences
+                                    .Where(l => l.Id == licence.Id && l.TenantId == tenantId);
+                                renewable = renewing
+                                    ? renewable.Where(l => l.ExpiresAt == null || l.ExpiresAt < newExpiry)
+                                    : renewable.Where(l => l.ExpiresAt == null);
+
+                                var moved = await renewable.ExecuteUpdateAsync(setters => setters
+                                    .SetProperty(l => l.ExpiresAt, newExpiry)
+                                    .SetProperty(l => l.UpdatedAt, DateTime.UtcNow), ct);
+
+                                if (moved != 1)
+                                {
+                                    // Returning rolls the transaction back as it is disposed. The
+                                    // receipt is already saved and the entitlements are Added, so
+                                    // the tracker is cleared for the reason the catch below gives.
+                                    db.ChangeTracker.Clear();
+
+                                    return ServiceResult<int>.Fail(
+                                        $"{line.Description ?? line.DeviceType}: '{licence.Name}' was renewed past {newExpiry:MMM dd, yyyy} by another delivery.");
+                                }
+                            }
                         }
 
                         continue;
@@ -373,12 +448,14 @@ public class GoodsReceiptService(
 
                 receiptId = receipt.Id;
 
+                var bySoftware = receipt.Lines.ToLookup(
+                    l => order.Lines.First(o => o.Id == l.PurchaseOrderLineId).DeviceType == DeviceTypes.Software);
+
                 logger.LogInformation(
-                    "Received {Lines} line(s) against purchase order {PoNumber}, creating {Assets} asset(s)",
+                    "Received {Lines} line(s) against purchase order {PoNumber}, creating {Assets} asset(s) " +
+                    "and {Entitlements} licence entitlement(s)",
                     receipt.Lines.Count, order.PoNumber,
-                    receipt.Lines
-                        .Where(l => order.Lines.First(o => o.Id == l.PurchaseOrderLineId).DeviceType != DeviceTypes.Software)
-                        .Sum(l => l.QuantityReceived));
+                    bySoftware[false].Sum(l => l.QuantityReceived), bySoftware[true].Count());
 
                 // The committed ReceivedQuantity values are still not the ones this context has
                 // tracked. Anything reading the order afterwards on the same scoped DbContext -
@@ -399,12 +476,14 @@ public class GoodsReceiptService(
             catch (DbUpdateException ex) when (!IsTransient(ex))
             {
                 // The transaction is rolled back by the `await using` above, but the change
-                // tracker knows nothing about that: it still holds every Asset as Added and the
-                // GoodsReceipt as Unchanged carrying the id of a row that no longer exists. This
-                // is a scoped DbContext, so a later SaveChangesAsync on the same request would
-                // insert those assets pointing at a receipt line that was rolled away - and
-                // Asset IS in AuditSaveChangesInterceptor.AuditedTypes, so it would mint audit
-                // rows swearing to it. No current caller saves again in this scope; clearing
+                // tracker knows nothing about that: it still holds every Asset and
+                // LicenceEntitlement as Added, any SoftwareLicence this receipt created as Added,
+                // and the GoodsReceipt as Unchanged carrying the id of a row that no longer exists.
+                // This is a scoped DbContext, so a later SaveChangesAsync on the same request would
+                // insert those assets and entitlements pointing at a receipt line that was rolled
+                // away - and Asset, LicenceEntitlement and SoftwareLicence are all in
+                // AuditSaveChangesInterceptor.AuditedTypes, so it would mint audit rows swearing
+                // to them. No current caller saves again in this scope; clearing
                 // here is what keeps that true of future ones. FulfilAsync clears in exactly
                 // this branch for exactly this reason.
                 db.ChangeTracker.Clear();

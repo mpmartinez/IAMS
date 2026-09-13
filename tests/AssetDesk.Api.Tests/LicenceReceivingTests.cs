@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Security.Claims;
 using AssetDesk.Api.Authorization;
 using AssetDesk.Api.Controllers;
@@ -9,6 +10,7 @@ using AssetDesk.Shared.DTOs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AssetDesk.Api.Tests;
@@ -410,6 +412,222 @@ public class LicenceReceivingTests
             Assert.False(result.Success);
             Assert.Equal("A licence named 'Microsoft 365 Business Standard' already exists.", result.Message);
             await AssertNothingWrittenAsync(db, licencesBefore: 1);
+        }
+    }
+
+    [Fact]
+    public async Task Adding_seats_does_not_move_an_existing_expiry()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, software, _) = await SeedOrderAsync(db, tenantId);
+            var term = new DateTime(2027, 9, 30);
+            var licence = await LicenceTestKit.SeedLicenceAsync(db, tenantId, expiresAt: term);
+
+            // An add-on quote's end date, whether it would shorten the term or lengthen it.
+            foreach (var quoted in new[] { new DateTime(2027, 3, 31), new DateTime(2028, 9, 30) })
+            {
+                var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(1m,
+                    Line(software.Id, 10) with { SoftwareLicenceId = licence.Id, LicenceExpiresAt = quoted }), "user-1");
+
+                Assert.False(result.Success);
+                Assert.Equal(
+                    "Microsoft 365 Business Standard: 'Microsoft 365 Business Standard' already runs until Sep 30, 2027. " +
+                    "Added seats take that term - use Renew to change it.",
+                    result.Message);
+                await AssertNothingWrittenAsync(db, licencesBefore: 1);
+                Assert.Equal(term, (await db.SoftwareLicences.SingleAsync()).ExpiresAt);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Adding_seats_can_date_a_licence_that_has_no_expiry()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, software, _) = await SeedOrderAsync(db, tenantId);
+            var licence = await LicenceTestKit.SeedLicenceAsync(db, tenantId);
+            var term = new DateTime(2027, 9, 30);
+
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(1m,
+                Line(software.Id, 50) with { SoftwareLicenceId = licence.Id, LicenceExpiresAt = term }), "user-1");
+
+            Assert.True(result.Success, result.Message);
+            db.ChangeTracker.Clear();
+
+            Assert.Equal(term, (await db.SoftwareLicences.SingleAsync()).ExpiresAt);
+            var entry = await db.LicenceEntitlements.SingleAsync();
+            Assert.Equal(50, entry.SeatsAdded);
+            Assert.Equal(term, entry.ExpiresAtAfter);
+        }
+    }
+
+    [Fact]
+    public async Task A_renewal_must_run_past_the_current_expiry()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, software, _) = await SeedOrderAsync(db, tenantId);
+            var term = new DateTime(2027, 9, 30);
+            var licence = await LicenceTestKit.SeedLicenceAsync(db, tenantId, expiresAt: term);
+
+            // Earlier than the running term, and the same day as it.
+            foreach (var renewedTo in new[] { new DateTime(2027, 3, 31), term })
+            {
+                var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(1m,
+                    Line(software.Id, 50) with
+                    {
+                        SoftwareLicenceId = licence.Id,
+                        LicenceMode = LicenceReceiptModes.Renew,
+                        LicenceExpiresAt = renewedTo
+                    }), "user-1");
+
+                Assert.False(result.Success);
+                Assert.Equal(
+                    "Microsoft 365 Business Standard: a renewal must run past the licence's current expiry of Sep 30, 2027.",
+                    result.Message);
+                await AssertNothingWrittenAsync(db, licencesBefore: 1);
+                Assert.Equal(term, (await db.SoftwareLicences.SingleAsync()).ExpiresAt);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task A_hardware_line_carrying_licence_terms_is_refused()
+    {
+        var tenantId = Guid.NewGuid();
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, _, laptop) = await SeedOrderAsync(db, tenantId);
+
+            var renewing = await ServiceFor(db).ReceiveAsync(tenantId, order.Id,
+                Receive(1m, Line(laptop.Id, 2) with { LicenceMode = LicenceReceiptModes.Renew }), "user-1");
+
+            Assert.False(renewing.Success);
+            Assert.Equal("Laptop is not software, so it cannot be received into a licence.", renewing.Message);
+            await AssertNothingWrittenAsync(db, licencesBefore: 0);
+
+            var dated = await ServiceFor(db).ReceiveAsync(tenantId, order.Id,
+                Receive(1m, Line(laptop.Id, 2) with { LicenceExpiresAt = new DateTime(2027, 9, 30) }), "user-1");
+
+            Assert.False(dated.Success);
+            Assert.Equal("Laptop is not software, so it cannot be received into a licence.", dated.Message);
+            await AssertNothingWrittenAsync(db, licencesBefore: 0);
+        }
+    }
+
+    /// <summary>
+    /// Stands in for a renewal on another purchase order committing between this receipt's checks
+    /// and its write. Just before the first UPDATE against SoftwareLicences runs, it moves the
+    /// licence's expiry past the renewal being received, on the same connection and inside the
+    /// same transaction - the only place SQLite will let a second writer in while the first holds
+    /// its write lock.
+    /// </summary>
+    private sealed class RenewalOvertaker(DateTime raisedTo) : DbCommandInterceptor
+    {
+        /// <summary>Zero until the test arms it, so seeding the licence cannot trip it.</summary>
+        public int LicenceId { get; set; }
+
+        public bool Raised { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            await OvertakeAsync(command, cancellationToken);
+            return result;
+        }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            await OvertakeAsync(command, cancellationToken);
+            return result;
+        }
+
+        private async Task OvertakeAsync(DbCommand command, CancellationToken ct)
+        {
+            if (Raised || LicenceId == 0 || !command.CommandText.Contains("UPDATE \"SoftwareLicences\"", StringComparison.Ordinal))
+                return;
+
+            Raised = true;
+
+            // Created on the connection directly rather than through the context, so it does not
+            // come back through this interceptor.
+            await using var overtake = command.Connection!.CreateCommand();
+            overtake.Transaction = command.Transaction;
+            overtake.CommandText = "UPDATE \"SoftwareLicences\" SET \"ExpiresAt\" = $raisedTo WHERE \"Id\" = $id";
+
+            var raised = overtake.CreateParameter();
+            raised.ParameterName = "$raisedTo";
+            raised.Value = raisedTo;
+            overtake.Parameters.Add(raised);
+
+            var id = overtake.CreateParameter();
+            id.ParameterName = "$id";
+            id.Value = LicenceId;
+            overtake.Parameters.Add(id);
+
+            Assert.Equal(1, await overtake.ExecuteNonQueryAsync(ct));
+        }
+    }
+
+    /// <summary>
+    /// Every check before the order lock passes here - the licence reads Sep 30, 2026 and the
+    /// renewal runs to Sep 30, 2027 - so the refusal can only come from the conditional update.
+    /// The overtaking write is inside the refused receipt's transaction, so it rolls back with it
+    /// and the licence ends at its original expiry; what proves the point is that the renewal was
+    /// refused, with the message only the update's zero-row branch produces.
+    /// </summary>
+    [Fact]
+    public async Task A_renewal_overtaken_by_a_later_one_is_refused()
+    {
+        var tenantId = Guid.NewGuid();
+        var original = new DateTime(2026, 9, 30);
+        var overtaker = new RenewalOvertaker(raisedTo: new DateTime(2028, 9, 30));
+        var (db, conn) = TestDb.Create(new FakeTenantProvider(tenantId), builder => builder.AddInterceptors(overtaker));
+        using (db)
+        using (conn)
+        {
+            await TestDb.SeedTenantAsync(db, tenantId);
+            var (order, software, _) = await SeedOrderAsync(db, tenantId);
+            var licence = await LicenceTestKit.SeedLicenceAsync(db, tenantId, expiresAt: original);
+
+            // Armed only now: seeding the licence went through the same interceptor.
+            overtaker.LicenceId = licence.Id;
+
+            var result = await ServiceFor(db).ReceiveAsync(tenantId, order.Id, Receive(1m,
+                Line(software.Id, 50) with
+                {
+                    SoftwareLicenceId = licence.Id,
+                    LicenceMode = LicenceReceiptModes.Renew,
+                    LicenceExpiresAt = new DateTime(2027, 9, 30)
+                }), "user-1");
+
+            Assert.True(overtaker.Raised, "The renewal never reached its conditional update.");
+            Assert.False(result.Success);
+            Assert.Equal(
+                "Microsoft 365 Business Standard: 'Microsoft 365 Business Standard' was renewed past Sep 30, 2027 by another delivery.",
+                result.Message);
+            await AssertNothingWrittenAsync(db, licencesBefore: 1);
+            Assert.Equal(original, (await db.SoftwareLicences.SingleAsync()).ExpiresAt);
         }
     }
 
