@@ -42,8 +42,8 @@ public class PermissionCatalogTests
     }
 
     [Theory]
-    [InlineData(Roles.Staff, 15)]
-    [InlineData(Roles.Auditor, 5)]
+    [InlineData(Roles.Staff, 18)]
+    [InlineData(Roles.Auditor, 6)]
     [InlineData(Roles.Management, 1)]
     [InlineData(Roles.Employee, 1)]
     public void BuiltInRoles_HaveTheExpectedGrantCount(string role, int expected)
@@ -85,6 +85,26 @@ public class PermissionCatalogTests
         Assert.Contains(Permissions.AssetsImport, staff);
         Assert.Contains(Permissions.AssetsCreate, staff);
         Assert.DoesNotContain(Permissions.AssetsDelete, staff);
+    }
+
+    [Fact]
+    public void Staff_RunsLicencesAndCanRevealKeys()
+    {
+        // Installing the software is the Staff role's job, and it needs the key to do it. Every
+        // reveal is audited, and a tenant can revoke this per role.
+        var staff = Permissions.DefaultsFor(Roles.Staff);
+        Assert.Contains(Permissions.LicencesView, staff);
+        Assert.Contains(Permissions.LicencesManage, staff);
+        Assert.Contains(Permissions.LicenceKeysReveal, staff);
+    }
+
+    [Fact]
+    public void Auditor_SeesLicencesButCannotChangeThemOrReadKeys()
+    {
+        var auditor = Permissions.DefaultsFor(Roles.Auditor);
+        Assert.Contains(Permissions.LicencesView, auditor);
+        Assert.DoesNotContain(Permissions.LicencesManage, auditor);
+        Assert.DoesNotContain(Permissions.LicenceKeysReveal, auditor);
     }
 
     [Fact]

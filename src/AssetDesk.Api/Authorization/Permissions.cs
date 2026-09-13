@@ -58,6 +58,10 @@ public static class Permissions
     public const string ProcurementView = "iams:procurement:view";
     public const string ProcurementManage = "iams:procurement:manage";
 
+    public const string LicencesView = "iams:licences:view";
+    public const string LicencesManage = "iams:licences:manage";
+    public const string LicenceKeysReveal = "iams:licences:reveal";
+
     public static readonly PermissionDescriptor[] All =
     [
         new(AssetsView, "Assets", "View assets", "See the asset list and individual asset records."),
@@ -100,6 +104,13 @@ public static class Permissions
             "See suppliers, purchase orders and what has been received."),
         new(ProcurementManage, "Procurement", "Manage purchasing",
             "Create suppliers and purchase orders, and receive deliveries."),
+
+        new(LicencesView, "Licences", "View licences",
+            "See software licences, who holds their seats, and when they renew."),
+        new(LicencesManage, "Licences", "Manage licences",
+            "Create and edit licences, record seats bought, and assign or release seats."),
+        new(LicenceKeysReveal, "Licences", "Reveal licence keys",
+            "Show a licence key in full. Every reveal is recorded in the audit trail."),
     ];
 
     public static readonly string[] Keys = All.Select(p => p.Key).ToArray();
@@ -131,10 +142,11 @@ public static class Permissions
             TicketsFile, TicketsQueue, TicketsManage,
             UsersRead, AttachmentsManage, WarrantyManage,
             ProcurementView, ProcurementManage,
+            LicencesView, LicencesManage, LicenceKeysReveal,
         ],
 
         // A role called Auditor that cannot open the audit trail would be a contradiction.
-        Roles.Auditor => [AssignmentsView, TicketsFile, ReportsView, AuditView, ProcurementView],
+        Roles.Auditor => [AssignmentsView, TicketsFile, ReportsView, AuditView, ProcurementView, LicencesView],
 
         Roles.Management => [TicketsFile],
 

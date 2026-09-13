@@ -147,6 +147,9 @@ builder.Services.AddAuthorizationBuilder()
     .RequirePermission("CanManageDepreciation", Permissions.DepreciationManage)
     .RequirePermission("CanViewProcurement", Permissions.ProcurementView)
     .RequirePermission("CanManageProcurement", Permissions.ProcurementManage)
+    .RequirePermission("CanViewLicences", Permissions.LicencesView)
+    .RequirePermission("CanManageLicences", Permissions.LicencesManage)
+    .RequirePermission("CanRevealLicenceKeys", Permissions.LicenceKeysReveal)
     // Platform-level: not tenant-tunable.
     .AddPolicy("SuperAdmin", policy => policy.RequireRole(Roles.SuperAdmin))
     .AddPolicy("CanManageTenants", policy => policy.RequireRole(Roles.SuperAdmin));
