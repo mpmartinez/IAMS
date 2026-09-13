@@ -227,6 +227,169 @@ public class LicencesController(
     }
 
     /// <summary>
+    /// Over-assignment is allowed. Refusing the fifty-first seat does not stop the fifty-first
+    /// install; it only stops it being recorded, and a register that reflects reality - including
+    /// non-compliance - is the point.
+    /// </summary>
+    [HttpPost("{id:int}/seats")]
+    [Authorize(Policy = "CanManageLicences")]
+    public async Task<ActionResult<ApiResponse<SoftwareLicenceDetailDto>>> AssignSeat(
+        int id, AssignLicenceSeatDto dto, CancellationToken ct)
+    {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail("Select an organisation first."));
+
+        var licence = await db.SoftwareLicences
+            .AsNoTracking()
+            .FirstOrDefaultAsync(l => l.TenantId == tenantId && l.Id == id, ct);
+        if (licence is null)
+            return NotFound(ApiResponse<SoftwareLicenceDetailDto>.Fail("Licence not found."));
+
+        if (!licence.IsActive)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail($"Licence '{licence.Name}' is deactivated."));
+
+        var toUser = !string.IsNullOrWhiteSpace(dto.UserId);
+        var toAsset = dto.AssetId is not null;
+
+        if (toUser == toAsset)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail("Assign the seat to one person or one device."));
+
+        if (licence.LicenceModel == LicenceModels.PerUser && !toUser)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(
+                $"'{licence.Name}' is licensed per user, so its seats go to people."));
+
+        if (licence.LicenceModel == LicenceModels.PerDevice && !toAsset)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(
+                $"'{licence.Name}' is licensed per device, so its seats go to devices."));
+
+        if (toUser)
+        {
+            var user = await db.Users
+                .AsNoTracking()
+                .Where(u => u.Id == dto.UserId && u.TenantId == tenantId)
+                .Select(u => new { u.FullName, u.IsActive })
+                .FirstOrDefaultAsync(ct);
+            if (user is null)
+                return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail("User not found."));
+            if (!user.IsActive)
+                return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(
+                    $"{user.FullName} is deactivated, so cannot be given a seat."));
+        }
+        else
+        {
+            var asset = await db.Assets
+                .AsNoTracking()
+                .Where(a => a.Id == dto.AssetId && a.TenantId == tenantId)
+                .Select(a => new { a.AssetTag, a.Status })
+                .FirstOrDefaultAsync(ct);
+            if (asset is null)
+                return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail("Asset not found."));
+            if (asset.Status is AssetStatus.Retired or AssetStatus.Lost)
+                return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(
+                    $"{asset.AssetTag} is {asset.Status}, so cannot be given a seat."));
+        }
+
+        var alreadyHeld = $"That {(toUser ? "person" : "device")} already holds a seat on this licence.";
+
+        if (await HoldsActiveSeatAsync(tenantId, id, dto, ct))
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(alreadyHeld));
+
+        db.LicenceSeatAssignments.Add(new LicenceSeatAssignment
+        {
+            TenantId = tenantId,
+            SoftwareLicenceId = id,
+            UserId = toUser ? dto.UserId : null,
+            AssetId = toAsset ? dto.AssetId : null,
+            AssignedByUserId = CurrentUserId,
+            Notes = TrimToNull(dto.Notes)
+        });
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // The failed insert is still tracked as Added; clear it so neither the check below nor
+            // any later save on this scoped context sees or retries it.
+            db.ChangeTracker.Clear();
+
+            // Two assignments of the same holder raced past the check above and the partial unique
+            // index refused the second - say so. Anything else is a real failure and propagates.
+            if (!await HoldsActiveSeatAsync(tenantId, id, dto, ct))
+                throw;
+
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail(alreadyHeld));
+        }
+
+        return Ok(ApiResponse<SoftwareLicenceDetailDto>.Ok((await DetailAsync(tenantId, id, ct))!));
+    }
+
+    [HttpPost("{id:int}/seats/{seatId:int}/release")]
+    [Authorize(Policy = "CanManageLicences")]
+    public async Task<ActionResult<ApiResponse<SoftwareLicenceDetailDto>>> ReleaseSeat(
+        int id, int seatId, CancellationToken ct)
+    {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail("Select an organisation first."));
+
+        var seat = await db.LicenceSeatAssignments
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.SoftwareLicenceId == id && s.Id == seatId, ct);
+        if (seat is null)
+            return NotFound(ApiResponse<SoftwareLicenceDetailDto>.Fail("Seat not found."));
+
+        if (seat.ReleasedAt is not null)
+            return BadRequest(ApiResponse<SoftwareLicenceDetailDto>.Fail("That seat was already released."));
+
+        seat.ReleasedAt = DateTime.UtcNow;
+        seat.ReleasedByUserId = CurrentUserId;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(ApiResponse<SoftwareLicenceDetailDto>.Ok((await DetailAsync(tenantId, id, ct))!));
+    }
+
+    [HttpGet("device/{assetId:int}")]
+    public async Task<ActionResult<ApiResponse<List<DeviceLicenceDto>>>> GetDeviceLicences(
+        int assetId, CancellationToken ct)
+    {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<List<DeviceLicenceDto>>.Fail("Select an organisation first."));
+
+        var rows = await db.LicenceSeatAssignments
+            .AsNoTracking()
+            .Where(s => s.TenantId == tenantId && s.AssetId == assetId && s.ReleasedAt == null)
+            .Select(s => new
+            {
+                s.SoftwareLicenceId,
+                s.SoftwareLicence!.Name,
+                s.SoftwareLicence.Publisher,
+                s.SoftwareLicence.ExpiresAt,
+                s.AssignedAt
+            })
+            .ToListAsync(ct);
+
+        var today = DateTime.UtcNow;
+        return Ok(ApiResponse<List<DeviceLicenceDto>>.Ok(rows
+            .OrderBy(r => r.Name)
+            .Select(r => new DeviceLicenceDto
+            {
+                LicenceId = r.SoftwareLicenceId,
+                Name = r.Name,
+                Publisher = r.Publisher,
+                AssignedAt = r.AssignedAt,
+                RenewalStatus = LicenceRules.RenewalStatus(r.ExpiresAt, today)
+            })
+            .ToList()));
+    }
+
+    private Task<bool> HoldsActiveSeatAsync(Guid tenantId, int licenceId, AssignLicenceSeatDto dto, CancellationToken ct) =>
+        db.LicenceSeatAssignments.AnyAsync(s =>
+            s.TenantId == tenantId
+            && s.SoftwareLicenceId == licenceId
+            && s.ReleasedAt == null
+            && (dto.AssetId == null ? s.UserId == dto.UserId : s.AssetId == dto.AssetId), ct);
+
+    /// <summary>
     /// The only response that carries a full key. A POST so the key does not end up in browser
     /// history or an intermediary's access log, and the audit row is saved before the key is
     /// returned: if the record of who saw it cannot be written, nobody sees it.

@@ -134,3 +134,22 @@ public record AddLicenceEntitlementDto
 
     public string? Notes { get; init; }
 }
+
+/// <summary>Exactly one of UserId and AssetId, matching the licence's model.</summary>
+public record AssignLicenceSeatDto
+{
+    public string? UserId { get; init; }
+    public int? AssetId { get; init; }
+
+    [StringLength(500)]
+    public string? Notes { get; init; }
+}
+
+public record DeviceLicenceDto
+{
+    public int LicenceId { get; init; }
+    public required string Name { get; init; }
+    public string? Publisher { get; init; }
+    public DateTime AssignedAt { get; init; }
+    public required string RenewalStatus { get; init; }
+}

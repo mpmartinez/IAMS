@@ -344,6 +344,8 @@ public class LicenceApiTests
     [InlineData(nameof(LicencesController.Deactivate), "CanManageLicences")]
     [InlineData(nameof(LicencesController.RevealKey), "CanRevealLicenceKeys")]
     [InlineData(nameof(LicencesController.AddEntitlement), "CanManageLicences")]
+    [InlineData(nameof(LicencesController.AssignSeat), "CanManageLicences")]
+    [InlineData(nameof(LicencesController.ReleaseSeat), "CanManageLicences")]
     public void Each_write_is_gated_on_its_own_policy(string action, string policy)
     {
         var method = typeof(LicencesController).GetMethod(action)!;
