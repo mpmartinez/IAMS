@@ -22,19 +22,28 @@ public class AttachmentsController(
 {
     private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
 
+    // Every query here filters on the tenant explicitly rather than trusting the global query
+    // filter, which has an IsSuperAdmin() bypass: a super admin whose current tenant is A could
+    // otherwise list, download, upload to and delete attachments on tenant B's assets by id. An
+    // upload is the worst of it - SaveChanges stamps the new row with tenant A's TenantId, so
+    // the bytes hang off B's asset but are metered against A's storage. Same shape as
+    // AssetsController; see AttachmentTenantIsolationTests.
+
     /// <summary>
     /// Get all attachments for an asset
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<List<AttachmentDto>>> GetAttachments(int assetId)
     {
-        var asset = await db.Assets.FindAsync(assetId);
-        if (asset is null)
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<List<AttachmentDto>>.Fail("Select an organisation first."));
+
+        if (!await db.Assets.AnyAsync(a => a.Id == assetId && a.TenantId == tenantId))
             return NotFound(ApiResponse<List<AttachmentDto>>.Fail("Asset not found"));
 
         var attachments = await db.Attachments
             .Include(a => a.UploadedByUser)
-            .Where(a => a.AssetId == assetId)
+            .Where(a => a.AssetId == assetId && a.TenantId == tenantId)
             .OrderByDescending(a => a.CreatedAt)
             .Select(a => MapToDto(a))
             .ToListAsync();
@@ -48,12 +57,14 @@ public class AttachmentsController(
     [HttpGet("summary")]
     public async Task<ActionResult<ApiResponse<AttachmentSummaryDto>>> GetSummary(int assetId)
     {
-        var asset = await db.Assets.FindAsync(assetId);
-        if (asset is null)
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AttachmentSummaryDto>.Fail("Select an organisation first."));
+
+        if (!await db.Assets.AnyAsync(a => a.Id == assetId && a.TenantId == tenantId))
             return NotFound(ApiResponse<AttachmentSummaryDto>.Fail("Asset not found"));
 
         var attachments = await db.Attachments
-            .Where(a => a.AssetId == assetId)
+            .Where(a => a.AssetId == assetId && a.TenantId == tenantId)
             .ToListAsync();
 
         var summary = new AttachmentSummaryDto
@@ -83,8 +94,12 @@ public class AttachmentsController(
         [FromForm] string category,
         [FromForm] string? description = null)
     {
-        var asset = await db.Assets.FindAsync(assetId);
-        if (asset is null)
+        // The current tenant is the one SaveChanges stamps on the new row and so the one whose
+        // usage CanUploadFileAsync sums below - the asset must belong to it too.
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AttachmentDto>.Fail("Select an organisation first."));
+
+        if (!await db.Assets.AnyAsync(a => a.Id == assetId && a.TenantId == tenantId))
             return NotFound(ApiResponse<AttachmentDto>.Fail("Asset not found"));
 
         // Validate category - editable lookup data, not the AttachmentCategories constant.
@@ -102,12 +117,7 @@ public class AttachmentsController(
             return BadRequest(ApiResponse<AttachmentDto>.Fail(
                 "Invalid file type. Allowed types: JPEG, PNG, GIF, WebP, PDF, DOC, DOCX, TXT"));
 
-        // Metered against the current tenant, which is the one SaveChanges stamps on the new
-        // row and so the one whose usage CanUploadFileAsync sums. Checked before the file is
-        // written, so a refusal leaves no orphan in storage.
-        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
-            return BadRequest(ApiResponse<AttachmentDto>.Fail("Select an organisation first."));
-
+        // Checked before the file is written, so a refusal leaves no orphan in storage.
         if (!await subscriptionService.CanUploadFileAsync(tenantId, file.Length))
             return BadRequest(ApiResponse<AttachmentDto>.Fail(
                 "Storage limit reached for your subscription. Please upgrade."));
@@ -121,6 +131,7 @@ public class AttachmentsController(
         // Create attachment record
         var attachment = new Attachment
         {
+            TenantId = tenantId,
             AssetId = assetId,
             FileName = file.FileName,
             StoredFileName = storedFileName,
@@ -148,9 +159,12 @@ public class AttachmentsController(
     [HttpGet("{attachmentId:int}")]
     public async Task<ActionResult<ApiResponse<AttachmentDto>>> GetAttachment(int assetId, int attachmentId)
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AttachmentDto>.Fail("Select an organisation first."));
+
         var attachment = await db.Attachments
             .Include(a => a.UploadedByUser)
-            .FirstOrDefaultAsync(a => a.Id == attachmentId && a.AssetId == assetId);
+            .FirstOrDefaultAsync(a => a.Id == attachmentId && a.AssetId == assetId && a.TenantId == tenantId);
 
         if (attachment is null)
             return NotFound(ApiResponse<AttachmentDto>.Fail("Attachment not found"));
@@ -164,8 +178,11 @@ public class AttachmentsController(
     [HttpGet("{attachmentId:int}/download")]
     public async Task<IActionResult> DownloadAttachment(int assetId, int attachmentId)
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
         var attachment = await db.Attachments
-            .FirstOrDefaultAsync(a => a.Id == attachmentId && a.AssetId == assetId);
+            .FirstOrDefaultAsync(a => a.Id == attachmentId && a.AssetId == assetId && a.TenantId == tenantId);
 
         if (attachment is null)
             return NotFound(ApiResponse<object>.Fail("Attachment not found"));
@@ -184,8 +201,11 @@ public class AttachmentsController(
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Policy = "CanManageAttachments")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteAttachment(int assetId, int attachmentId)
     {
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<object>.Fail("Select an organisation first."));
+
         var attachment = await db.Attachments
-            .FirstOrDefaultAsync(a => a.Id == attachmentId && a.AssetId == assetId);
+            .FirstOrDefaultAsync(a => a.Id == attachmentId && a.AssetId == assetId && a.TenantId == tenantId);
 
         if (attachment is null)
             return NotFound(ApiResponse<object>.Fail("Attachment not found"));
