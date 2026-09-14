@@ -16,7 +16,9 @@ namespace AssetDesk.Api.Controllers;
 public class AttachmentsController(
     AppDbContext db,
     IFileStorageService fileStorage,
-    ILookupService lookups) : ControllerBase
+    ILookupService lookups,
+    ISubscriptionService subscriptionService,
+    ITenantProvider tenantProvider) : ControllerBase
 {
     private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
 
@@ -99,6 +101,16 @@ public class AttachmentsController(
         if (!fileStorage.IsValidFileType(file.ContentType))
             return BadRequest(ApiResponse<AttachmentDto>.Fail(
                 "Invalid file type. Allowed types: JPEG, PNG, GIF, WebP, PDF, DOC, DOCX, TXT"));
+
+        // Metered against the current tenant, which is the one SaveChanges stamps on the new
+        // row and so the one whose usage CanUploadFileAsync sums. Checked before the file is
+        // written, so a refusal leaves no orphan in storage.
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<AttachmentDto>.Fail("Select an organisation first."));
+
+        if (!await subscriptionService.CanUploadFileAsync(tenantId, file.Length))
+            return BadRequest(ApiResponse<AttachmentDto>.Fail(
+                "Storage limit reached for your subscription. Please upgrade."));
 
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 

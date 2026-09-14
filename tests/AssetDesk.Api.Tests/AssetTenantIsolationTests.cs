@@ -32,7 +32,8 @@ public class AssetTenantIsolationTests
             null!,
             new LookupService(db),
             new AssetTagGenerator(db),
-            tenantProvider);
+            tenantProvider,
+            new FakeSubscriptionService());
 
         controller.ControllerContext = new ControllerContext
         {

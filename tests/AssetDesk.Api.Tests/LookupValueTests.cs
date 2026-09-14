@@ -111,7 +111,7 @@ public class LookupValueTests
             });
             await db.SaveChangesAsync();
 
-            var controller = new AssetsController(db, null!, null!, new LookupService(db), new AssetTagGenerator(db), new FakeTenantProvider(tenantId));
+            var controller = new AssetsController(db, null!, null!, new LookupService(db), new AssetTagGenerator(db), new FakeTenantProvider(tenantId), new FakeSubscriptionService());
 
             var result = await controller.CreateAsset(new CreateAssetDto
             {
@@ -139,7 +139,7 @@ public class LookupValueTests
 
             // DeviceType rows already exist from the model's seed data, so an unrecognised
             // type must be rejected even though it "looks" like a device type string.
-            var controller = new AssetsController(db, null!, null!, new LookupService(db), new AssetTagGenerator(db), new FakeTenantProvider(tenantId));
+            var controller = new AssetsController(db, null!, null!, new LookupService(db), new AssetTagGenerator(db), new FakeTenantProvider(tenantId), new FakeSubscriptionService());
 
             var result = await controller.CreateAsset(new CreateAssetDto
             {
@@ -275,7 +275,7 @@ public class LookupValueTests
         {
             await TestDb.SeedTenantAsync(db, tenantId);
 
-            var controller = new AssetsController(db, null!, null!, new LookupService(db), new AssetTagGenerator(db), new FakeTenantProvider(tenantId));
+            var controller = new AssetsController(db, null!, null!, new LookupService(db), new AssetTagGenerator(db), new FakeTenantProvider(tenantId), new FakeSubscriptionService());
 
             var result = await controller.CreateAsset(new CreateAssetDto
             {
@@ -301,7 +301,7 @@ public class LookupValueTests
         {
             await TestDb.SeedTenantAsync(db, tenantId);
 
-            var controller = new AssetsController(db, null!, null!, new LookupService(db), new AssetTagGenerator(db), new FakeTenantProvider(tenantId));
+            var controller = new AssetsController(db, null!, null!, new LookupService(db), new AssetTagGenerator(db), new FakeTenantProvider(tenantId), new FakeSubscriptionService());
 
             // ExchangeRate must be a real rate, not the DTO default of 1 - CurrencyRules
             // rejects USD booked at exactly 1 (see AssetCurrencyValidationTests).

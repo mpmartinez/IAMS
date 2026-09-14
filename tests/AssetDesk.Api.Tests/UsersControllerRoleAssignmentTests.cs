@@ -67,6 +67,8 @@ public class UsersControllerRoleAssignmentTests
     private class StubSubscriptionService : ISubscriptionService
     {
         public Task<bool> CanCreateAssetAsync(Guid tenantId) => throw new NotSupportedException();
+        public Task<string?> ReserveAssetCapacityAsync(Data.AppDbContext db, Guid tenantId, int count, CancellationToken ct = default) =>
+            throw new NotSupportedException();
         public Task<bool> CanCreateUserAsync(Guid tenantId) => Task.FromResult(true);
         public Task<bool> CanUploadFileAsync(Guid tenantId, long fileSizeBytes) => throw new NotSupportedException();
         public Task<bool> CanCreateTicketAsync(Guid tenantId) => throw new NotSupportedException();

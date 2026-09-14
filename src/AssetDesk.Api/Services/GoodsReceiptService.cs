@@ -24,6 +24,7 @@ public interface IGoodsReceiptService
 public class GoodsReceiptService(
     AppDbContext db,
     IAssetTagGenerator tags,
+    ISubscriptionService subscriptions,
     ILogger<GoodsReceiptService> logger) : IGoodsReceiptService
 {
     /// <summary>
@@ -232,6 +233,22 @@ public class GoodsReceiptService(
                     existingLicenceFor[line.Id] = licence;
                 }
 
+                // The asset limit, for every unit of a hardware line - a software line records an
+                // entitlement, not assets. Checked here, inside the transaction and before
+                // anything else is written, so a refusal returns with nothing to roll back but the
+                // tenant lock itself. ReserveAssetCapacityAsync takes the TENANT row's lock and
+                // holds it to commit, which serialises every receipt, import and create that adds
+                // assets to this tenant; a check made before the strategy would let two receipts
+                // against different orders both see the same free room. Every line has been
+                // matched to the order above, so First cannot miss.
+                var assetsToCreate = dto.Lines
+                    .Where(l => order.Lines.First(o => o.Id == l.PurchaseOrderLineId).DeviceType != DeviceTypes.Software)
+                    .Sum(l => l.QuantityReceived);
+
+                if (assetsToCreate > 0
+                    && await subscriptions.ReserveAssetCapacityAsync(db, tenantId, assetsToCreate, ct) is { } limitReached)
+                    return ServiceResult<int>.Fail(limitReached);
+
                 // Take the ORDER's row lock before claiming any line. The lock is the point; the
                 // assignment is only how you get it - an UPDATE takes the row's write lock and
                 // holds it until this transaction ends.
@@ -244,9 +261,10 @@ public class GoodsReceiptService(
                 // every remaining quantity. Serialising receipts per order means the second one
                 // reads totals that already include the first.
                 //
-                // First write in the transaction, deliberately: a single lock order (the order
-                // row, then its lines) is what keeps two receipts from deadlocking against each
-                // other by grabbing lines in different sequences.
+                // First write in the transaction after the tenant lock above, deliberately: a single
+                // lock order (the tenant row, then the order row, then its lines) is what keeps two
+                // receipts from deadlocking against each other by grabbing rows in different
+                // sequences. Nothing takes the tenant lock after an order or line lock.
                 var locked = await db.PurchaseOrders
                     .Where(p => p.Id == order.Id)
                     .ExecuteUpdateAsync(setters => setters

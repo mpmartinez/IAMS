@@ -102,9 +102,10 @@ public class AssetDtoExchangeRateTests
             ms.Position = 0;
 
             var service = new AssetImportService(
-                db, NullLogger<AssetImportService>.Instance, new LookupService(db), new AssetTagGenerator(db));
+                db, NullLogger<AssetImportService>.Instance, new LookupService(db), new AssetTagGenerator(db),
+                new FakeSubscriptionService());
 
-            var result = await service.ImportAsync(ms);
+            var result = await service.ImportAsync(tenantId, ms);
 
             Assert.Empty(result.Errors);
             var created = Assert.Single(result.CreatedAssets);

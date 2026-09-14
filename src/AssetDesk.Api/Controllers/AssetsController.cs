@@ -15,7 +15,7 @@ namespace AssetDesk.Api.Controllers;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class AssetsController(
     AppDbContext db, IQrCodeService qrCodeService, IAssetImportService importService, ILookupService lookups,
-    IAssetTagGenerator tags, ITenantProvider tenantProvider) : ControllerBase
+    IAssetTagGenerator tags, ITenantProvider tenantProvider, ISubscriptionService subscriptions) : ControllerBase
 {
     // Every query here filters on the tenant explicitly rather than trusting the global query
     // filter, which has an IsSuperAdmin() bypass: a super admin whose current tenant is A could
@@ -180,8 +180,27 @@ public class AssetsController(
             Notes = dto.Notes
         };
 
-        db.Assets.Add(asset);
-        await db.SaveChangesAsync();
+        // The limit check and the insert share one transaction - see ReserveAssetCapacityAsync
+        // for why a check made before it would not hold. Run through the execution strategy
+        // because production retries transient failures and EF refuses a user-initiated
+        // transaction outside one. A replay re-adds the same instance, which is a no-op for an
+        // entity already tracked as Added.
+        var strategy = db.Database.CreateExecutionStrategy();
+        var refusal = await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync();
+
+            if (await subscriptions.ReserveAssetCapacityAsync(db, tenantId, 1) is { } limitReached)
+                return limitReached;
+
+            db.Assets.Add(asset);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return null;
+        });
+
+        if (refusal is not null)
+            return BadRequest(ApiResponse<AssetDto>.Fail(refusal));
 
         // Reload with navigation property
         await db.Entry(asset).Reference(a => a.AssignedToUser).LoadAsync();
@@ -304,10 +323,15 @@ public class AssetsController(
         if (!string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase))
             return BadRequest(ApiResponse<ImportAssetsResultDto>.Fail("File must be an .xlsx workbook."));
 
+        // The import meters the rows against this tenant's asset limit, and without a current
+        // tenant the TenantId stamping in SaveChanges skips - see the same guard in CreateAsset.
+        if (tenantProvider.GetCurrentTenantId() is not { } tenantId)
+            return BadRequest(ApiResponse<ImportAssetsResultDto>.Fail("Select an organisation first."));
+
         try
         {
             await using var stream = file.OpenReadStream();
-            var result = await importService.ImportAsync(stream, ct);
+            var result = await importService.ImportAsync(tenantId, stream, ct);
             var message = result.FailedCount == 0
                 ? $"Imported {result.CreatedCount} asset(s)."
                 : $"Imported {result.CreatedCount} of {result.TotalRows} row(s); {result.FailedCount} failed.";

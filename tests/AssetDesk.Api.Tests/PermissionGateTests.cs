@@ -56,7 +56,7 @@ public class PermissionGateTests
 
     private static AssetsController BuildAssetsController(Data.AppDbContext db, Guid tenantId) =>
         new(db, new UnusedQrCodeService(), new UnusedAssetImportService(), new UnusedLookupService(), new UnusedAssetTagGenerator(),
-            new FakeTenantProvider(tenantId));
+            new FakeTenantProvider(tenantId), new UnusedSubscriptionService());
 
     // These three dependencies are never touched by the code paths under test (scan/{tag} and
     // Tickets.Get read straight from the DbContext), so a throwing stub both satisfies the
@@ -65,6 +65,8 @@ public class PermissionGateTests
     private class UnusedSubscriptionService : ISubscriptionService
     {
         public Task<bool> CanCreateAssetAsync(Guid tenantId) => throw new NotSupportedException();
+        public Task<string?> ReserveAssetCapacityAsync(Data.AppDbContext db, Guid tenantId, int count, CancellationToken ct = default) =>
+            throw new NotSupportedException();
         public Task<bool> CanCreateUserAsync(Guid tenantId) => throw new NotSupportedException();
         public Task<bool> CanUploadFileAsync(Guid tenantId, long fileSizeBytes) => throw new NotSupportedException();
         public Task<bool> CanCreateTicketAsync(Guid tenantId) => throw new NotSupportedException();
@@ -84,7 +86,7 @@ public class PermissionGateTests
 
     private class UnusedAssetImportService : IAssetImportService
     {
-        public Task<ImportAssetsResultDto> ImportAsync(Stream xlsxStream, CancellationToken ct = default) =>
+        public Task<ImportAssetsResultDto> ImportAsync(Guid tenantId, Stream xlsxStream, CancellationToken ct = default) =>
             throw new NotSupportedException();
     }
 
@@ -384,6 +386,8 @@ public class PermissionGateTests
     private sealed class StubUploadAllowedSubscriptionService : ISubscriptionService
     {
         public Task<bool> CanCreateAssetAsync(Guid tenantId) => throw new NotSupportedException();
+        public Task<string?> ReserveAssetCapacityAsync(Data.AppDbContext db, Guid tenantId, int count, CancellationToken ct = default) =>
+            throw new NotSupportedException();
         public Task<bool> CanCreateUserAsync(Guid tenantId) => throw new NotSupportedException();
         public Task<bool> CanUploadFileAsync(Guid tenantId, long fileSizeBytes) => Task.FromResult(true);
         public Task<bool> CanCreateTicketAsync(Guid tenantId) => throw new NotSupportedException();

@@ -84,7 +84,7 @@ public class LicenceReceivingTests
     }
 
     private static GoodsReceiptService ServiceFor(AppDbContext db) =>
-        new(db, new AssetTagGenerator(db), NullLogger<GoodsReceiptService>.Instance);
+        new(db, new AssetTagGenerator(db), new FakeSubscriptionService(), NullLogger<GoodsReceiptService>.Instance);
 
     private static ReceiveGoodsDto Receive(decimal rate, params ReceiveLineDto[] lines) => new()
     {

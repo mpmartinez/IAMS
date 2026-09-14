@@ -38,7 +38,8 @@ public class AssetImportCurrencyTests
     }
 
     private static AssetImportService ServiceFor(AppDbContext db) =>
-        new(db, NullLogger<AssetImportService>.Instance, new LookupService(db), new AssetTagGenerator(db));
+        new(db, NullLogger<AssetImportService>.Instance, new LookupService(db), new AssetTagGenerator(db),
+            new FakeSubscriptionService());
 
     private static string[] LegacyRow(string currency, string price) =>
         ["Test Laptop", DeviceTypes.Laptop, AssetStatus.Available, "Dell", "XPS", "2024",
@@ -55,7 +56,7 @@ public class AssetImportCurrencyTests
             await TestDb.SeedTenantAsync(db, tenantId);
             using var stream = Workbook(LegacyHeaders, LegacyRow(Currencies.PHP, "50000"));
 
-            var result = await ServiceFor(db).ImportAsync(stream);
+            var result = await ServiceFor(db).ImportAsync(tenantId, stream);
 
             Assert.Empty(result.Errors);
             Assert.Equal(1, result.CreatedCount);
@@ -74,7 +75,7 @@ public class AssetImportCurrencyTests
             await TestDb.SeedTenantAsync(db, tenantId);
             using var stream = Workbook(LegacyHeaders, LegacyRow(Currencies.USD, "1200"));
 
-            var result = await ServiceFor(db).ImportAsync(stream);
+            var result = await ServiceFor(db).ImportAsync(tenantId, stream);
 
             Assert.Single(result.Errors);
             Assert.Contains("exchange rate is required", result.Errors[0].Message, StringComparison.OrdinalIgnoreCase);
@@ -95,7 +96,7 @@ public class AssetImportCurrencyTests
             string[] row = [.. LegacyRow(Currencies.USD, "1200"), "58.20"];
             using var stream = Workbook(headers, row);
 
-            var result = await ServiceFor(db).ImportAsync(stream);
+            var result = await ServiceFor(db).ImportAsync(tenantId, stream);
 
             Assert.Empty(result.Errors);
             var asset = db.Assets.Single();
@@ -118,7 +119,7 @@ public class AssetImportCurrencyTests
             string[] row = [.. LegacyRow(Currencies.PHP, "50000"), "58.20"];
             using var stream = Workbook(headers, row);
 
-            var result = await ServiceFor(db).ImportAsync(stream);
+            var result = await ServiceFor(db).ImportAsync(tenantId, stream);
 
             Assert.Single(result.Errors);
             Assert.Contains("must be exactly 1", result.Errors[0].Message);

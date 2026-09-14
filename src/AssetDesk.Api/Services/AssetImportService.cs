@@ -8,11 +8,16 @@ namespace AssetDesk.Api.Services;
 
 public interface IAssetImportService
 {
-    Task<ImportAssetsResultDto> ImportAsync(Stream xlsxStream, CancellationToken ct = default);
+    /// <summary>
+    /// The tenant is the one whose asset limit the rows are metered against. It is a parameter
+    /// rather than read from ITenantProvider here for the reason IGoodsReceiptService gives.
+    /// </summary>
+    Task<ImportAssetsResultDto> ImportAsync(Guid tenantId, Stream xlsxStream, CancellationToken ct = default);
 }
 
 public class AssetImportService(
-    AppDbContext db, ILogger<AssetImportService> logger, ILookupService lookups, IAssetTagGenerator tags) : IAssetImportService
+    AppDbContext db, ILogger<AssetImportService> logger, ILookupService lookups, IAssetTagGenerator tags,
+    ISubscriptionService subscriptions) : IAssetImportService
 {
     private static readonly string[] ExpectedHeaders =
     [
@@ -24,7 +29,7 @@ public class AssetImportService(
     private static readonly string[] ValidStatuses =
         [AssetStatus.Available, AssetStatus.InUse, AssetStatus.Maintenance, AssetStatus.Retired, AssetStatus.Lost];
 
-    public async Task<ImportAssetsResultDto> ImportAsync(Stream xlsxStream, CancellationToken ct = default)
+    public async Task<ImportAssetsResultDto> ImportAsync(Guid tenantId, Stream xlsxStream, CancellationToken ct = default)
     {
         using var workbook = new XLWorkbook(xlsxStream);
 
@@ -59,7 +64,7 @@ public class AssetImportService(
 
             try
             {
-                var asset = await BuildAssetAsync(row, headerMap, tagSequenceCache, ct);
+                var asset = await BuildAssetAsync(tenantId, row, headerMap, tagSequenceCache, ct);
                 toCreate.Add(asset);
             }
             catch (ImportRowException ex)
@@ -70,13 +75,36 @@ public class AssetImportService(
 
         if (toCreate.Count > 0)
         {
+            string? limitRefusal;
             try
             {
-                db.Assets.AddRange(toCreate);
-                await db.SaveChangesAsync(ct);
+                // The limit check and the insert share one transaction - see
+                // ReserveAssetCapacityAsync for why a check made before it would not hold. Run
+                // through the execution strategy because production retries transient failures
+                // and EF refuses a user-initiated transaction outside one; each attempt starts
+                // from a cleared tracker so a replay adds the rows once, not on top of the
+                // failed attempt's.
+                var strategy = db.Database.CreateExecutionStrategy();
+                limitRefusal = await strategy.ExecuteAsync(async () =>
+                {
+                    db.ChangeTracker.Clear();
+                    await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+                    if (await subscriptions.ReserveAssetCapacityAsync(db, tenantId, toCreate.Count, ct) is { } refusal)
+                        return refusal;
+
+                    db.Assets.AddRange(toCreate);
+                    await db.SaveChangesAsync(ct);
+                    await tx.CommitAsync(ct);
+                    return null;
+                });
             }
             catch (Exception ex)
             {
+                // Rolled back, but the tracker still holds every row as Added; a later save on
+                // this scoped context would insert them after all.
+                db.ChangeTracker.Clear();
+
                 logger.LogError(ex, "Failed to persist imported assets");
                 return new ImportAssetsResultDto
                 {
@@ -87,6 +115,28 @@ public class AssetImportService(
                     [
                         ..errors,
                         new ImportRowError { RowNumber = 0, Message = $"Database save failed: {ex.Message}" }
+                    ]
+                };
+            }
+
+            // The whole file is refused, not the rows past the limit. Importing the first N rows
+            // in sheet order would leave an arbitrary slice of the register behind, and with no
+            // de-duplication on import, re-uploading the rest means hand-editing the file to
+            // remove exactly the rows that made it. Nothing written is the state a user can act
+            // on: trim the file or upgrade, then upload it again. Rows that failed validation are
+            // still reported, so both can be fixed in one pass - and they are not counted against
+            // the limit, since they would never have been created.
+            if (limitRefusal is not null)
+            {
+                return new ImportAssetsResultDto
+                {
+                    TotalRows = toCreate.Count + errors.Count,
+                    CreatedCount = 0,
+                    FailedCount = toCreate.Count + errors.Count,
+                    Errors =
+                    [
+                        new ImportRowError { RowNumber = 0, Message = $"Nothing was imported. {limitRefusal}" },
+                        ..errors
                     ]
                 };
             }
@@ -103,6 +153,7 @@ public class AssetImportService(
     }
 
     private async Task<Asset> BuildAssetAsync(
+        Guid tenantId,
         IXLRow row,
         Dictionary<string, int> headerMap,
         Dictionary<string, int> tagSequenceCache,
@@ -157,6 +208,9 @@ public class AssetImportService(
 
         return new Asset
         {
+            // Explicit rather than left to SaveChanges stamping, so the rows belong to exactly
+            // the tenant whose limit they were metered against.
+            TenantId = tenantId,
             AssetTag = assetTag,
             DeviceType = deviceType,
             Status = status,

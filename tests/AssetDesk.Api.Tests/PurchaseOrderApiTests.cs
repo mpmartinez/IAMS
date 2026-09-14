@@ -113,7 +113,7 @@ public class PurchaseOrderApiTests
     private static PurchaseOrdersController ControllerFor(
         AssetDesk.Api.Data.AppDbContext db, ITenantProvider tenants) =>
         new(db, tenants, new PurchaseOrderNumberAllocator(db), new LookupService(db),
-            new GoodsReceiptService(db, new AssetTagGenerator(db), NullLogger<GoodsReceiptService>.Instance),
+            new GoodsReceiptService(db, new AssetTagGenerator(db), new FakeSubscriptionService(), NullLogger<GoodsReceiptService>.Instance),
             NullLogger<PurchaseOrdersController>.Instance, new PdfReportService());
 
     private static async Task<Supplier> SeedSupplierAsync(
@@ -423,7 +423,7 @@ public class PurchaseOrderApiTests
             var lineId = order.Lines.First().Id;
 
             var service = new GoodsReceiptService(
-                db, new AssetTagGenerator(db), NullLogger<GoodsReceiptService>.Instance);
+                db, new AssetTagGenerator(db), new FakeSubscriptionService(), NullLogger<GoodsReceiptService>.Instance);
 
             await service.ReceiveAsync(tenantId, order.Id, new ReceiveGoodsDto
             {
@@ -483,7 +483,7 @@ public class PurchaseOrderApiTests
             await controller.Send(order.Id);
 
             var service = new GoodsReceiptService(
-                db, new AssetTagGenerator(db), NullLogger<GoodsReceiptService>.Instance);
+                db, new AssetTagGenerator(db), new FakeSubscriptionService(), NullLogger<GoodsReceiptService>.Instance);
             var receipt = await service.ReceiveAsync(tenantId, order.Id, new ReceiveGoodsDto
             {
                 ReceiptDate = new DateTime(2026, 9, 12),

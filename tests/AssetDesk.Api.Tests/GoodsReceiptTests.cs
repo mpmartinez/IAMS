@@ -105,7 +105,7 @@ public class GoodsReceiptTests
     }
 
     private static GoodsReceiptService ServiceFor(AssetDesk.Api.Data.AppDbContext db) =>
-        new(db, new AssetTagGenerator(db), NullLogger<GoodsReceiptService>.Instance);
+        new(db, new AssetTagGenerator(db), new FakeSubscriptionService(), NullLogger<GoodsReceiptService>.Instance);
 
     private static ReceiveGoodsDto Receive(int lineId, int qty, decimal rate = 1m, DateTime? date = null) => new()
     {
@@ -746,7 +746,7 @@ public class GoodsReceiptTests
     /// EF routes ExecuteUpdateAsync through the non-query path and SaveChanges/SELECT through
     /// the reader path, so both are captured into one list to keep the sequence intact.
     /// </summary>
-    private sealed class SqlRecorder : DbCommandInterceptor
+    internal sealed class SqlRecorder : DbCommandInterceptor
     {
         public List<string> Commands { get; } = [];
 

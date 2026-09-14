@@ -1,3 +1,4 @@
+using AssetDesk.Api.Data;
 using AssetDesk.Api.Services;
 using AssetDesk.Shared.DTOs;
 
@@ -29,6 +30,8 @@ internal sealed class FakeFileStorageService : IFileStorageService
 internal sealed class FakeSubscriptionService : ISubscriptionService
 {
     public Task<bool> CanCreateAssetAsync(Guid tenantId) => Task.FromResult(true);
+    public Task<string?> ReserveAssetCapacityAsync(AppDbContext db, Guid tenantId, int count, CancellationToken ct = default) =>
+        Task.FromResult<string?>(null);
     public Task<bool> CanCreateUserAsync(Guid tenantId) => Task.FromResult(true);
     public Task<bool> CanUploadFileAsync(Guid tenantId, long fileSizeBytes) => Task.FromResult(true);
     public Task<bool> CanCreateTicketAsync(Guid tenantId) => Task.FromResult(true);

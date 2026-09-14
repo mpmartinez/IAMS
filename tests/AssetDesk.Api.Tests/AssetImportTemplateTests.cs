@@ -31,7 +31,8 @@ public class AssetImportTemplateTests
     }
 
     private static AssetImportService ServiceFor(AppDbContext db) =>
-        new(db, NullLogger<AssetImportService>.Instance, new LookupService(db), new AssetTagGenerator(db));
+        new(db, NullLogger<AssetImportService>.Instance, new LookupService(db), new AssetTagGenerator(db),
+            new FakeSubscriptionService());
 
     [Fact]
     public void The_template_offers_an_ExchangeRate_column_next_to_Currency()
@@ -57,7 +58,7 @@ public class AssetImportTemplateTests
             await TestDb.SeedTenantAsync(db, tenantId);
             using var stream = File.OpenRead(TemplatePath());
 
-            var result = await ServiceFor(db).ImportAsync(stream);
+            var result = await ServiceFor(db).ImportAsync(tenantId, stream);
 
             // The sample row is booked in USD, so a template whose sample carries no rate would
             // fail the moment anyone uploaded it untouched.
